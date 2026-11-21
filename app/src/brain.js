@@ -160,7 +160,7 @@ export function createBrain({ stage, model, state, refresh, defer, viewLayers, e
     // kesit yüzü: beslenme alanı renginde (parçanın çoğunluk alanı)
     mats.terr.userData.capColor = r => G.terr?.cap.get(r.id) || null;
     const visible = r => !!(state.isolate?.has(r.id) || state.isoGhost?.has(r.id));
-    test = createStudyQuiz({ recs, items: quizItems(), facts: data.quiz, cats: [['csf', 'BOS'], ['cn', 'Sinirler'], ['art', 'Arterler']], refresh, stage, model, visible });
+    test = createStudyQuiz({ recs, items: quizItems(), facts: data.quiz, cats: [['csf', 'cat.csf'], ['cn', 'cat.cn'], ['art', 'cat.art']], refresh, stage, model, visible });
     built = true;
   }
   // Yapı testi havuzu: her madde yapının bütün parçalarıyla (ör. MCA'nın bütün dalları; V'nin bütün dalları): parçalardan

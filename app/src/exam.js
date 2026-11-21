@@ -10,7 +10,11 @@
 //    sürerken tıklanamaz ve uygulamanın kısayolları çalışmaz (main.js kısayolları açık bir dialog varken susar).
 //  - Her cevap çalışma modlarındaki testlerle aynı kimlikle kaydedilir: record(factId(soru metni), doğru mu). Sınav
 //    modunda bitişte (cevap sonuna kadar değişebilir), Çalışma modunda cevap verilince. Boş soru kaydedilmez.
+//  - Test dili (testlang.js; varsayılan Almanca): pencere, soru metinleri, konu ve alt konu adları çizim anında o anki
+//    dilde yazılır. Saklananlar (ayarlar, süren sınav, geçmiş) dilden bağımsızdır: soru kimlikleri, şık sırası, cevap
+//    indisleri ve konu anahtarları. Dil değişince (relang) açık pencere aynı durumla yeniden çizilir.
 import { esc } from './text.js';
+import { T, Tin, has, getLang, setLang, factText, langSwitch, loadDe } from './testlang.js';
 import { record, weak, seen, factId } from './progress.js';
 import { shuffle } from './study.js';
 import { ukey } from './users.js';
@@ -22,27 +26,29 @@ const HIST_KEY = ukey('anatomi3d.examHistory.v1');
 const HIST_MAX = 20;
 const RUN_KEY = ukey('anatomi3d.examRun.v1');   // süren sınav (sessionStorage): sayfa yenilenir ya da sekme atılırsa devam edilebilsin
 const COUNTS = [10, 20, 40, 60];
-const TIMES = [[0, 'Süresiz'], [45, '45 sn'], [60, '60 sn'], [90, '90 sn']];
+const TIMES = [0, 45, 60, 90];   // soru başına saniye (0: süresiz)
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
 
 // Bankalar. Yeni bir banka: buraya bir satır (anahtar, Türkçe ad, dosya, okuyucu) ya da main.js TOURS içinde `exam`
-// adı olan yeni bir tur. Okuyucu her soruya alt konu (sub) ekler; sonuçta konu çubuğunun altında gösterilir.
+// adı olan yeni bir tur (Almanca adı testlang.js 'subj.<anahtar>'; yoksa Türkçe ad). Okuyucu her soruya alt konu ekler:
+// [soru, Türkçe alt konu (gruplama anahtarı), Almanca alt konu]; sonuçta konu çubuğunun altında gösterilir.
 const SUB_BRAIN = { csf: 'BOS', cn: 'Kraniyal sinirler', art: 'Arterler' };
 const SUB_LOCO = { nerve: 'Sinirler', passage: 'Geçitler', joint: 'Eklemler' };
+const subOf = (map, cat) => [map[cat] || null, map[cat] ? Tin('de', 'cat.' + cat) || null : null];
 function baseBanks(tours) {
   return [
-    { key: 'brain', title: 'Beyin ve sinir sistemi', url: 'data/brain.json', read: d => (d.quiz || []).map(f => [f, SUB_BRAIN[f.cat] || null]) },
-    { key: 'loco', title: 'Hareket sistemi', url: 'data/locomotor.json', read: d => (d.quiz || []).map(f => [f, SUB_LOCO[f.cat] || null]) },
-    { key: 'muscles', title: 'Kaslar', url: 'data/muscles.json', read: d => (d.quiz || []).map(f => [f, null]) },
+    { key: 'brain', title: 'Beyin ve sinir sistemi', url: 'data/brain.json', read: d => (d.quiz || []).map(f => [f, ...subOf(SUB_BRAIN, f.cat)]) },
+    { key: 'loco', title: 'Hareket sistemi', url: 'data/locomotor.json', read: d => (d.quiz || []).map(f => [f, ...subOf(SUB_LOCO, f.cat)]) },
+    { key: 'muscles', title: 'Kaslar', url: 'data/muscles.json', read: d => (d.quiz || []).map(f => [f, null, null]) },
     // kalp modunun İleti sekmesi (ileti sistemi ve kalbin sinirleri): bilgi soruları
-    { key: 'heart', title: 'Kalp', url: 'data/conduction.json', read: d => (d.quiz || []).map(f => [f, null]) },
+    { key: 'heart', title: 'Kalp', url: 'data/conduction.json', read: d => (d.quiz || []).map(f => [f, null, null]) },
     ...tours.filter(t => t.exam).map(t => ({
       key: t.key, title: t.exam, url: t.dataUrl,
-      read: d => (d.tabs || []).flatMap(tab => (tab.quiz || []).map(f => [f, tab.title_tr || tab.key])),
+      read: d => (d.tabs || []).flatMap(tab => (tab.quiz || []).map(f => [f, tab.title_tr || tab.key, tab.title_de || Tin('de', 'tab.' + tab.key) || tab.title_tr || tab.key])),
     })),
     // kesit atlası: ikiz pelvis seviyeleri (kadın / erkek) aynı soruları taşır; aynı metin bir kez alınır
     { key: 'sect', title: 'Kesit anatomisi', url: 'data/sections.json', optional: true,
-      read: d => (d.regions || []).flatMap(r => (r.levels || []).flatMap(l => (l.facts || []).map(f => [f, r.title_tr || r.key]))) },
+      read: d => (d.regions || []).flatMap(r => (r.levels || []).flatMap(l => (l.facts || []).map(f => [f, r.title_tr || r.key, Tin('de', 'sreg.' + r.key) || r.title_tr || r.key]))) },
   ];
 }
 const validQ = f => f && typeof f.q === 'string' && Array.isArray(f.options) && f.options.length >= 2 && f.options.every(o => typeof o === 'string');
@@ -104,7 +110,7 @@ export function createExam({ tours = [], onShow, onToggle, onData } = {}) {
       .then(d => {
         failed.delete(b.key);
         if (!d) { data.set(b.key, { title: b.title, qs: [] }); return; }   // isteğe bağlı dosya yok
-        data.set(b.key, { title: b.title, qs: b.read(d).filter(([f]) => validQ(f)).map(([f, sub]) => ({ id: factId(f.q), q: f.q, options: f.options, explain: f.explain || '', show: Array.isArray(f.show) ? f.show : null, subj: b.key, sub })) });
+        data.set(b.key, { title: b.title, qs: b.read(d).filter(([f]) => validQ(f)).map(([f, sub, subDe]) => ({ id: factId(f.q), q: f.q, options: f.options, explain: f.explain || '', show: Array.isArray(f.show) ? f.show : null, subj: b.key, sub, subDe: subDe || sub })) });
       })
       .catch(e => { console.warn('Sınav bankası yüklenemedi:', b.url, e); failed.set(b.key, b.title); })))
       .then(() => {
@@ -124,7 +130,11 @@ export function createExam({ tours = [], onShow, onToggle, onData } = {}) {
     return (idSet ||= new Set([...data.values()].flatMap(d => d.qs.map(x => x.id))));
   }
   const subjects = () => BANKS.filter(b => data.get(b.key)?.qs.length).map(b => ({ key: b.key, title: b.title, qs: data.get(b.key).qs }));
-  const titleOf = k => BANKS.find(b => b.key === k)?.title || k;
+  // konu adı test dilinde (Almanca: testlang 'subj.<anahtar>', yoksa Türkçe ad); alt konu adı da
+  const titleOf = k => (getLang() === 'de' && has('subj.' + k) ? T('subj.' + k) : BANKS.find(b => b.key === k)?.title || k);
+  const subName = x => (getLang() === 'de' ? x.subDe || x.sub : x.sub);
+  const pct = n => T('ex.pct', n);
+  const timeName = v => (v ? T('ex.sec', v) : T('ex.untimed'));
 
   // ayarlar (son kullanılan) ve geçmiş
   const def = { subj: null, n: 20, t: 60, src: 'all', mode: 'exam' };
@@ -132,7 +142,7 @@ export function createExam({ tours = [], onShow, onToggle, onData } = {}) {
   const S = {
     subj: Array.isArray(saved.subj) ? saved.subj : null,   // null: hepsi
     n: COUNTS.includes(saved.n) ? saved.n : def.n,
-    t: TIMES.some(([v]) => v === saved.t) ? saved.t : def.t,
+    t: TIMES.includes(saved.t) ? saved.t : def.t,
     src: saved.src === 'weak' ? 'weak' : 'all',
     mode: saved.mode === 'study' ? 'study' : 'exam',
   };
@@ -143,12 +153,13 @@ export function createExam({ tours = [], onShow, onToggle, onData } = {}) {
 
   // ---------- pencere ----------
   const dlg = document.createElement('dialog');
-  dlg.id = 'exam'; dlg.setAttribute('aria-label', 'Deneme sınavı'); dlg.tabIndex = -1;
+  dlg.id = 'exam'; dlg.tabIndex = -1;   // aria-label ve lang: render
   document.body.appendChild(dlg);
   // "3B'de göster"den sonra sonuca geri dönüş düğmesi (sayfa açık kaldıkça)
   const back = document.createElement('div');
   back.id = 'exam-back'; back.hidden = true;
-  back.innerHTML = '<button data-a="reopen">Sonuca dön</button><button data-a="drop" aria-label="Kapat" title="Kapat">×</button>';
+  const backHTML = () => { back.lang = getLang(); back.innerHTML = `<button data-a="reopen">${T('ex.back')}</button><button data-a="drop" aria-label="${T('ex.close')}" title="${T('ex.close')}">×</button>`; };
+  backHTML();
   // #app içinde: #app (position: fixed) kendi yığın bağlamıdır; dışarıda kalırsa hap arama listesinin (#topbar, z 10) üstüne çizilir
   (document.getElementById('app') || document.body).appendChild(back);
   back.addEventListener('click', e => {
@@ -181,7 +192,7 @@ export function createExam({ tours = [], onShow, onToggle, onData } = {}) {
   function hide() {
     if (dlg.open) { closing = true; dlg.close(); }   // close olayı eşzamansız gelir: bayrağı o sıfırlar
     stopTick();
-    back.hidden = !last;
+    backHTML(); back.hidden = !last;
     onToggle?.();
   }
   // tarayıcı pencereyi kendisi kapatırsa (ör. iki kez Esc) sınav kaybolmasın: yeniden aç
@@ -195,6 +206,7 @@ export function createExam({ tours = [], onShow, onToggle, onData } = {}) {
   // dışarıdan açılış: opts.src ('weak') kaynağı yalnız bu açılış için seçer (kaydedilmez)
   async function open(opts = {}) {
     S.src = opts.src === 'weak' || opts.src === 'all' ? opts.src : savedSrc;
+    if (getLang() === 'de') loadDe();   // Almanca soru metinleri (gelince main.js onLang -> relang)
     if (run && view === 'run') { show(); return; }   // süren sınav varsa ona dön
     view = 'loading'; show();
     await fetchBanks();
@@ -315,7 +327,10 @@ export function createExam({ tours = [], onShow, onToggle, onData } = {}) {
   }
 
   // ---------- çizim ----------
+  // Bütün metinler o anki test dilinde (T); soru metinleri factText ile (Almancası yoksa o soru Türkçe, lang="tr")
   const seg = (key, list, cur) => `<div class="seg ex-seg">${list.map(([v, t, dis]) => `<button data-set="${key}" data-v="${v}" class="${String(v) === String(cur) ? 'active' : ''}"${dis ? ' disabled' : ''}>${t}</button>`).join('')}</div>`;
+  const closeX = (label = T('ex.close'), title = T('ex.closeEsc')) => `<button class="ex-x" data-a="close" aria-label="${label}" title="${title}">×</button>`;
+  const ql = ft => (ft.de ? 'de' : 'tr');
   function startHTML() {
     const subs = subjects();
     const sel = new Set(chosen().map(s => s.key));
@@ -323,30 +338,30 @@ export function createExam({ tours = [], onShow, onToggle, onData } = {}) {
     const nWeak = pool.filter(x => weak(x.id)).length, nNew = pool.filter(x => !seen(x.id)).length;
     const avail = S.src === 'weak' ? nWeak + pool.filter(x => !weak(x.id) && !seen(x.id)).length : pool.length;
     const n = Math.min(S.n, avail);
-    const err = [...failed.values()];
+    const err = [...failed.keys()].map(titleOf);
     const h = history();
     const pr = pendingRun();
-    const prHTML = pr ? `<div class="ex-resume" role="status"><span>Yarım kalan sınav: ${pr.qs.filter(q => q.ans != null).length} / ${pr.qs.length} cevaplı${pr.limit ? `, kalan süre ${fmt(pr.limit - (Date.now() - pr.start) / 1000)}` : ''}.</span><button class="ex-primary" data-a="resume">Devam et</button><button data-a="discard">Sil</button></div>` : '';
+    const prHTML = pr ? `<div class="ex-resume" role="status"><span>${T('ex.resume', pr.qs.filter(q => q.ans != null).length, pr.qs.length)}${pr.limit ? T('ex.resumeLeft', fmt(pr.limit - (Date.now() - pr.start) / 1000)) : ''}.</span><button class="ex-primary" data-a="resume">${T('ex.continue')}</button><button data-a="discard">${T('ex.discard')}</button></div>` : '';
     return `
-      <header class="ex-head"><h2>Deneme sınavı</h2><button class="ex-x" data-a="close" aria-label="Kapat" title="Kapat (Esc)">×</button></header>
+      <header class="ex-head"><h2>${T('ex.title')}</h2>${langSwitch('ex-lang')}${closeX()}</header>
       <div class="ex-body">
-        <p class="ex-intro">Bütün çalışma modlarının bilgi sorularından karışık, süreli bir test. Cevaplar Yanlışlarım listesine yazılır.</p>
+        <p class="ex-intro">${T('ex.intro')}</p>
         ${prHTML}
-        ${err.length ? `<div class="ex-err" role="alert">Yüklenemedi: ${esc(err.join(', '))}. Sınav öteki konularla yapılabilir; pencereyi yeniden açınca tekrar denenir.</div>` : ''}
-        <section><div class="ex-lbl">Konular <span class="ex-links"><button data-a="all">Tümü</button> / <button data-a="none">Hiçbiri</button></span></div>
-          <div class="ex-chips">${subs.map(s => `<button class="ex-chip${sel.has(s.key) ? ' on' : ''}" data-subj="${s.key}" aria-pressed="${sel.has(s.key)}">${esc(s.title)} <small>${s.qs.length}</small></button>`).join('')}</div></section>
-        <section><div class="ex-lbl">Soru sayısı${avail < S.n ? ` <small>(seçimde ${avail} soru var)</small>` : ''}</div>${seg('n', COUNTS.map(c => [c, c]), S.n)}</section>
-        <section><div class="ex-lbl">Soru başına süre <small>(tek toplam geri sayım)</small></div>${seg('t', TIMES, S.t)}</section>
-        <section><div class="ex-lbl">Sorular</div>${seg('src', [['all', 'Tüm sorular'], ['weak', 'Yalnız yanlışlarım ve yeni sorular']], S.src)}
-          <div class="ex-note">${S.src === 'weak' ? `Seçili konularda ${nWeak} yanlış ve ${nNew} yeni soru; önce yanlışlar sorulur.` : `Seçili konularda ${pool.length} soru.`}</div></section>
-        <section><div class="ex-lbl">Mod</div>${seg('mode', [['exam', 'Sınav'], ['study', 'Çalışma']], S.mode)}
-          <div class="ex-note">${S.mode === 'exam' ? 'Sonuçlar sınavın sonunda gösterilir; cevabını bitirene kadar değiştirebilirsin.' : 'Her cevaptan sonra doğrusu ve açıklaması gösterilir; cevap değiştirilemez.'}</div></section>
+        ${err.length ? `<div class="ex-err" role="alert">${T('ex.failed', esc(err.join(', ')))}</div>` : ''}
+        <section><div class="ex-lbl">${T('ex.subjects')} <span class="ex-links"><button data-a="all">${T('all')}</button> / <button data-a="none">${T('ex.none')}</button></span></div>
+          <div class="ex-chips">${subs.map(s => `<button class="ex-chip${sel.has(s.key) ? ' on' : ''}" data-subj="${s.key}" aria-pressed="${sel.has(s.key)}">${esc(titleOf(s.key))} <small>${s.qs.length}</small></button>`).join('')}</div></section>
+        <section><div class="ex-lbl">${T('ex.count')}${avail < S.n ? ` <small>${T('ex.countAvail', avail)}</small>` : ''}</div>${seg('n', COUNTS.map(c => [c, c]), S.n)}</section>
+        <section><div class="ex-lbl">${T('ex.time')} <small>${T('ex.timeNote')}</small></div>${seg('t', TIMES.map(v => [v, timeName(v)]), S.t)}</section>
+        <section><div class="ex-lbl">${T('ex.questions')}</div>${seg('src', [['all', T('ex.src.all')], ['weak', T('ex.src.weak')]], S.src)}
+          <div class="ex-note">${S.src === 'weak' ? T('ex.note.weak', nWeak, nNew) : T('ex.note.all', pool.length)}</div></section>
+        <section><div class="ex-lbl">${T('ex.mode')}</div>${seg('mode', [['exam', T('ex.m.exam')], ['study', T('ex.m.study')]], S.mode)}
+          <div class="ex-note">${S.mode === 'exam' ? T('ex.note.exam') : T('ex.note.study')}</div></section>
         ${historyHTML(h)}
       </div>
       <footer class="ex-foot">
-        <span class="ex-sum">${n ? `${n} soru · ${S.t ? fmt(n * S.t) : 'süresiz'}` : 'Seçimde soru yok'}</span>
-        ${last ? '<button data-a="result">Son sonuç</button>' : ''}
-        <button class="ex-primary" data-a="start"${n ? '' : ' disabled'}>Başla</button>
+        <span class="ex-sum">${n ? T('ex.sum', n, S.t ? fmt(n * S.t) : T('ex.sumUntimed')) : T('ex.sumNone')}</span>
+        ${last ? `<button data-a="result">${T('ex.lastResult')}</button>` : ''}
+        <button class="ex-primary" data-a="start"${n ? '' : ' disabled'}>${T('ex.start')}</button>
       </footer>`;
   }
   function historyHTML(h) {
@@ -358,107 +373,113 @@ export function createExam({ tours = [], onShow, onToggle, onData } = {}) {
     const pts = ps.map((p, i) => `${(i * step).toFixed(1)},${(H - 2 - (p / 100) * (H - 4)).toFixed(1)}`).join(' ');
     const prev = ps.slice(0, -1), avg = prev.length ? prev.reduce((a, b) => a + b, 0) / prev.length : null;
     const d = avg == null ? '' : Math.round(ps[ps.length - 1] - avg);
-    const trend = avg == null ? '' : `<span class="ex-trend ${d > 0 ? 'up' : d < 0 ? 'down' : ''}">${d > 0 ? '▲ +' : d < 0 ? '▼ ' : '= '}${d === 0 ? '' : d} puan (öncekilerin ortalaması %${Math.round(avg)})</span>`;
-    const short = s => s.length > 2 ? `${s.length} konu` : s.map(titleOf).join(', ');
-    const dt = t => { try { return new Date(t).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }) + ' ' + new Date(t).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
-    return `<section class="ex-hist"><div class="ex-lbl">Son sınavlar ${trend}</div>
+    const trend = avg == null ? '' : `<span class="ex-trend ${d > 0 ? 'up' : d < 0 ? 'down' : ''}">${d > 0 ? '▲ ' : d < 0 ? '▼ ' : ''}${T('ex.trend', d > 0 ? '+' + d : d === 0 ? '±0' : d, Math.round(avg))}</span>`;
+    const short = s => s.length > 2 ? T('ex.nSubj', s.length) : s.map(titleOf).join(', ');
+    const loc = getLang() === 'de' ? 'de-DE' : 'tr-TR';
+    const dt = t => { try { return new Date(t).toLocaleDateString(loc, { day: 'numeric', month: 'short' }) + ' ' + new Date(t).toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
+    return `<section class="ex-hist"><div class="ex-lbl">${T('ex.hist')} ${trend}</div>
       ${ps.length > 1 ? `<svg class="ex-spark" viewBox="-2 0 ${W + 4} ${H}" aria-hidden="true"><polyline points="${pts}"/></svg>` : ''}
-      <ul>${h.slice().reverse().map(x => `<li><span>${esc(dt(x.d))}</span><span class="ex-hs">${esc(short(x.s || []))}${x.m === 'study' ? ' · Çalışma' : ''}</span><b>${x.r}/${x.n} · %${pc(x)}</b><span class="dim">${fmt(x.sec || 0)}</span></li>`).join('')}</ul></section>`;
+      <ul>${h.slice().reverse().map(x => `<li><span>${esc(dt(x.d))}</span><span class="ex-hs">${esc(short(x.s || []))}${x.m === 'study' ? ` · ${T('ex.m.study')}` : ''}</span><b>${x.r}/${x.n} · ${pct(pc(x))}</b><span class="dim">${fmt(x.sec || 0)}</span></li>`).join('')}</ul></section>`;
   }
   function runHTML() {
     const R = run, q = curQ(), n = R.qs.length, x = q.x, study = R.mode === 'study';
+    const ft = factText(x);
     const locked = study && q.ans != null;
     const answered = R.qs.filter(z => z.ans != null).length, flagged = R.qs.filter(z => z.flag).length;
     const s = R.limit ? left() : 0;
     const opts = q.order.map((oi, pos) => {
       let cls = q.ans === oi ? ' sel' : '';
       if (locked) cls = oi === 0 ? ' ok' : q.ans === oi ? ' bad' : ' dimmed';
-      return `<button class="ex-opt${cls}" data-opt="${pos}"${locked ? ' disabled' : ''} aria-pressed="${q.ans === oi}"><b class="ex-key">${LETTERS[pos]}</b><span>${esc(x.options[oi])}</span></button>`;
+      return `<button class="ex-opt${cls}" data-opt="${pos}"${locked ? ' disabled' : ''} aria-pressed="${q.ans === oi}"><b class="ex-key">${LETTERS[pos]}</b><span>${esc(ft.options[oi])}</span></button>`;
     }).join('');
-    const fb = locked ? `<div class="qres ${q.ans === 0 ? 'ok' : 'bad'}">${q.ans === 0 ? 'Doğru!' : 'Yanlış; doğru şık yeşil.'}</div>${x.explain ? `<div class="tip">${esc(x.explain)}</div>` : ''}` : '';
+    const fb = locked ? `<div class="qres ${q.ans === 0 ? 'ok' : 'bad'}">${q.ans === 0 ? T('res.ok') : T('res.bad')}</div>${ft.explain ? `<div class="tip" lang="${ql(ft)}">${esc(ft.explain)}</div>` : ''}` : '';
     const dots = R.qs.map((z, i) => {
       const c = [i === R.cur ? 'cur' : '', z.ans != null ? 'done' : '', z.flag ? 'flag' : '', study && z.ans != null ? (z.ans === 0 ? 'ok' : 'bad') : ''].filter(Boolean).join(' ');
-      return `<button class="ex-dot ${c}" data-go="${i}" aria-label="Soru ${i + 1}${z.ans != null ? ', cevaplı' : ''}${z.flag ? ', işaretli' : ''}"${i === R.cur ? ' aria-current="true"' : ''}>${i + 1}</button>`;
+      return `<button class="ex-dot ${c}" data-go="${i}" aria-label="${T('ex.qn', i + 1)}${z.ans != null ? ', ' + T('ex.answered') : ''}${z.flag ? ', ' + T('ex.flagged') : ''}"${i === R.cur ? ' aria-current="true"' : ''}>${i + 1}</button>`;
     }).join('');
     const empty = n - answered;
     const conf = confirmKind === 'finish'
-      ? `<div class="ex-confirm" role="alert"><span>${empty} soru boş${flagged ? `, ${flagged} işaretli` : ''}. Boş sorular yanlış sayılır. Yine de bitirilsin mi?</span><button class="ex-primary" data-a="finish-yes">Bitir</button><button data-a="cancel">Devam et</button></div>`
+      ? `<div class="ex-confirm" role="alert"><span>${T('ex.confirmFinish', empty, flagged ? T('ex.confirmFlag', flagged) : '')}</span><button class="ex-primary" data-a="finish-yes">${T('ex.finish')}</button><button data-a="cancel">${T('ex.keepOn')}</button></div>`
       : confirmKind === 'leave'
-        ? `<div class="ex-confirm" role="alert"><span>Sınavdan çıkılsın mı? ${study ? 'Verdiğin cevaplar kaydedildi; sonuç' : 'Cevapların kaydedilmez, sonuç'} oluşmaz.</span><button class="ex-danger" data-a="leave-yes">Çık</button><button data-a="cancel">Devam et</button></div>` : '';
+        ? `<div class="ex-confirm" role="alert"><span>${T('ex.confirmLeave', study ? T('ex.leaveStudy') : T('ex.leaveExam'))}</span><button class="ex-danger" data-a="leave-yes">${T('ex.leave')}</button><button data-a="cancel">${T('ex.keepOn')}</button></div>` : '';
     const lastQ = R.cur === n - 1;
     return `
       <header class="ex-head ex-runhead">
-        <span class="ex-count" title="Soru">${R.cur + 1} / ${n}</span>
-        ${R.limit ? `<span class="ex-time${s <= 60 ? ' warn' : ''}" title="Kalan süre" role="timer">${fmt(s)}</span>` : '<span class="ex-time off" title="Süresiz">süresiz</span>'}
-        <span class="ex-modechip">${study ? 'Çalışma' : 'Sınav'}</span>
-        <button class="ex-finish" data-a="finish" title="Sınavı bitir">Bitir</button>
-        <button class="ex-x" data-a="close" aria-label="Sınavdan çık" title="Sınavdan çık (Esc)">×</button>
+        <span class="ex-count" title="${T('ex.q')}">${R.cur + 1} / ${n}</span>
+        ${R.limit ? `<span class="ex-time${s <= 60 ? ' warn' : ''}" title="${T('ex.timeLeft')}" role="timer">${fmt(s)}</span>` : `<span class="ex-time off" title="${T('ex.untimed')}">${T('ex.untimedShort')}</span>`}
+        <span class="ex-modechip">${study ? T('ex.m.study') : T('ex.m.exam')}</span>
+        ${langSwitch('ex-lang')}
+        <button class="ex-finish" data-a="finish" title="${T('ex.finish.title')}">${T('ex.finish')}</button>
+        ${closeX(T('ex.leave.title').replace(/ \(Esc\)$/, ''), T('ex.leave.title'))}
       </header>
       <div class="ex-bar" aria-hidden="true"><i style="width:${(100 * answered) / n}%"></i></div>
       <div class="ex-body">
-        <div class="ex-qchip"><span class="chip">${esc(titleOf(x.subj))}</span>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}${q.flag ? '<span class="ex-flagmark" title="İşaretli">⚑ işaretli</span>' : ''}</div>
-        <p class="ex-q">${esc(x.q)}</p>
-        <div class="ex-opts">${opts}</div>
+        <div class="ex-qchip"><span class="chip">${esc(titleOf(x.subj))}</span>${x.sub ? `<small>${esc(subName(x))}</small>` : ''}${q.flag ? `<span class="ex-flagmark" title="${T('ex.flagged')}">${T('ex.flagmark')}</span>` : ''}</div>
+        <p class="ex-q" lang="${ql(ft)}">${esc(ft.q)}</p>
+        <div class="ex-opts" lang="${ql(ft)}">${opts}</div>
         ${fb}
       </div>
       ${conf}
       <footer class="ex-foot ex-runfoot">
         <div class="ex-navbtns">
-          <button data-a="prev"${R.cur ? '' : ' disabled'}>◀ Önceki</button>
-          <button data-a="flag" class="${q.flag ? 'on' : ''}" aria-pressed="${q.flag}" title="Sonra bakmak için işaretle">⚑ İşaretle</button>
-          ${lastQ ? '<button data-a="finish" class="ex-primary">Bitir</button>' : `<button data-a="next" class="${q.ans != null ? 'ex-primary' : ''}">Sonraki ▶</button>`}
+          <button data-a="prev"${R.cur ? '' : ' disabled'}>${T('ex.prev')}</button>
+          <button data-a="flag" class="${q.flag ? 'on' : ''}" aria-pressed="${q.flag}" title="${T('ex.flag.title')}">${T('ex.flag')}</button>
+          ${lastQ ? `<button data-a="finish" class="ex-primary">${T('ex.finish')}</button>` : `<button data-a="next" class="${q.ans != null ? 'ex-primary' : ''}">${T('ex.next')}</button>`}
         </div>
-        <details class="ex-nav"${navOpen ? ' open' : ''}><summary>Soru haritası · ${answered}/${n} cevaplı${flagged ? ` · ${flagged} işaretli` : ''}</summary><div class="ex-dots">${dots}</div></details>
-        <div class="ex-keys">Klavye: 1-4 / A-D cevap · Enter sonraki · ← → gezin · Esc çık</div>
+        <details class="ex-nav"${navOpen ? ' open' : ''}><summary>${T('ex.map', answered, n)}${flagged ? T('ex.mapFlag', flagged) : ''}</summary><div class="ex-dots">${dots}</div></details>
+        <div class="ex-keys">${T('ex.keys')}</div>
       </footer>`;
   }
   function resultHTML() {
     const L = last, n = L.qs.length;
-    const pct = Math.round((100 * L.right) / n);
-    // konu ve alt konu başına doğru / sorulan
+    const pc = Math.round((100 * L.right) / n);
+    // konu ve alt konu başına doğru / sorulan (gruplama Türkçe alt konuyla, gösterim test dilinde)
     const by = new Map();
     for (const q of L.qs) {
       const k = q.x.subj; if (!by.has(k)) by.set(k, { r: 0, n: 0, subs: new Map() });
       const b = by.get(k); b.n++; if (q.ans === 0) b.r++;
-      if (q.x.sub) { const s = b.subs.get(q.x.sub) || { r: 0, n: 0 }; s.n++; if (q.ans === 0) s.r++; b.subs.set(q.x.sub, s); }
+      if (q.x.sub) { const s = b.subs.get(q.x.sub) || { r: 0, n: 0, x: q.x }; s.n++; if (q.ans === 0) s.r++; b.subs.set(q.x.sub, s); }
     }
     const bars = [...by].map(([k, b]) => `<div class="ex-sbar"><div class="ex-sname"><span>${esc(titleOf(k))}</span><b>${b.r} / ${b.n}</b></div>
       <div class="ex-track"><i style="width:${(100 * b.r) / b.n}%"></i></div>
-      ${b.subs.size > 1 ? `<div class="ex-subs">${[...b.subs].map(([t, s]) => `<span>${esc(t)} ${s.r}/${s.n}</span>`).join('')}</div>` : ''}</div>`).join('');
+      ${b.subs.size > 1 ? `<div class="ex-subs">${[...b.subs.values()].map(s => `<span>${esc(subName(s.x))} ${s.r}/${s.n}</span>`).join('')}</div>` : ''}</div>`).join('');
     const wrong = L.qs.filter(q => q.ans !== 0), flagged = L.qs.filter(q => q.flag);
     const list = (filter === 'wrong' ? wrong : filter === 'flag' ? flagged : L.qs);
     const items = list.map(q => {
-      const i = L.qs.indexOf(q), x = q.x, st = q.ans == null ? 'skip' : q.ans === 0 ? 'ok' : 'bad';
-      return `<li class="ex-ri ${st}"><div class="ex-rih"><span class="ex-rin">${i + 1}</span><span class="chip">${esc(titleOf(x.subj))}</span>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}${q.flag ? '<span class="ex-flagmark">⚑</span>' : ''}<span class="ex-rst">${st === 'ok' ? 'Doğru' : st === 'bad' ? 'Yanlış' : 'Boş'}</span></div>
-        <p class="ex-q small">${esc(x.q)}</p>
-        ${st !== 'ok' ? `<div class="ex-given">Senin cevabın: ${q.ans == null ? '<i>boş</i>' : esc(x.options[q.ans])}</div>` : ''}
-        <div class="ex-right">Doğru cevap: ${esc(x.options[0])}</div>
-        ${x.explain ? `<div class="tip">${esc(x.explain)}</div>` : ''}
-        ${x.show?.length ? `<button class="ex-show" data-show="${i}" title="Sorunun yapılarını 3B görünümde seç ve göster">3B'de göster</button>` : ''}</li>`;
+      const i = L.qs.indexOf(q), x = q.x, ft = factText(x), st = q.ans == null ? 'skip' : q.ans === 0 ? 'ok' : 'bad', lg = ql(ft);
+      return `<li class="ex-ri ${st}"><div class="ex-rih"><span class="ex-rin">${i + 1}</span><span class="chip">${esc(titleOf(x.subj))}</span>${x.sub ? `<small>${esc(subName(x))}</small>` : ''}${q.flag ? '<span class="ex-flagmark">⚑</span>' : ''}<span class="ex-rst">${T('ex.st.' + st)}</span></div>
+        <p class="ex-q small" lang="${lg}">${esc(ft.q)}</p>
+        ${st !== 'ok' ? `<div class="ex-given">${T('ex.given', q.ans == null ? `<i>${T('ex.givenNone')}</i>` : `<span lang="${lg}">${esc(ft.options[q.ans])}</span>`)}</div>` : ''}
+        <div class="ex-right">${T('ex.right', `<span lang="${lg}">${esc(ft.options[0])}</span>`)}</div>
+        ${ft.explain ? `<div class="tip" lang="${lg}">${esc(ft.explain)}</div>` : ''}
+        ${x.show?.length ? `<button class="ex-show" data-show="${i}" title="${T('ex.show.title')}">${T('ex.show')}</button>` : ''}</li>`;
     }).join('');
+    const nEmpty = L.qs.filter(q => q.ans == null).length;
     return `
-      <header class="ex-head"><h2>Sonuç</h2><button class="ex-x" data-a="close" aria-label="Kapat" title="Kapat (Esc)">×</button></header>
+      <header class="ex-head"><h2>${T('ex.result')}</h2>${langSwitch('ex-lang')}${closeX()}</header>
       <div class="ex-body">
-        <div class="ex-score ${pct >= 60 ? 'ok' : 'bad'}"><b>${L.right} / ${n}</b><span>%${pct}</span>
-          <small>Süre ${fmt(L.sec)}${L.limit ? ` / ${fmt(L.limit)}` : ''} · ${L.mode === 'study' ? 'Çalışma' : 'Sınav'} modu${L.timeout ? ' · <b class="ex-to">Süre doldu</b>' : ''}${L.qs.some(q => q.ans == null) ? ` · ${L.qs.filter(q => q.ans == null).length} boş` : ''}</small></div>
+        <div class="ex-score ${pc >= 60 ? 'ok' : 'bad'}"><b>${L.right} / ${n}</b><span>${pct(pc)}</span>
+          <small>${T('ex.dur', `${fmt(L.sec)}${L.limit ? ` / ${fmt(L.limit)}` : ''}`)} · ${T('ex.modeName', L.mode === 'study' ? T('ex.m.study') : T('ex.m.exam'))}${L.timeout ? ` · <b class="ex-to">${T('ex.timeout')}</b>` : ''}${nEmpty ? ` · ${T('ex.empty', nEmpty)}` : ''}</small></div>
         <div class="ex-sbars">${bars}</div>
         <div class="seg ex-seg ex-filter">
-          <button data-f="wrong" class="${filter === 'wrong' ? 'active' : ''}">Yanlışlar (${wrong.length})</button>
-          <button data-f="flag" class="${filter === 'flag' ? 'active' : ''}">İşaretliler (${flagged.length})</button>
-          <button data-f="all" class="${filter === 'all' ? 'active' : ''}">Tümü (${n})</button></div>
-        ${items ? `<ol class="ex-list">${items}</ol>` : `<p class="ex-note">${filter === 'wrong' ? 'Yanlış ya da boş soru yok, tebrikler!' : 'İşaretlediğin soru yok.'}</p>`}
+          <button data-f="wrong" class="${filter === 'wrong' ? 'active' : ''}">${T('ex.f.wrong', wrong.length)}</button>
+          <button data-f="flag" class="${filter === 'flag' ? 'active' : ''}">${T('ex.f.flag', flagged.length)}</button>
+          <button data-f="all" class="${filter === 'all' ? 'active' : ''}">${T('ex.f.all', n)}</button></div>
+        ${items ? `<ol class="ex-list">${items}</ol>` : `<p class="ex-note">${filter === 'wrong' ? T('ex.noWrong') : T('ex.noFlag')}</p>`}
       </div>
       <footer class="ex-foot">
-        <button data-a="retry"${wrong.length ? '' : ' disabled'} title="Yanlış ve boş sorulardan yeni bir sınav">Yanlışları tekrar çöz</button>
-        <button class="ex-primary" data-a="new">Yeni sınav</button>
+        <button data-a="retry"${wrong.length ? '' : ' disabled'} title="${T('ex.retry.title')}">${T('ex.retry')}</button>
+        <button class="ex-primary" data-a="new">${T('ex.new')}</button>
       </footer>`;
   }
   function render() {
-    const scroll = view === 'run' ? 0 : dlg.querySelector('.ex-body')?.scrollTop || 0;
-    const keepScroll = dlg.dataset.view === view && view !== 'run';
-    dlg.dataset.view = view;
+    const scroll = dlg.querySelector('.ex-body')?.scrollTop || 0;
+    // aynı görünüm yeniden çizilince kaydırma yerinde kalır (sınavda yalnız aynı soru: dil değişimi, işaretleme)
+    const keepScroll = dlg.dataset.view === view && (view !== 'run' || dlg.dataset.cur === String(run?.cur));
+    dlg.dataset.view = view; dlg.dataset.cur = view === 'run' ? String(run.cur) : '';
+    dlg.lang = getLang(); dlg.setAttribute('aria-label', T('ex.title'));
     dlg.innerHTML = view === 'loading'
-      ? '<header class="ex-head"><h2>Deneme sınavı</h2><button class="ex-x" data-a="close" aria-label="Kapat">×</button></header><div class="ex-body ex-loading"><span class="spin"></span> Soru bankaları yükleniyor…</div>'
+      ? `<header class="ex-head"><h2>${T('ex.title')}</h2>${langSwitch('ex-lang')}${closeX(T('ex.close'), T('ex.closeEsc'))}</header><div class="ex-body ex-loading"><span class="spin"></span> ${T('ex.loading')}</div>`
       : view === 'start' ? startHTML() : view === 'run' ? runHTML() : resultHTML();
     if (keepScroll) { const b = dlg.querySelector('.ex-body'); if (b) b.scrollTop = scroll; }
     if (dlg.open && !dlg.contains(document.activeElement)) dlg.focus({ preventScroll: true });
@@ -466,11 +487,19 @@ export function createExam({ tours = [], onShow, onToggle, onData } = {}) {
     if (confirmKind) dlg.querySelector('.ex-confirm [data-a="cancel"]')?.focus({ preventScroll: true });
     if (view === 'run') saveRun();
   }
+  // test dili değişti ya da Almanca metinler geldi: açık pencere aynı durumla yeniden çizilir (soru, şık sırası,
+  // cevaplar, süre değişmez); "Sonuca dön" hapı da
+  function relang() {
+    backHTML();
+    if (dlg.open) render();
+  }
 
   // ---------- olaylar ----------
   dlg.addEventListener('toggle', e => { if (e.target.matches?.('.ex-nav')) navOpen = e.target.open; }, true);
   dlg.addEventListener('click', e => {
     const t = e.target.closest('button'); if (!t || t.disabled) return;
+    // test dili: durum değişmez, yalnız yeniden çizilir (main.js onLang -> relang); odak yeni dilin düğmesine
+    if (t.dataset.tlang) { const l = t.dataset.tlang; setLang(l); dlg.querySelector(`[data-tlang="${l}"]`)?.focus({ preventScroll: true }); return; }
     if (expired()) return;
     const d = t.dataset;
     if (d.set) {
@@ -536,6 +565,6 @@ export function createExam({ tours = [], onShow, onToggle, onData } = {}) {
     open, close: () => { if (view === 'run') escape(); else hide(); },
     isOpen: () => dlg.open,
     get run() { return run; }, get last() { return last; }, get view() { return view; },
-    settings: S, subjects, finish, data, bankIds,
+    settings: S, subjects, finish, data, bankIds, relang,
   };
 }

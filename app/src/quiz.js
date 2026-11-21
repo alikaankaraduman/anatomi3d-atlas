@@ -6,9 +6,10 @@
 // izole görünümle yaşar: izolasyondan çıkılınca biter (sync), "Konuya dön" konu kartına döner.
 // Sonuçlar kalıcı ilerlemeye yazılır (progress.js); "Yanlışlarım" düğmesi soruları zayıf yapılara indirir. Aynı motor
 // genel tekrarda da çalışır (start(null, { title: 'Yanlışlarım', back: false })): konu kartı olmadan, verilen başlıkla.
-import { SYSTEMS, titleName, subtitleName, esc } from './text.js';
+import { titleName, subtitleName, esc } from './text.js';
 import { record, weak, stats, pickWeighted, structId, onChange } from './progress.js';
-import { quizBar, WEAK_EMPTY } from './study.js';
+import { quizBar, weakEmpty, resHTML } from './study.js';
+import { T, langAttr } from './testlang.js';
 
 export function createQuiz({ stage, model, state, refresh, getTopic }) {
   let active = false;
@@ -60,33 +61,36 @@ export function createQuiz({ stage, model, state, refresh, getTopic }) {
   const nameOf = rs => ({ la: titleName(rs[0]), de: subtitleName(rs[0]) });
   function panelHTML() {
     const t = q.id != null ? getTopic(q.id) : null, c = q.cur, p = pool(), st = stats(p.map(sid));
-    const title = q.title || (t ? t.title : ''), place = q.title ? q.place : t ? t.place : '';
+    // genel tekrarın başlığı ve alt satırı işlev olabilir (test dilinde: main.js)
+    const val = v => (typeof v === 'function' ? v() : v);
+    const title = val(q.title) || (t ? t.title : ''), place = q.title ? val(q.place) : t ? t.place : '';
     let body;
-    if (!c && q.weakOnly && p.length >= 2 && !st.weak) body = WEAK_EMPTY;
-    else if (!c) body = '<p class="htext">Bu görünümde soru sorulacak kadar yapı yok (Katmanlar ile gizlenen sistemlerin yapıları soru olmaz).</p>';
+    if (!c && q.weakOnly && p.length >= 2 && !st.weak) body = weakEmpty();
+    else if (!c) body = `<p class="htext">${T('quiz.few')}</p>`;
     else if (q.mode === 'name') {
-      body = `<p class="htext">Parlayan yapı hangisi? <small class="dim">(${esc(SYSTEMS[c.rs[0].s].title)})</small></p><div class="qopts">${c.opts.map((o, i) => {
+      body = `<p class="htext">${T('q.name')} <small class="dim">(${esc(T('sys.' + c.rs[0].s))})</small></p><div class="qopts">${c.opts.map((o, i) => {
         const x = nameOf(o), cls = c.answer ? (o === c.rs ? 'ok' : c.answer.pick === o ? 'bad' : '') : '';
         return `<button class="qopt ${cls}" data-opt="${i}"${c.answer ? ' disabled' : ''}><b lang="la">${esc(x.la)}</b>${x.de ? `<small lang="de">${esc(x.de)}</small>` : ''}</button>`;
-      }).join('')}</div>${c.answer ? `<div class="qres ${c.answer.ok ? 'ok' : 'bad'}">${c.answer.ok ? 'Doğru!' : 'Yanlış; doğru şık yeşil.'}</div>` : ''}`;
+      }).join('')}</div>${c.answer ? resHTML(c.answer.ok, T('res.bad')) : ''}`;
     } else {
       const x = nameOf(c.rs);
-      body = `<p class="htext">Şu yapıyı 3B görünümde tıkla:</p><h1 class="name" lang="la">${esc(x.la)}</h1>${x.de ? `<div class="name-de" lang="de">${esc(x.de)}</div>` : ''}
-        ${c.answer ? `<div class="qres ${c.answer.ok ? 'ok' : 'bad'}">${c.answer.ok ? 'Doğru!' : `Yanlış: ${esc(c.answer.picked)}. Doğrusu şimdi parlıyor.`}</div>` : ''}`;
+      body = `<p class="htext">${T('q.find')}</p><h1 class="name" lang="la">${esc(x.la)}</h1>${x.de ? `<div class="name-de" lang="de">${esc(x.de)}</div>` : ''}
+        ${c.answer ? resHTML(c.answer.ok, T('res.badFind', `<span lang="la">${esc(c.answer.picked)}</span>`)) : ''}`;
     }
-    return `
-      <div class="chips"><span class="chip aanki">${q.title ? 'Tekrar' : 'Aanki · Test'}</span><span class="chip">${p.length} yapı</span></div>
-      <h1 class="name"${q.title ? '' : ' lang="de"'}>${esc(title)}</h1>
-      ${place ? `<div class="name-de"${q.title ? '' : ' lang="de"'}>${esc(place)}</div>` : ''}
-      <div class="seg tiny qmode"><button data-qm="name" class="${q.mode === 'name' ? 'active' : ''}">Bu yapı ne?</button><button data-qm="find" class="${q.mode === 'find' ? 'active' : ''}">Yapıyı bul</button></div>
+    const tl = q.title ? langAttr() : ' lang="de"';   // Aanki konusunun adı Almanca, genel tekrarınki test dilinde
+    return `<div class="tlbox"${langAttr()}>
+      <div class="chips"><span class="chip aanki">${q.title ? T('quiz.review') : 'Aanki · Test'}</span><span class="chip">${T('quiz.count', p.length)}</span></div>
+      <h1 class="name"${tl}>${esc(title)}</h1>
+      ${place ? `<div class="name-de"${tl}>${esc(place)}</div>` : ''}
+      <div class="seg tiny qmode"><button data-qm="name" class="${q.mode === 'name' ? 'active' : ''}">${T('mode.name')}</button><button data-qm="find" class="${q.mode === 'find' ? 'active' : ''}">${T('mode.find')}</button></div>
       ${quizBar({ attr: 'data-qw', on: q.weakOnly, st, score: q.score })}
       ${body}
       <div class="btns">
-        ${c && (q.mode === 'name' || c.answer) ? '<button data-qa="show" title="Kamerayı sorulan yapıya getir">Yapıya odaklan</button>' : ''}
-        ${c && c.answer ? '<button data-qa="next">Sonraki soru ▶</button>' : c && q.mode === 'find' ? '<button data-qa="skip">Geç</button>' : ''}
-        ${q.back ? '<button data-qa="back" title="Konu kartına dön">Konuya dön</button>' : ''}
-        <button data-qa="exit" title="İzole görünümden çık (Esc)">Testten çık</button>
-      </div>`;
+        ${c && (q.mode === 'name' || c.answer) ? `<button data-qa="show" title="${T('focus.title')}">${T('focus')}</button>` : ''}
+        ${c && c.answer ? `<button data-qa="next">${T('next')}</button>` : c && q.mode === 'find' ? `<button data-qa="skip">${T('skip')}</button>` : ''}
+        ${q.back ? `<button data-qa="back" title="${T('quiz.back.title')}">${T('quiz.back')}</button>` : ''}
+        <button data-qa="exit" title="${T('quiz.exit.title')}">${T('quiz.exit')}</button>
+      </div></div>`;
   }
   function click(e) {
     const b = e.target.closest('[data-qm],[data-qa],[data-opt],[data-qw]'); if (!b) return;

@@ -20,6 +20,18 @@
 import * as THREE from 'three';
 import { titleName, subtitleName, esc, SEX } from './text.js';
 import { tint, solid, hex, nameIndex, anchorOf, centerOf, isExploded, createLabels, createStudyQuiz } from './study.js';
+import { getLang, langAttr, Tin } from './testlang.js';
+
+// Test sekmesinin sahne seçicisinde sekmelerin kısa Almanca adları (test dili Almancayken; tabloda olmayan sekme
+// title_de'nin ilk parçasını, o da yoksa Türkçe kısa adı kullanır). Düğmenin title'ı title_de (yoksa title_tr).
+const TAB_DE = {
+  orbita: 'Orbita', ear: 'Ohr & VII', mouth: 'Mund-Rachen', neck: 'Hals',
+  organs: 'Lymphorgane', headneck: 'Kopf-Hals', trunk: 'Rumpf', pelvisleg: 'Becken-Bein',
+  arteries: 'Bauch­arterien', portal: 'Pfortader', peritoneum: 'Peritoneum', liver: 'Leber, Pankreas',
+  larynx: 'Kehlkopf', lung: 'Lunge', pleura: 'Atmung', mediastinum: 'Mediastinum',
+  kidney: 'Niere', male: 'Männlich', female: 'Weiblich', pelvis: 'Becken',
+  armart: 'Armarterien', armven: 'Armvenen', legart: 'Beinarterien', legven: 'Beinvenen',
+};
 
 // açıkça ayrışan grup renkleri (sırayla)
 const PALETTE = [0xe0473f, 0x3f7fe0, 0xf5c542, 0x3fbf6a, 0xb36ae0, 0xf08a2a, 0x3fd0d8, 0xe8579f, 0x9a7a4a, 0xa6e05a];
@@ -589,10 +601,13 @@ export function createTour({ key, title, chip, dataUrl, stage, model, state, ref
     return `<div class="field tpicked"><div class="k">Tıklanan yapı</div><div class="v"><b lang="la">${esc(titleName(r))}</b>${subtitleName(r) ? ` · <span lang="de">${esc(subtitleName(r))}</span>` : ''}${r.tr ? `<br><small>${esc(r.tr)}</small>` : ''}</div></div>`;
   };
   const tabName = t => t.short_tr || (t.title_tr || t.key).split(/[,(]/)[0].trim();
+  const de = () => getLang() === 'de';
+  const sceneName = t => (de() ? t.short_de || TAB_DE[t.key] || (t.title_de || '').split(/[,(:]/)[0].trim() || tabName(t) : tabName(t));
+  const sceneTitle = t => (de() ? t.title_de || Tin('de', 'tab.' + t.key) || t.title_tr || '' : t.title_tr || '');
   function panelHTML() {
     if (!D || !built) return `<p class="htext">${esc(title)} yükleniyor…</p>`;
     const body = m.tab === 'quiz'
-      ? `<div class="seg tiny bview tscene">${D.tabs.map(t => `<button data-ts="${esc(t.key)}" class="${m.scene === t.key ? 'active' : ''}" title="${esc(t.title_tr || '')}">${esc(tabName(t))}</button>`).join('')}</div>${quizOf(tabOf(m.scene) || D.tabs[0]).html()}`
+      ? `<div class="seg tiny bview tscene"${langAttr()}>${D.tabs.map(t => `<button data-ts="${esc(t.key)}" class="${m.scene === t.key ? 'active' : ''}" title="${esc(sceneTitle(t))}">${esc(sceneName(t))}</button>`).join('')}</div>${quizOf(tabOf(m.scene) || D.tabs[0]).html()}`
       : contentHTML() + pickedHTML();
     return `
       <div class="chips"><span class="chip tour">${esc(chip)}</span></div>

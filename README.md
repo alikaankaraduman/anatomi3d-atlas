@@ -68,6 +68,12 @@ right twice in a row, and "Yanlışlarım" (my mistakes) repeats only those. The
 questions of all study modes: 11 topics, 1137 questions, with a choice of topics, number of questions, time limit,
 exam or practice mode, a question map, results per topic and a history of the last 20 exams.
 
+**Test language.** Tests are in German by default, as in the German Anki decks many students learn with, with a DE | TR switch in every
+test panel and in the mock exam: questions, options, explanations and the whole test interface switch language in
+the middle of a question without changing the question, the answer, the score or the timer. Progress is shared by both
+languages. The German texts are AI translations checked by AI reviewers, not by an anatomist; a question without a
+German text is shown in Turkish.
+
 **Device-local profiles.** People who share a device can create profiles with a name and password. Each profile
 has its own progress and exam history. Profiles exist only on the device where they were created, there is no server,
 and the data is not encrypted. The password only keeps the profiles on one device apart.
@@ -158,6 +164,9 @@ Tests:
 
 - `node tools/_qawork/users-test.mjs` (in `app/`): 115 checks for the profile module (password hashing, attempt limit,
   per-profile keys, export and import validation, merge rules, broken or full storage). No browser needed.
+- `node tools/_qawork/testlang-test.mjs` (in `app/`): checks for the test language module (both string tables complete,
+  fallback to Turkish per question, identical option order in both languages, short texts, progress ids unchanged, a
+  failed download neither loops nor throws).
 - `node tools/_qawork/welcome-test.mjs` (in `app/`): checks for the personal welcome link with a throwaway key pair
   (signature round trip; altered payload or signature, another key, unsigned and old-format links are rejected; length
   limits, wrong types, oversized or broken input, prototype keys).

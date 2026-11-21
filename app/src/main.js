@@ -14,6 +14,7 @@ import { createSections } from './sections.js';
 import { loadMuscles } from './muscles.js';
 import { createQuiz } from './quiz.js';
 import { createExam } from './exam.js';
+import * as testlang from './testlang.js';
 import * as progress from './progress.js';
 import { setupPWA } from './pwa.js';
 import * as users from './users.js';
@@ -449,10 +450,10 @@ const actions = {
     state.isolate = new Set(recs.map(r => r.id));
     viewLayers(Object.fromEntries([...new Set(recs.map(r => r.s))].map(sys => [sys, 'show'])));
     refresh();   // soru havuzu görünürlüğe bakar: önce görünüm kurulur
-    quiz.start(null, { title: 'Yanlışlarım', place: 'Testlerde yanlış cevapladığın yapılar', back: false });
+    quiz.start(null, { title: () => testlang.T('review.title'), place: () => testlang.T('review.place'), back: false });   // test dilinde
     stage.focusBox(coreBounds(recs));
-    if (xs) ui.notify(`Kesit testinde ${xs} yanlış daha var: onlar için Yanlışlarım'a bir daha bas`);
-    else if (fx) ui.notify(`Bilgi sorularında ${fx} yanlış daha var: deneme sınavı için Yanlışlarım'a bir daha bas`);
+    if (xs) ui.notify(testlang.T('note.moreSect', xs));   // test dilinde
+    else if (fx) ui.notify(testlang.T('note.moreFacts', fx));
   },
   // Deneme sınavı penceresi (açık çalışma modu altında olduğu gibi kalır). opts.src: 'weak' kaynağı önceden seçer.
   exam(opts) { cancelDeferred(); setPanelOpen(false); setHover(null); ui.tooltip(null); exam.open(opts); },
@@ -461,13 +462,13 @@ const actions = {
   showParts(names) {
     const want = new Set(names);
     const all = model.list.filter(r => want.has(r.n) && !model.failed?.has(r.s));
-    if (!all.length) { ui.notify('Bu sorunun yapıları modelde yok'); return; }
+    if (!all.length) { ui.notify(testlang.T('note.noParts')); return; }   // sınav sonucundan: test dilinde
     const sex = all.some(sexOk) ? state.sex : all[0].x;
     const mine = all.filter(r => !r.x || r.x === sex);
     const wait = [...new Set(mine.filter(r => !r.mesh).map(r => r.s))][0];
     if (wait) { defer(wait, () => actions.showParts(names)); return; }
     const recs = mine.filter(r => r.mesh);
-    if (!recs.length) { ui.notify('Bu sorunun yapıları modelde yok'); return; }
+    if (!recs.length) { ui.notify(testlang.T('note.noParts')); return; }
     cancelDeferred(); endStudy(null); setPanelOpen(false);
     setHover(null); ui.tooltip(null);
     if (matchMedia('(max-height: 500px)').matches) setSheet(true);   // yatay telefon: alt panel küçülsün, yapı görünsün
@@ -517,6 +518,20 @@ quiz = createQuiz({ stage, model, state, refresh, getTopic: id => aanki?.byId.ge
 exam = createExam({ tours: TOURS, onShow: names => actions.showParts(names), onToggle: () => syncHash(), onData: () => syncWeakBtn() });
 document.getElementById('exam-btn').addEventListener('click', e => { e.currentTarget.blur(); actions.exam(); });
 ui.registerPanel('quiz', { html: quiz.panelHTML, click: quiz.click });
+// Test dili (testlang.js): test panelinin puan satırındaki "DE | TR" düğmesi. Paneli yakalama evresinde işler (panelin
+// kendi tıklaması çalışmaz); dil değişince ya da Almanca metinler gelince açık test paneli ve sınav penceresi aynı
+// durumla yeniden çizilir (soru, şık sırası, cevap, puan, kamera değişmez). Test açık değilse hiçbir şey çizilmez.
+const testOpen = () => state.primary?.type === 'quiz' || [heart, brain, loco, ...allTours(), sect].some(m => m?.isActive() && m.hideTips?.());
+testlang.onLang(() => { exam?.relang(); if (testOpen()) refresh(); });
+document.getElementById('info').addEventListener('click', e => {
+  const b = e.target.closest('[data-tlang]'); if (!b) return;
+  e.stopPropagation();
+  const l = b.dataset.tlang;
+  testlang.setLang(l);
+  document.querySelector(`#info [data-tlang="${l}"]`)?.focus({ preventScroll: true });
+}, true);
+// Almanca test metinleri boşta önceden indirilir (servis çalışanı zaten önbelleğe alır); testler beklemeden Almanca açılsın
+if (testlang.getLang() === 'de') setTimeout(() => (window.requestIdleCallback || (f => f()))(() => testlang.loadDe()), 4000);
 document.getElementById('heart-mode').addEventListener('click', e => { e.currentTarget.blur(); actions.heartMode('flow'); });
 document.getElementById('brain-mode').addEventListener('click', e => { e.currentTarget.blur(); actions.brainMode('csf'); });
 document.getElementById('sect-mode').addEventListener('click', e => { e.currentTarget.blur(); actions.sectMode(''); });

@@ -227,6 +227,15 @@ göre yapıldı: destenin kartları okunmadı, tabloda henüz boş olan başlık
 bırakıldı. Anatomi 3D resmî bir uygulama değildir; Aanki, Fachschaft Medizin Aachen ve RWTH Aachen ile
 bağlantısı yoktur.
 
+**Test dili (Almanca / Türkçe)**: Testler varsayılan olarak Almancadır (Fachschaft'ın Almanca Anki destesindeki gibi):
+bilgi soruları, şıklar, açıklamalar, kesit testinde cevaptan sonraki kısa metinler ve test panellerinin ve deneme sınavının
+bütün yazıları (düğmeler, sonuçlar, sayaçlar, konu ve kategori adları). Puan satırındaki ve sınav penceresinin başlığındaki
+**DE | TR** düğmesi Türkçeye (ve geri) geçirir; seçim kullanıcı başına saklanır. Dil sorunun ortasında değişebilir: aynı
+soru, şıklar ekrandaki aynı sırada, verilen cevap, puan, süre ve kamera olduğu gibi kalır. İlerleme iki dilde ortaktır
+("Gewusst" ile "Bilinen" aynı sayıdır). Almancası olmayan bir soru Türkçe gösterilir. Testlerin dışı (menüler, mod
+sekmeleri, çalışma metinleri) Türkçe kalır. Almanca metinler yapay zekâ çevirisidir ve yapay zekâ denetçileriyle
+kontrol edilmiştir, bir anatomi uzmanı tarafından değil.
+
 **İlerleme ve Yanlışlarım**: Bütün testler (kalp, beyin, hareket sistemi, altı tur, kesit testi, Aanki konu testi ve deneme
 sınavı) her sorunun sonucunu bu tarayıcıda saklar; sayfa yenilenince kaybolmaz. Aynı yapı bütün testlerde tek kayıttır. Yanlış cevaplanan soru, iki kez
 arka arkaya doğru bilinene kadar "yanlış" sayılır. Testlerde puanın yanında o soru havuzundaki ilerleme yazar ("Bilinen X /

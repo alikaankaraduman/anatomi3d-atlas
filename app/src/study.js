@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { titleName, subtitleName, esc } from './text.js';
 import { record, weak, stats, pickWeighted, structId, factId, onChange } from './progress.js';
+import { T, langAttr, langSwitch, factText } from './testlang.js';
 
 // Yarı saydam renkli malzeme: kenarlarda belirgin, yüzeyde hafif (hayalet katmanın renkli hâli). alpha: yüzey, edge: kenar.
 // Kesit düzlemi (section.js) bunu da keser: clipping ve clipping_planes parçaları bu yüzden var.
@@ -171,13 +172,24 @@ export function animateFlow(flow, now, speed = 4.5) {
   }
 }
 
-// Test başlığı altındaki satır: "Yanlışlarım (N)" düğmesi (attr: tıklama özniteliği), havuzun kalıcı ilerlemesi ve oturum
-// puanı. st: progress.stats(havuz), score: [doğru, toplam]
-export const quizBar = ({ attr, on, st, score }) => `<div class="qbar">
-  <button class="qweak${on ? ' on' : ''}" ${attr}="1" aria-pressed="${on}" title="${on ? 'Bütün sorulara dön' : 'Yalnız yanlış cevapladığın ve henüz iki kez arka arkaya doğru bilmediğin sorular'}">Yanlışlarım (${st.weak})</button>
-  <span class="qprog" title="Bu tarayıcıda saklanan ilerleme: bu soru havuzunda bilinen ve tekrar edilecek sorular">Bilinen ${st.known} / ${st.total} · yanlış ${st.weak}</span>
-  <span class="score">Doğru ${score[0]} / ${score[1]}</span></div>`;
-export const WEAK_EMPTY = '<p class="htext">Burada tekrar edilecek yanlışın yok, güzel! Bütün sorulara dönmek için «Yanlışlarım» düğmesini kapat.</p>';
+// Test başlığı altındaki satır: "Yanlışlarım (N)" düğmesi (attr: tıklama özniteliği), havuzun kalıcı ilerlemesi, oturum
+// puanı ve test dili düğmesi (DE | TR; tıklamayı main.js işler). st: progress.stats(havuz), score: [doğru, toplam]
+export const quizBar = ({ attr, on, st, score }) => `<div class="qbar"${langAttr()}>
+  <button class="qweak${on ? ' on' : ''}" ${attr}="1" aria-pressed="${on}" title="${T(on ? 'weak.on' : 'weak.off')}">${T('weak.btn', st.weak)}</button>
+  <span class="qprog" title="${T('prog.title')}">${T('prog', st.known, st.total, st.weak)}</span>
+  <span class="score">${T('score', score[0], score[1])}</span>${langSwitch()}</div>`;
+export const weakEmpty = () => `<p class="htext"${langAttr()}>${T('weak.empty')}</p>`;
+// bilgi sorusunun metin bloğu (soru, şıklar, sonuç, açıklama) o anki test dilinde. c: { order, answer: { pick } | null };
+// attr: şık düğmesinin tıklama özniteliği; extra: sonuçla açıklama arasına (kesit testi). Şıkların ekrandaki sırası
+// c.order ile sabittir: dil değişince aynı soru aynı sırada yeniden çizilir.
+export function factHTML(f, c, attr, { pre = '' } = {}) {
+  const x = factText(f), a = c.answer, L = x.de ? 'de' : 'tr';
+  return `${pre}<p class="htext qtext" lang="${L}">${esc(x.q)}</p><div class="qopts" lang="${L}">${c.order.map(i => {
+    const cls = a ? (i === 0 ? 'ok' : a.pick === i ? 'bad' : '') : '';
+    return `<button class="qopt ${cls}" ${attr}="${i}"${a ? ' disabled' : ''}><b>${esc(x.options[i])}</b></button>`;
+  }).join('')}</div>${a ? resHTML(a.ok, T('res.bad')) + (x.explain ? `<div class="tip" lang="${L}">${esc(x.explain)}</div>` : '') : ''}`;
+}
+export const resHTML = (ok, bad) => `<div class="qres ${ok ? 'ok' : 'bad'}"${langAttr()}>${ok ? T('res.ok') : bad}</div>`;
 
 export const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
@@ -224,7 +236,7 @@ export function createStudyQuiz({ recs, items, facts = null, cats = null, refres
   // yenisi seçilir (çizim, ana yenilemeyle gelir)
   onChange(() => { const c = z.cur; if (z.weakOnly && c && !c.answer && !weak(z.mode === 'facts' ? fid(c.f) : sid(c.q))) next(false); });
   const score = (ok, id) => { z.score[1]++; if (ok) z.score[0]++; record(id, ok); };
-  const res = (ok, bad) => `<div class="qres ${ok ? 'ok' : 'bad'}">${ok ? 'Doğru!' : bad}</div>`;
+  const res = resHTML;
   // parlayan / odaklanılacak yapılar: "Bu yapı ne?" sorusunda sorulan yapı, "Yapıyı bul" sorusunda cevaptan sonra doğrusu,
   // bilgi sorusunda cevaptan sonra sorunun ilgili yapıları (show); yalnız görünenler
   const asked = () => {
@@ -252,35 +264,32 @@ export function createStudyQuiz({ recs, items, facts = null, cats = null, refres
     },
     html() {
       const c = z.cur;
-      const modes = [['name', 'Bu yapı ne?'], ['find', 'Yapıyı bul'], ...(facts?.length ? [['facts', 'Bilgi']] : [])];
+      const modes = [['name', T('mode.name')], ['find', T('mode.find')], ...(facts?.length ? [['facts', T('mode.facts')]] : [])];
       let body = '';
       const ids = pool().map(idOf), st = stats(ids);
-      if (!c) body = z.weakOnly && ids.length && !st.weak ? WEAK_EMPTY : '<p class="htext">Bu görünümde soru yok.</p>';
-      else if (z.mode === 'facts') {
-        const f = c.f, a = c.answer;
-        body = `<p class="htext qtext">${esc(f.q)}</p><div class="qopts">${c.order.map(i => {
-          const cls = a ? (i === 0 ? 'ok' : a.pick === i ? 'bad' : '') : '';
-          return `<button class="qopt ${cls}" data-zo="${i}"${a ? ' disabled' : ''}><b>${esc(f.options[i])}</b></button>`;
-        }).join('')}</div>${a ? res(a.ok, 'Yanlış; doğru şık yeşil.') + (f.explain ? `<div class="tip">${esc(f.explain)}</div>` : '') : ''}`;
-      } else if (z.mode === 'name') {
-        body = `<p class="htext">Parlayan yapı hangisi?</p><div class="qopts">${c.opts.map((o, i) => {
+      if (!c) body = z.weakOnly && ids.length && !st.weak ? weakEmpty() : `<p class="htext">${T('noQ.view')}</p>`;
+      else if (z.mode === 'facts') body = factHTML(c.f, c, 'data-zo');
+      else if (z.mode === 'name') {
+        body = `<p class="htext">${T('q.name')}</p><div class="qopts">${c.opts.map((o, i) => {
           const x = qName(o); const cls = c.answer ? (o === c.q ? 'ok' : c.answer.pick === o ? 'bad' : '') : '';
           return `<button class="qopt ${cls}" data-zo="${i}"${c.answer ? ' disabled' : ''}><b lang="la">${esc(x.la)}</b>${x.de ? `<small lang="de">${esc(x.de)}</small>` : ''}</button>`;
-        }).join('')}</div>${c.answer ? res(c.answer.ok, 'Yanlış; doğru şık yeşil.') : ''}`;
+        }).join('')}</div>${c.answer ? res(c.answer.ok, T('res.bad')) : ''}`;
       } else {
         const x = qName(c.q);
-        body = `<p class="htext">Şu yapıyı 3B görünümde tıkla:</p><h1 class="name" lang="la">${esc(x.la)}</h1>${x.de ? `<div class="name-de" lang="de">${esc(x.de)}</div>` : ''}
-          ${c.answer ? res(c.answer.ok, `Yanlış: ${esc(c.answer.picked)}. Doğrusu şimdi parlıyor.`) : ''}`;
+        body = `<p class="htext">${T('q.find')}</p><h1 class="name" lang="la">${esc(x.la)}</h1>${x.de ? `<div class="name-de" lang="de">${esc(x.de)}</div>` : ''}
+          ${c.answer ? res(c.answer.ok, T('res.badFind', `<span lang="la">${esc(c.answer.picked)}</span>`)) : ''}`;
       }
+      // kategori adları test dilinde: cats [[kategori, T anahtarı]]
       const catSeg = z.mode === 'facts' && cats?.length > 1
-        ? `<div class="seg tiny qcat"><button data-zc="all" class="${z.cat === 'all' ? 'active' : ''}">Hepsi</button>${cats.map(([k, t]) => `<button data-zc="${k}" class="${z.cat === k ? 'active' : ''}">${esc(t)}</button>`).join('')}</div>` : '';
-      return `
+        ? `<div class="seg tiny qcat"><button data-zc="all" class="${z.cat === 'all' ? 'active' : ''}">${T('all')}</button>${cats.map(([k, t]) => `<button data-zc="${k}" class="${z.cat === k ? 'active' : ''}">${esc(T(t))}</button>`).join('')}</div>` : '';
+      // test bloğu test dilinde (display: contents: yerleşim değişmez)
+      return `<div class="tlbox"${langAttr()}>
         <div class="seg tiny qmode">${modes.map(([k, t]) => `<button data-zm="${k}" class="${z.mode === k ? 'active' : ''}">${t}</button>`).join('')}</div>
         ${catSeg}
         ${quizBar({ attr: 'data-zw', on: z.weakOnly, st, score: z.score })}
-        ${asked().length ? '<button class="qnext" data-za="show" title="Kamerayı sorulan yapıya getir">Yapıya odaklan</button>' : ''}
+        ${asked().length ? `<button class="qnext" data-za="show" title="${T('focus.title')}">${T('focus')}</button>` : ''}
         ${body}
-        ${c && c.answer ? '<button class="qnext" data-za="next">Sonraki soru ▶</button>' : c && z.mode !== 'name' ? '<button class="qnext" data-za="next">Geç</button>' : ''}`;
+        ${c && c.answer ? `<button class="qnext" data-za="next">${T('next')}</button>` : c && z.mode !== 'name' ? `<button class="qnext" data-za="next">${T('skip')}</button>` : ''}</div>`;
     },
     // panel tıklaması: test düğmelerinden biriyse işler ve true döner
     click(e) {

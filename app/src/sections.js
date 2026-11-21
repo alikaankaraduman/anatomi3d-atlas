@@ -38,7 +38,8 @@
 // oranı ve (main.js) katmanları geri gelir.
 import * as THREE from 'three';
 import { titleName, subtitleName, esc, SEX, SYS_ORDER } from './text.js';
-import { isExploded, createLabels, quizBar, WEAK_EMPTY, shuffle } from './study.js';
+import { isExploded, createLabels, quizBar, weakEmpty, factHTML, resHTML, shuffle } from './study.js';
+import { T, langAttr, shortText, getLang, tipLang } from './testlang.js';
 import { record, weak, stats, pickWeighted, factId, weakIds, onChange } from './progress.js';
 
 const NARROW = 620;      // px: görünür tuval (paneller düşülünce) bundan darsa yapı etiketleri numaradır (seçili olan tam adla)
@@ -297,7 +298,7 @@ export function createSections({ stage, model, state, refresh, defer, cancel, vi
   });
 
   // --- Test ---
-  const TYPES = [['find', 'Yapıyı bul'], ['name', 'Bu ne?'], ['level', 'Hangi seviye?'], ['facts', 'Bilgi']];
+  const TYPES = ['find', 'name', 'level', 'facts'];   // adları test dilinde: T('sx.<tür>')
   const testLevels = () => (z.region === 'all' ? D.regions.flatMap(r => levelsOf(r.key)) : levelsOf(z.region));
   // havuz öğeleri kalıcı nesnelerdir (pickWeighted'ın "öncekini tekrar seçme" karşılaştırması kimlikle)
   const qCache = new Map();
@@ -405,8 +406,8 @@ export function createSections({ stage, model, state, refresh, defer, cancel, vi
     const c = z.cur, r = x !== undefined ? capAt(x, y) : null;
     if (c && !c.answer) {
       if (c.kind !== 'find') return true;   // şıklı soruda tıklama adı ele vermesin
-      if (!onLevel()) { ui?.notify?.('Önce düzlemi seviyeye döndür'); return true; }
-      if (!r) { ui?.notify?.('Kesit yüzündeki yapıya tıkla'); return true; }
+      if (!onLevel()) { ui?.notify?.(T('sx.offLevel')); return true; }
+      if (!r) { ui?.notify?.(T('sx.clickCap')); return true; }
       const ok = c.a.n.includes(r.n);
       m.picked = ok ? null : r.id;
       answer(ok, { picked: titleName(r), pid: r.id });
@@ -469,47 +470,52 @@ export function createSections({ stage, model, state, refresh, defer, cancel, vi
     for (const id of weakIds('f:')) if ([...(factIds.get(id) || [])].some(l => ls.has(l))) n++;
     return n;
   }
-  const res = (ok, bad) => `<div class="qres ${ok ? 'ok' : 'bad'}">${ok ? 'Doğru!' : bad}</div>`;
+  const res = resHTML;
   const nameOpt = (o, cls, i, dis) => `<button class="qopt ${cls}" data-yo="${i}"${dis ? ' disabled' : ''}><b lang="la">${esc(o.la)}</b>${o.de ? `<small lang="de">${esc(o.de)}</small>` : ''}</button>`;
-  const levelField = L => `<div class="field"><div class="k">Seviye</div><div class="v" lang="de">${esc(L.title_de)}</div></div>`;
-  const itemText = a => `${a.tr ? `<p class="htext">${esc(a.tr)}</p>` : ''}${a.tip ? `<div class="tip" lang="de">${esc(a.tip)}</div>` : ''}`;
+  const levelField = L => `<div class="field"><div class="k">${T('sx.level.k')}</div><div class="v" lang="de">${esc(L.title_de)}</div></div>`;
+  // cevaptan sonraki tanıma metni ve ipucu test dilinde (Almancası quiz-de.json "texts" içinde; yoksa kaynak metin).
+  // İpuçlarının bir kısmı kaynakta zaten Almanca, bir kısmı Türkçe: Almancası bulunmayan ipucunun dili tipLang ile kestirilir.
+  const itemText = a => {
+    const t = a.tr ? shortText(a.tr) : null, tp = a.tip ? shortText(a.tip) : null;
+    return `${t ? `<p class="htext" lang="${t.de ? 'de' : 'tr'}">${esc(t.text)}</p>` : ''}${tp ? `<div class="tip" lang="${tp.de ? 'de' : tipLang(tp.text)}">${esc(tp.text)}</div>` : ''}`;
+  };
+  // bölge adı test dilinde (Almanca: sabit tablo; tabloda yoksa Türkçe ad)
+  const regionNameT = r => (getLang() === 'de' && T('sreg.' + r.key) !== 'sreg.' + r.key ? T('sreg.' + r.key) : regionName(r));
   function testHTML() {
     const c = z.cur, a = c?.answer;
     const ids = pool().map(x => idOf(x)), st = stats(ids);
     let body = '';
-    if (!c) body = z.weakOnly && ids.length && !st.weak ? WEAK_EMPTY : '<p class="htext">Bu seçimde soru yok.</p>';
+    if (!c) body = z.weakOnly && ids.length && !st.weak ? weakEmpty() : `<p class="htext">${T('sx.noQ')}</p>`;
     else if (c.kind === 'find') {
-      body = `${levelField(c.L)}<p class="htext">Şu yapıyı kesit yüzünde tıkla:</p><h1 class="name" lang="la">${esc(c.a.la)}</h1>${c.a.de ? `<div class="name-de" lang="de">${esc(c.a.de)}</div>` : ''}
-        ${a ? res(a.ok, `Yanlış: ${esc(a.picked)}. Doğrusu şimdi vurgulu.`) + itemText(c.a) : ''}`;
+      body = `${levelField(c.L)}<p class="htext">${T('sx.q.find')}</p><h1 class="name" lang="la">${esc(c.a.la)}</h1>${c.a.de ? `<div class="name-de" lang="de">${esc(c.a.de)}</div>` : ''}
+        ${a ? res(a.ok, T('sx.badFind', `<span lang="la">${esc(a.picked)}</span>`)) + itemText(c.a) : ''}`;
     } else if (c.kind === 'name') {
-      body = `${levelField(c.L)}<p class="htext">Kesit yüzünde halkayla işaretli yapı hangisi?</p><div class="qopts">${c.opts.map((o, i) =>
+      body = `${levelField(c.L)}<p class="htext">${T('sx.q.name')}</p><div class="qopts">${c.opts.map((o, i) =>
         nameOpt(o, a ? (o === c.a ? 'ok' : a.pick === o ? 'bad' : '') : '', i, a)).join('')}</div>
-        ${a ? res(a.ok, 'Yanlış; doğru şık yeşil.') + itemText(c.a) : ''}`;
+        ${a ? res(a.ok, T('res.bad')) + itemText(c.a) : ''}`;
     } else if (c.kind === 'level') {
-      body = `<p class="htext">Bu kesit hangi seviyede?</p><div class="qopts">${c.opts.map((o, i) => {
+      // cevaptan sonra seviyenin adı: Almancada seviye adı ve yüksekliği, Türkçede Türkçe adı ve Almanca yüksekliği
+      const after = getLang() === 'de'
+        ? `<p class="htext" lang="de">${esc(c.L.title_de)}${c.L.level_de ? ` · ${esc(c.L.level_de)}` : ''}</p>`
+        : `<p class="htext">${esc(c.L.title_tr)}${c.L.level_de ? ` · <span lang="de">${esc(c.L.level_de)}</span>` : ''}</p>`;
+      body = `<p class="htext">${T('sx.q.level')}</p><div class="qopts">${c.opts.map((o, i) => {
         const cls = a ? (o === c.L ? 'ok' : a.pick === o ? 'bad' : '') : '';
         return `<button class="qopt ${cls}" data-yo="${i}"${a ? ' disabled' : ''}><b lang="de">${esc(o.title_de)}</b></button>`;
-      }).join('')}</div>${a ? res(a.ok, 'Yanlış; doğru şık yeşil.') + `<p class="htext">${esc(c.L.title_tr)}${c.L.level_de ? ` · <span lang="de">${esc(c.L.level_de)}</span>` : ''}</p>` : ''}`;
-    } else {
-      const f = c.f;
-      body = `${levelField(c.L)}<p class="htext qtext">${esc(f.q)}</p><div class="qopts">${c.order.map(i => {
-        const cls = a ? (i === 0 ? 'ok' : a.pick === i ? 'bad' : '') : '';
-        return `<button class="qopt ${cls}" data-yo="${i}"${a ? ' disabled' : ''}><b>${esc(f.options[i])}</b></button>`;
-      }).join('')}</div>${a ? res(a.ok, 'Yanlış; doğru şık yeşil.') + (f.explain ? `<div class="tip">${esc(f.explain)}</div>` : '') : ''}`;
-    }
-    return `
-      <div class="seg tiny bview xregion">${[['all', 'Tümü', 'Bütün bölgeler'], ...D.regions.map(r => [r.key, regionName(r), r.title_tr])].map(([k, t, ti]) =>
+      }).join('')}</div>${a ? res(a.ok, T('res.bad')) + after : ''}`;
+    } else body = factHTML(c.f, c, 'data-yo', { pre: levelField(c.L) });
+    return `<div class="tlbox"${langAttr()}>
+      <div class="seg tiny bview xregion">${[['all', T('all'), T('sx.allRegions')], ...D.regions.map(r => [r.key, regionNameT(r), getLang() === 'de' ? regionNameT(r) : r.title_tr])].map(([k, t, ti]) =>
         `<button data-yr="${esc(k)}" class="${z.region === k ? 'active' : ''}" title="${esc(ti)}">${esc(t)}</button>`).join('')}</div>
-      <div class="seg tiny qmode xqmode">${TYPES.map(([k, t]) => `<button data-ym="${k}" class="${z.mode === k ? 'active' : ''}">${t}</button>`).join('')}</div>
+      <div class="seg tiny qmode xqmode">${TYPES.map(k => `<button data-ym="${k}" class="${z.mode === k ? 'active' : ''}">${T('sx.' + k)}</button>`).join('')}</div>
       ${quizBar({ attr: 'data-yw', on: z.weakOnly, st, score: z.score })}
       ${body}
-      ${c && a ? pickedHTML() : ''}
+      ${c && a ? pickedHTML(T('sx.picked')) : ''}
       <div class="xtools">
-        ${c ? `<button data-ya="next" class="qnext">${a ? 'Sonraki soru ▶' : 'Geç'}</button>` : ''}
-        <button data-ya="view" title="Kamerayı kesite dik ve seviyeyi çerçeveleyecek şekilde getir">Kesite bak</button>
-        ${onLevel() ? '' : '<button data-ya="back" title="Düzlemi seviyenin yerine geri koy">Seviyeye dön</button>'}
+        ${c ? `<button data-ya="next" class="qnext">${a ? T('next') : T('skip')}</button>` : ''}
+        <button data-ya="view" title="${T('sx.view.title')}">${T('sx.view')}</button>
+        ${onLevel() ? '' : `<button data-ya="back" title="${T('sx.back.title')}">${T('sx.back')}</button>`}
       </div>
-      ${a ? '<p class="htext small">Kesit yüzüne tıklayınca o yapının adı görünür.</p>' : ''}`;
+      ${a ? `<p class="htext small">${T('sx.clickHint')}</p>` : ''}</div>`;
   }
 
   // --- panel ---
@@ -518,9 +524,9 @@ export function createSections({ stage, model, state, refresh, defer, cancel, vi
     const list = levelsOf(m.region), i = list.findIndex(l => l.key === L.key);
     return `<div class="stepnav xnav"><button data-xa="prev"${i <= 0 ? ' disabled' : ''} title="Bir önceki seviye">◀ Önceki</button><span>${i + 1} / ${list.length}</span><button data-xa="next"${i < 0 || i >= list.length - 1 ? ' disabled' : ''} title="Bir sonraki seviye">Sonraki ▶</button></div>`;
   }
-  function pickedHTML() {
+  function pickedHTML(label = 'Tıklanan yapı') {
     const r = m.picked ? model.items.get(m.picked) : null; if (!r) return '';
-    return `<div class="field"><div class="k">Tıklanan yapı</div><div class="v"><b lang="la">${esc(titleName(r))}</b>${subtitleName(r) ? `<br><span lang="de">${esc(subtitleName(r))}</span>` : ''}</div></div>`;
+    return `<div class="field"><div class="k">${label}</div><div class="v"><b lang="la">${esc(titleName(r))}</b>${subtitleName(r) ? `<br><span lang="de">${esc(subtitleName(r))}</span>` : ''}</div></div>`;
   }
   function atlasHTML(L) {
     const sel = selItem(L);
@@ -542,7 +548,7 @@ export function createSections({ stage, model, state, refresh, defer, cancel, vi
       ${m.away ? '<p class="htext small">Düzlem sol paneldeki kesit denetimleriyle değiştirildi; etiketler gizli.</p>' : m.off ? '<p class="htext small">Düzlem seviyeden kaydırıldı; etiketler gizli.</p>' : ''}
       ${sel ? `<div class="tsel xsel">
         <h1 class="name" lang="la">${esc(sel.la)}</h1>${sel.de ? `<div class="name-de" lang="de">${esc(sel.de)}</div>` : ''}
-        ${sel.tr ? `<p class="htext">${esc(sel.tr)}</p>` : ''}${sel.tip ? `<div class="tip" lang="de">${esc(sel.tip)}</div>` : ''}</div>`
+        ${sel.tr ? `<p class="htext">${esc(sel.tr)}</p>` : ''}${sel.tip ? `<div class="tip" lang="${tipLang(sel.tip)}">${esc(sel.tip)}</div>` : ''}</div>`
         : '<p class="htext small">Bir yapıyı listeden, etiketinden ya da kesit yüzüne tıklayarak seç.</p>'}
       ${pickedHTML()}
       <div class="tlist xitems">${askOf(L).map((a, i) => `<button class="titem${a === sel ? ' on' : ''}" data-xi="${esc(a.key)}" title="${esc(a.de || '')}"><b class="xn">${i + 1}</b> <span lang="la">${esc(a.la)}</span></button>`).join('')}</div>`;
@@ -552,7 +558,7 @@ export function createSections({ stage, model, state, refresh, defer, cancel, vi
     const L = cur();
     const body = m.tab === 'test' ? testHTML() : atlasHTML(L);
     return `
-      <div class="chips"><span class="chip tour">Kesit atlası</span><span class="chip">${esc(m.tab === 'test' && z.region === 'all' ? 'Bütün bölgeler' : regionName(regionOf(m.tab === 'test' ? z.region : m.region)))}</span></div>
+      <div class="chips"><span class="chip tour">Kesit atlası</span>${m.tab === 'test' ? `<span class="chip"${langAttr()}>${esc(z.region === 'all' ? T('sx.allRegions') : regionNameT(regionOf(z.region)))}</span>` : `<span class="chip">${esc(regionName(regionOf(m.region)))}</span>`}</div>
       <div class="seg small htabs xtabs"><button data-xt="atlas" class="${m.tab === 'atlas' ? 'active' : ''}">Atlas</button><button data-xt="test" class="${m.tab === 'test' ? 'active' : ''}" title="Kesit yüzünde yapı bul, yapıyı adlandır, seviyeyi tanı, bilgi soruları">Test</button></div>
       ${body}
       <div class="btns"><button data-xa="exit" title="Kesit atlasından çık (Esc)">Moddan çık</button></div>`;

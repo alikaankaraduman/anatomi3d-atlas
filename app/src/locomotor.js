@@ -16,6 +16,7 @@
 import * as THREE from 'three';
 import { titleName, subtitleName, esc } from './text.js';
 import { tint, solid, hex, nameIndex, anchorOf, isExploded, createLabels, createStudyQuiz, shuffle } from './study.js';
+import { T, langAttr } from './testlang.js';
 import { cardHTML } from './muscles.js';
 
 const TABS = [['nerves', 'Sinir'], ['passages', 'Geçit'], ['muscles', 'Kas'], ['joints', 'Eklem'], ['quiz', 'Test']];
@@ -95,7 +96,7 @@ export function createLoco({ stage, model, state, refresh, defer, viewLayers, en
     };
     const visible = r => !!state.isolate?.has(r.id);
     test = createStudyQuiz({ recs: lrecs, items: quizItems(), facts: tagFacts([...(D.quiz || []), ...(MU.quiz || []), ...genFacts()]), factOk: f => !f.reg || f.reg === m.testRegion,
-      cats: [['nerve', 'Sinir'], ['passage', 'Geçit'], ['joint', 'Eklem'], ['muscle', 'Kas']], refresh, stage, model, visible, findable });
+      cats: [['nerve', 'cat.nerve'], ['passage', 'cat.passage'], ['joint', 'cat.joint'], ['muscle', 'cat.muscle']], refresh, stage, model, visible, findable });
     built = true;
   }
   // Yapı testi havuzu: kol ve bacağın kasları (bütün kas, bütün başlarıyla) ve listedeki sinirler. Aynı gruptaki kaslar
@@ -131,7 +132,8 @@ export function createLoco({ stage, model, state, refresh, defer, viewLayers, en
       if (nerves.length < 4) continue;
       for (const { w, nv } of ws) {
         const seg = cardsOf(w).find(c => !c.nonMuscle)?.seg, b = base(nv);
-        out.push({ q: `${w.whole_la} hangi sinirle innerve edilir?`, options: [b, ...shuffle(nerves.filter(x => x !== b)).slice(0, 3)],
+        // q Türkçe kalır (ilerleme kimliği), qde Almanca soru metni (testlang.factText); şıklar ve açıklama dilden bağımsız
+        out.push({ q: `${w.whole_la} hangi sinirle innerve edilir?`, qde: `${w.whole_la}: Innervation durch welchen Nerv?`, options: [b, ...shuffle(nerves.filter(x => x !== b)).slice(0, 3)],
           explain: `${w.whole_la}: ${nv}${seg ? ` (${seg})` : ''}.`, cat: 'muscle', show: w.parts });
       }
     }
@@ -516,7 +518,7 @@ export function createLoco({ stage, model, state, refresh, defer, viewLayers, en
   function panelHTML() {
     if (!D || !built) return '<p class="htext">Hareket sistemi modu yükleniyor…</p>';
     const body = m.tab === 'nerves' ? nervesHTML() : m.tab === 'passages' ? passagesHTML() : m.tab === 'muscles' ? musclesHTML() : m.tab === 'joints' ? jointsHTML()
-      : `${seg(TEST_REGIONS, m.testRegion, 'data-tr')}${test.html()}`;
+      : `<div class="tlbox"${langAttr()}>${seg(TEST_REGIONS.map(([k]) => [k, esc(T('reg.' + k))]), m.testRegion, 'data-tr')}</div>${test.html()}`;
     return `
       <div class="chips"><span class="chip loco">Hareket sistemi modu</span></div>
       <div class="seg small htabs">${TABS.map(([k, t]) => `<button data-lt="${k}" class="${m.tab === k ? 'active' : ''}"${hasTab(k) ? '' : ' disabled'}>${t}</button>`).join('')}</div>
