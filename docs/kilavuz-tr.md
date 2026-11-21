@@ -42,6 +42,25 @@ Uygulama telefonda da çalışır ve ana ekrana eklenebilir (PWA).
   (ör. `#m=loco:joints:knie`, `#m=loco:nerves:radialis`). Tanınmayan bir bağlantı bir uyarı verir ve adres ekrandaki
   görünüme göre yeniden yazılır. Deneme sınavı açıkken tarayıcının Geri tuşu alttaki görünümü değiştirmez.
 
+## Kişisel bağlantı (sana özel not)
+
+Birine, uygulamayı kısa bir notla açan bir bağlantı gönderebilirsin.
+
+- **Oluşturmak**: ⓘ › "Birine özel bağlantı oluştur". Kime (gerekli, en çok 40 karakter), Kimden, Not (en çok 600
+  karakter, satır sonları kalır), Tarih, Renk ve Uygulama adı (en çok 30 karakter) doldurulur; kartın önizlemesi ve
+  bağlantı anında görünür, "Kopyala" ile alınır. Yazılanlar hiçbir yerde saklanmaz ve gönderilmez.
+- **Açılınca**: bağlantıyı açan kişi önce bu kartı görür. "Başla"ya basarsa not, renk ve uygulama adı onun
+  cihazında saklanır (× ya da Geri ile kapatırsa hiçbir şey saklanmaz): kart ⓘ › "Sana özel not" ile yeniden açılır, oradan "Bu cihazdan kaldır" ile silinir. Cihazda
+  henüz kullanıcı yoksa Kullanıcılar penceresi notun adıyla kullanıcı oluşturmayı önerir (şifreyi kişi kendisi
+  belirler). Başka bir kişisel bağlantı açılırsa eskisinin yerine geçmeden önce sorulur.
+- **iPhone / iPad / Mac**: ana ekrana ya da Dock'a eklenen uygulama Safari'nin kayıtlarını görmez. Eklemeyi
+  bağlantıyla açılan sayfadan yap (kart bunu söyler; bağlantı yalnız Safari'de adreste kalır, öteki tarayıcılarda hemen
+  adresten silinir). Not ana ekrandaki uygulamada görünmezse: ⓘ › "Kişisel bağlantın var mı?"
+  alanına bağlantının tamamını yapıştır › Uygula.
+- **Gizlilik**: notun metni bağlantının kendisinde (adresin # işaretinden sonrası, uygulama onu sunucuya göndermez) ve
+  onu kabul eden cihazda durur. Bağlantı, gönderildiği uygulamada ve tarayıcı geçmişinde de durur; bağlantıyı alan herkes
+  notu okuyabilir: bağlantıyı yalnız o kişiye gönder.
+
 ## Kullanım
 
 | İşlem | Nasıl |

@@ -18,6 +18,7 @@ import * as progress from './progress.js';
 import { setupPWA } from './pwa.js';
 import * as users from './users.js';
 import { setupUsers } from './users-ui.js';
+import { setupWelcome, storedWelcome } from './welcome-ui.js';
 import { SYSTEMS, SYS_ORDER, LOAD_ORDER, SUBS, SUB_DEFAULT_OFF, SEX, presetFor } from './text.js';
 
 const canvas = document.getElementById('view');
@@ -609,7 +610,8 @@ document.getElementById('about-btn').addEventListener('click', () => { document.
 // Kullanıcılar (bu cihazdaki profiller, src/users.js): sol paneldeki giriş düğmesi ve pencere. Öğrenme verisi
 // (progress.js, exam.js) açık kullanıcının anahtarlarıyla yüklenir; kullanıcı değişince sayfa yeniden yüklenir.
 // Açılışta şifre bekleyen profil ya da kullanıcı listesi burada açılır (Geri tuşu katmanı #users'ı da kapatır).
-const usersUI = setupUsers({ notify: t => ui.notify(t) });
+// Cihazda kullanıcı yoksa ve bir kişisel not saklıysa pencere notun adıyla kullanıcı oluşturmayı önerir (src/welcome-ui.js).
+const usersUI = setupUsers({ notify: t => ui.notify(t), suggestName: () => storedWelcome()?.to });
 
 // "Sistemleri gerektiğinde yükle" ayarı (Araçlar)
 const lazyBox = document.getElementById('lazy-load');
@@ -717,7 +719,7 @@ let hashReady = false;   // açılıştaki bağlantı okunana kadar adrese dokun
 function syncHash() {
   if (!hashReady) return;
   if (!deferred) {   // bekleyen bir istek varken adres onun görünümünü bekler (bekçi yine de kurulur)
-    const h = viewHash();
+    const h = fullHash();
     if (h !== location.hash.replace(/^#/, '')) {
       try { history.replaceState(history.state, '', h ? '#' + h : location.pathname + location.search); } catch { /* file:// vb. */ }
     }
@@ -750,11 +752,17 @@ function applyHash(raw) {
     else miss('Bağlantıdaki çalışma modu bulunamadı');
     return;
   }
-  syncHash();   // tanınmayan bağlantı
+  syncHash();   // tanınmayan bağlantı (ya da yalnız kişisel bağlantı, #g=)
 }
+// Kişisel bağlantı (#g=..., src/welcome-ui.js): bir görünüm değildir. Geçerliyse yalnız iOS / macOS Safari sekmesinde adreste kalır
+// (ana ekran / Dock yer imi onu taşısın diye): syncHash onu görünümün önüne ekler (fullHash). applyHash g'yi yok sayar,
+// derin bağlantılar (#g=...&t=...) eskisi gibi uygulanır. Öteki tarayıcılarda, kurulu uygulamada ve Android kabuğunda adresten silinir.
+// Kart açılıştan önce gösterilir; Geri tuşu katmanı onu da kapatır.
+const welcomeUI = setupWelcome({ notify: t => ui.notify(t), onHash: () => syncHash() });
+function fullHash() { return [welcomeUI?.hashParam(), viewHash()].filter(Boolean).join('&'); }
 // Sınav penceresi açıkken (Geri tuşu) alttaki görünüm değişmez; adres sınavı göstermeye devam eder
 // Uygulamanın kendi geçmiş girişlerine (taban ve bekçi, aşağıda) dönüşleri popstate işler: adresleri yeniden yazılır.
-window.addEventListener('hashchange', () => { if (navMark(history.state)) { syncHash(); return; } navCur = history.state; if (exam?.isOpen()) { syncHash(); return; } try { applyHash(location.hash); } catch (err) { console.error(err); ui.notify('Bağlantı açılamadı'); syncHash(); } });
+window.addEventListener('hashchange', () => { if (navMark(history.state)) { syncHash(); return; } navCur = history.state; welcomeUI.onHashChange(location.hash); if (exam?.isOpen()) { syncHash(); return; } try { applyHash(location.hash); } catch (err) { console.error(err); ui.notify('Bağlantı açılamadı'); syncHash(); } });
 // ---------- Geri tuşu / geri hareketi (telefon tarayıcısı, kurulu uygulama, Android WebView) ----------
 /* TASARIM
    Amaç: telefonda sistemin Geri tuşu ya da hareketi uygulamadan çıkmasın, en üstteki açık katmanı kapatsın (her
@@ -796,7 +804,7 @@ function navAfterGesture() {
 function topLayer() {
   if (exam?.isOpen()) return () => exam.close();   // süren sınavda close() çıkış onayını açar ya da kapatır
   const dlg = [...document.querySelectorAll('dialog[open]')].pop();   // en son açılan (Hakkında'nın üstündeki #doc) önce kapanır
-  if (dlg) return () => { if (dlg.id === 'users' && usersUI?.back()) return; dlg.close(); };   // Kullanıcılar: alt görünümden önce listeye
+  if (dlg) return () => { if (dlg.id === 'users' && usersUI?.back()) return; if (dlg.id === 'welcome' && welcomeUI?.back()) return; dlg.close(); };   // Kullanıcılar: alt görünümden önce listeye; kişisel not: kaldırma onayından önce karta
   const res = document.getElementById('results');
   if (res && !res.hidden) return () => { res.hidden = true; document.getElementById('search')?.blur(); };
   if (document.body.classList.contains('panel-open') && DRAWER_MQ.matches) return () => setPanelOpen(false);
@@ -840,7 +848,7 @@ window.addEventListener('popstate', e => {
   }
   if (to?.a3d === 'guard') {
     // ileri tuşu ya da sonraki bir girişten geri: bekçinin adresindeki görünüm
-    if (!exam?.isOpen() && location.hash.replace(/^#/, '') !== viewHash()) {
+    if (!exam?.isOpen() && location.hash.replace(/^#/, '') !== fullHash()) {
       try { Promise.resolve(applyHash(location.hash)).catch(err => console.error(err)).finally(() => syncHash()); } catch (err) { console.error(err); }
     }
     syncHash();

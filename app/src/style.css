@@ -889,3 +889,82 @@ dialog#users .us-text { font-family: ui-monospace, Consolas, monospace; font-siz
   dialog#users .us-head { padding-left: 14px; }
   dialog#users .us-row > button { flex: 1 1 auto; }
 }
+
+/* ---------- kişisel bağlantı (src/welcome-ui.js) ---------- */
+/* Hakkında penceresindeki girişler */
+dialog#about .wl-mine-row { margin-top: 10px; }
+dialog#about .wl-mine-row[hidden] { display: none; }
+dialog#about .wl-mine { border-color: var(--accent); color: var(--text); }
+dialog#about .wl-about .btns { margin-top: 8px; }
+dialog#about .wl-paste { margin-top: 10px; }
+dialog#about .wl-paste summary { cursor: pointer; color: var(--accent); font-weight: 600; min-height: 32px; display: flex; align-items: center; }
+dialog#about .wl-paste-row { display: flex; gap: 6px; margin-top: 6px; }
+dialog#about .wl-paste-row input { flex: 1; min-width: 0; font: inherit; font-size: 16px; color: var(--text); background: #1f2126; border: 1px solid var(--line-strong); border-radius: 8px; padding: 7px 10px; min-height: 40px; }
+dialog#about .wl-paste-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+dialog#about .wl-paste-row button { border: 1px solid var(--line-strong); background: rgba(255, 255, 255, 0.06); border-radius: 8px; padding: 6px 14px; font-weight: 600; min-height: 40px; }
+dialog#about .wl-paste-msg { margin: 6px 0 0; padding: 6px 10px; border-radius: 8px; background: rgba(255, 158, 158, 0.12); color: #ffc4c4; font-size: 12px; }
+dialog#about .wl-paste-msg[hidden] { display: none; }
+
+/* kart ve oluşturma penceresi */
+dialog#welcome, dialog#welcome-make { width: min(460px, calc(100vw - 24px)); max-height: calc(100vh - 48px); max-height: calc(100dvh - 32px - var(--sat) - var(--sab)); overflow: auto; overscroll-behavior: contain; padding: 0; background: var(--panel-solid); color: var(--text); border: 1px solid var(--line-strong); border-radius: 14px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55); }
+dialog#welcome { border-top: 3px solid var(--accent); }
+dialog#welcome-make { width: min(520px, calc(100vw - 24px)); }
+dialog#welcome::backdrop, dialog#welcome-make::backdrop { background: rgba(0, 0, 0, 0.6); }
+dialog#welcome { position: fixed; }
+dialog#welcome .wl-x { position: absolute; top: 8px; right: 8px; }
+.wl-x { width: 36px; height: 36px; border: 0; border-radius: 8px; background: transparent; font-size: 22px; line-height: 1; color: var(--dim); padding: 0; }
+.wl-x:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+dialog#welcome-make .wl-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 12px 8px 18px; background: var(--panel-solid); border-bottom: 1px solid var(--line); }
+dialog#welcome-make h2 { margin: 0; font-size: 17px; }
+dialog#welcome-make h3 { margin: 16px 0 6px; font-size: 11px; letter-spacing: 0.9px; text-transform: uppercase; color: var(--dim); }
+.wl-body { padding: 18px 20px 18px; }
+dialog#welcome .wl-body { padding: 22px 22px 18px; }
+.wl-card { overflow-wrap: anywhere; }
+.wl-kicker { margin: 0 0 6px; font-size: 11px; letter-spacing: 0.9px; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+.wl-to { margin: 0 0 12px; font-size: 21px; line-height: 1.25; padding-right: 28px; }
+.wl-msg { margin: 0 0 12px; white-space: pre-line; line-height: 1.6; font-size: 15px; color: #d4d8e0; }
+.wl-sign { margin: 0 0 4px; color: var(--dim); font-size: 13px; font-style: italic; }
+.wl-text { margin: 0 0 12px; line-height: 1.55; color: #c9cdd6; overflow-wrap: anywhere; }
+.wl-hint { margin: 12px 0 0; padding: 8px 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.05); border-left: 3px solid var(--accent); font-size: 12.5px; line-height: 1.5; color: #c9cdd6; }
+.wl-hint.warn { border-left-color: #ff9e9e; }
+.wl-small { margin: 8px 0; font-size: 12px; line-height: 1.5; color: var(--dim); }
+.wl-by { margin: 10px 0 0; font-size: 11.5px; }
+.wl-status.err { color: #ffc4c4; }
+.wl-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+dialog#welcome button:not(.wl-x), dialog#welcome-make button:not(.wl-x) { min-height: 38px; padding: 7px 16px; border: 1px solid var(--line-strong); border-radius: 8px; background: rgba(255, 255, 255, 0.05); font-weight: 600; }
+dialog#welcome button.pri, dialog#welcome-make button.pri { border-color: transparent; background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+dialog#welcome button.danger { border-color: transparent; background: #d9534f; color: #fff; font-weight: 700; }
+dialog#welcome-make button:disabled { opacity: 0.55; cursor: default; }
+dialog#welcome .wl-link-danger { min-height: 32px !important; margin-top: 10px; padding: 4px 0 !important; border: 0 !important; background: none !important; color: #ff9e9e; text-decoration: underline; font-weight: 500 !important; }
+.wl-form { display: flex; flex-direction: column; gap: 2px; }
+.wl-field { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+.wl-field > span, .wl-field-top > span, .wl-colors legend { font-size: 12px; color: var(--dim); }
+.wl-field-top { display: flex; justify-content: space-between; align-items: baseline; }
+.wl-count { color: var(--dim); font-size: 11.5px; }
+.wl-count.over { color: #ff9e9e; font-weight: 700; }
+/* 16 px: iOS odaklanınca sayfayı büyütmesin */
+.wl-field input, .wl-field textarea, .wl-out { width: 100%; font: inherit; font-size: 16px; color: var(--text); background: #1f2126; border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px 10px; min-height: 42px; color-scheme: dark; }
+.wl-field textarea { resize: vertical; line-height: 1.5; }
+.wl-field input:focus-visible, .wl-field textarea:focus-visible, .wl-out:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+.wl-out { font-family: ui-monospace, Consolas, monospace; font-size: 13px; word-break: break-all; resize: vertical; -webkit-user-select: text; user-select: text; }
+.wl-colors { border: 0; margin: 8px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.wl-colors legend { padding: 0; margin-bottom: 6px; }
+.wl-swatch { position: relative; display: inline-grid; place-items: center; width: 36px; height: 36px; cursor: pointer; }
+.wl-swatch input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.wl-swatch span { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4) inset; }
+.wl-swatch input:checked + span { border-color: var(--text); box-shadow: 0 0 0 2px var(--panel-solid) inset; }
+.wl-swatch input:focus-visible + span { outline: 2px solid var(--text); outline-offset: 2px; }
+.wl-preview { padding: 16px; border: 1px solid var(--line-strong); border-top: 3px solid var(--accent); border-radius: 12px; background: rgba(0, 0, 0, 0.18); }
+.wl-preview .wl-to { padding-right: 0; }
+.wl-len { color: var(--dim); }
+@media (pointer: coarse) {
+  dialog#welcome button:not(.wl-x), dialog#welcome-make button:not(.wl-x) { min-height: 44px; }
+  .wl-x { min-width: 44px; min-height: 44px; }
+  .wl-swatch { width: 44px; height: 44px; }
+}
+@media (max-width: 600px) {
+  dialog#welcome, dialog#welcome-make { width: calc(100vw - 16px - var(--sal) - var(--sar)); max-width: none; max-height: calc(100dvh - 16px - var(--sat) - var(--sab)); }
+  .wl-body, dialog#welcome .wl-body { padding: 16px 16px 16px; }
+  dialog#welcome-make .wl-head { padding-left: 14px; }
+  .wl-row > button { flex: 1 1 auto; }
+}

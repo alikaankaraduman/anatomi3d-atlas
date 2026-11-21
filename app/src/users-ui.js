@@ -11,7 +11,7 @@ const native = () => !!window.Capacitor?.isNativePlatform?.() || location.protoc
 const day = t => (t ? new Date(t).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 const HONEST = 'Şifre, bu cihazdaki profilleri birbirinden ayırır. Veriler şifrelenmez, yalnız bu cihazda kalır ve hiçbir yere gönderilmez; bir telefonda oluşturulan profil başka bir cihazda yoktur (taşımak için Dışa aktar / İçe aktar). Başka bir yerde kullandığın şifreyi kullanma. Unutulan şifre kurtarılamaz: profil, adı yazılarak silinebilir.';
 
-export function setupUsers({ notify } = {}) {
+export function setupUsers({ notify, suggestName } = {}) {
   const dlg = $('#users'), btn = $('#user-btn');
   if (!dlg || !btn) return { open() {} };
   const me = users.current();
@@ -38,6 +38,11 @@ export function setupUsers({ notify } = {}) {
   const back = (label = 'Geri') => `<button type="button" data-a="main">${label}</button>`;
   const submit = label => `<button type="submit" class="pri" data-l="${esc(label)}"${busy ? ' disabled' : ''}>${busy ? 'Bekle…' : esc(label)}</button>`;
   const userOf = id => users.list().find(u => u.id === id);
+  // kişisel bağlantıdaki ad (src/welcome-ui.js): yalnız cihazda hiç kullanıcı yokken önerilir; şifreyi kişi kendisi belirler
+  const suggestion = () => {
+    if (!users.available().ok || users.list().length) return '';
+    try { const n = users.cleanName(suggestName?.() || ''); return [...n].length <= users.NAME_MAX ? n : ''; } catch { return ''; }
+  };
 
   function mainView() {
     const av = users.available(), list = users.list(), cur = users.current(), pend = users.pendingUnlock();
@@ -75,6 +80,8 @@ export function setupUsers({ notify } = {}) {
       }
       h += '</ul>';
     }
+    const sug = suggestion();
+    if (sug) h += `<p class="us-note">Sana özel not <b>${esc(sug)}</b> için. Bu adla kendine bir kullanıcı oluşturabilirsin; şifreyi sen belirlersin.</p><div class="us-row"><button type="button" class="pri" data-a="create">${esc(sug)} adıyla oluştur</button></div>`;
     h += '<div class="us-row">';
     h += '<button type="button" data-a="create">Yeni kullanıcı</button>';
     if (!cur) h += '<button type="button" data-a="import">İçe aktar</button>';
@@ -93,7 +100,7 @@ export function setupUsers({ notify } = {}) {
   function createView() {
     const first = users.list().length === 0, guest = !users.current() && users.hasGuestData();
     return `<form data-f="create"><p class="us-lead">Yeni kullanıcı</p>
-      ${field('Ad', 'name', 'text', `required maxlength="${users.NAME_MAX}"`, 'username')}
+      ${field('Ad', 'name', 'text', `required maxlength="${users.NAME_MAX}"${suggestion() ? ` value="${esc(suggestion())}"` : ''}`, 'username')}
       ${field('Şifre', 'pw', 'password', 'required', 'new-password')}
       ${field('Şifre (tekrar)', 'pw2', 'password', 'required', 'new-password')}
       <p class="us-note small">En az ${users.MIN_PW} karakter. Başka bir yerde kullandığın şifreyi kullanma. Unutulursa kurtarılamaz.</p>

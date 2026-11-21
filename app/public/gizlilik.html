@@ -58,9 +58,10 @@
       <li>beden seçimi (kadın / erkek) ve ayarlar (ör. sistemlerin gerektiğinde yüklenmesi, yapı ağacı görünümü, kesit ayarları),</li>
       <li>test ve deneme sınavı ilerlemesi (doğru / yanlış sayıları, son sınavlar),</li>
       <li>isteğe bağlı kullanıcı profilleri: ad, şifrenin özeti (PBKDF2; şifrenin kendisi saklanmaz; kısa bir şifre, cihaza erişen biri tarafından özetten tahmin edilebilir, bu yüzden başka bir yerde kullandığınız şifreyi kullanmayın) ve her profilin ilerlemesi. Profiller yalnız oluşturuldukları cihazda vardır; şifre profilleri bu cihazda birbirinden ayırır, veriler şifrelenmez. Dışa aktarılan profil dosyası şifre bilgisi içermez ve yalnız sizin seçtiğiniz yere kaydedilir,</li>
+      <li>kişisel bir bağlantıyla açılan not (alıcının adı, isteğe bağlı gönderenin adı, not, tarih, renk ve uygulama adı): bu metin yalnız bağlantının kendisinde (adresin # işaretinden sonraki kısmı; tarayıcı bu kısmı hiçbir sunucuya göndermez) ve bağlantıyı açıp "Başla" diyen cihazda durur; uygulama onu hiçbir sunucuya göndermez. Bağlantının kendisi, gönderildiği uygulamada (ör. mesajlaşma) ve tarayıcı geçmişinde (geçmiş eşitleme açıksa tarayıcının hesabında da) durur; bağlantıyı alan herkes notu okuyabilir. Cihazdaki not Hakkında › "Sana özel not" › "Bu cihazdan kaldır" ile silinir,</li>
       <li>çevrimdışı kullanım için indirilen uygulama dosyaları ve 3B modeller (web sürümünde service worker önbelleği).</li>
     </ul>
-    <p>Bu veriler bir kişiye bağlanmaz ve uygulamanın geliştiricisi bunlara erişemez.</p>
+    <p>Bu veriler (kişisel bağlantının notundaki, bağlantıyı yapanın yazdığı adlar dışında) bir kişiye bağlanmaz ve uygulamanın geliştiricisi bunlara erişemez.</p>
 
     <h3>Web sürümü: barındırma hizmeti</h3>
     <p>Web sürümü açıldığında sayfayı sunan barındırma hizmeti, her web sitesinde olduğu gibi, dosyaları iletebilmek için IP adresinizi, tarayıcı ve cihaz bilgisini ve istenen adresi teknik olarak işler ve kısa süre kayıt tutabilir. Barındırıcı adres çubuğundaki alan adından anlaşılır: github.io adreslerinde GitHub, Inc. (ABD), netlify.app adreslerinde Netlify, Inc. (ABD); işleme onun gizlilik politikasına göre yapılır. Netlify ücretsiz planda sayfaya kendi rozetini ("Powered by Netlify") ekleyebilir; bu rozet barındırıcının kendi içeriğidir.</p>
@@ -101,9 +102,10 @@
       <li>Körperwahl (weiblich / männlich) und Einstellungen,</li>
       <li>Fortschritt in Tests und Probeklausur,</li>
       <li>optionale Benutzerprofile: Name, ein Hash des Passworts (PBKDF2; das Passwort selbst wird nicht gespeichert; ein kurzes Passwort kann von jemandem mit Zugriff auf das Gerät aus dem Hash erraten werden, verwenden Sie daher kein Passwort, das Sie anderswo nutzen) und der Fortschritt jedes Profils. Profile gibt es nur auf dem Gerät, auf dem sie angelegt wurden; das Passwort trennt die Profile auf diesem Gerät, die Daten werden nicht verschlüsselt. Eine exportierte Profildatei enthält keine Passwortdaten und wird nur dort gespeichert, wo Sie sie ablegen,</li>
+      <li>die mit einem persönlichen Link geöffnete Notiz (Name des Empfängers, optional des Absenders, Notiz, Datum, Farbe und App-Name): dieser Text steht nur im Link selbst (dem Teil der Adresse nach dem #-Zeichen, den der Browser an keinen Server sendet) und auf dem Gerät, das den Link öffnet und „Başla“ wählt; die App sendet ihn an keinen Server. Der Link selbst bleibt außerdem in der App, über die er verschickt wurde (z. B. ein Messenger), und im Browserverlauf (bei aktivierter Verlaufssynchronisierung auch im Konto des Browsers); wer den Link erhält, kann die Notiz lesen. Die Notiz auf dem Gerät ist löschbar über Info › „Sana özel not“ › „Bu cihazdan kaldır“,</li>
       <li>für die Offline-Nutzung heruntergeladene App-Dateien und 3D-Modelle (in der Webversion im Service-Worker-Cache).</li>
     </ul>
-    <p>Diese Daten bleiben im lokalen Speicher des Browsers bzw. der App, verlassen das Gerät nicht und sind für den Entwickler nicht zugänglich.</p>
+    <p>Diese Daten bleiben im lokalen Speicher des Browsers bzw. der App, werden von der App nicht vom Gerät gesendet und sind für den Entwickler nicht zugänglich (zum Link einer persönlichen Notiz siehe oben).</p>
 
     <h3>Webversion: Hosting</h3>
     <p>Beim Aufruf der Webversion verarbeitet der Hosting-Anbieter, wie bei jeder Website, technisch Ihre IP-Adresse, Browser- und Geräteangaben und die aufgerufene Adresse, um die Dateien auszuliefern, und kann dazu kurzzeitig Protokolle führen. Der Anbieter ergibt sich aus der Domain in der Adresszeile: bei github.io-Adressen GitHub, Inc. (USA), bei netlify.app-Adressen Netlify, Inc. (USA), jeweils nach dessen Datenschutzerklärung. Netlify kann im kostenlosen Tarif ein eigenes Abzeichen („Powered by Netlify“) einblenden.</p>
@@ -134,9 +136,10 @@
       <li>body choice (female / male) and settings,</li>
       <li>quiz and mock exam progress,</li>
       <li>optional user profiles: name, a hash of the password (PBKDF2; the password itself is not stored; a short password can be guessed from the hash by someone with access to the device, so do not use a password you use elsewhere) and each profile's progress. Profiles exist only on the device they were created on; the password separates profiles on this device, the data is not encrypted. An exported profile file contains no password data and is saved only where you put it,</li>
+      <li>the note opened with a personal welcome link (recipient name, optionally the sender name, note, date, colour and app name): this text exists only in the link itself (the part of the address after the # sign, which the browser never sends to any server) and on the device that opens the link and chooses "Başla"; the app never sends it to any server. The link itself also stays in the app it was sent through (for example a messenger) and in the browser history (with history sync turned on, also in the browser account); anyone who receives the link can read the note. The note on the device can be removed via About › "Sana özel not" › "Bu cihazdan kaldır",</li>
       <li>app files and 3D models downloaded for offline use (in the web version, in the service worker cache).</li>
     </ul>
-    <p>This data stays in the browser's or app's local storage, never leaves the device and cannot be accessed by the developer.</p>
+    <p>This data stays in the browser's or app's local storage, is never sent off the device by the app and cannot be accessed by the developer (for the link of a personal note, see above).</p>
 
     <h3>Web version: hosting</h3>
     <p>When you open the web version, the hosting provider processes your IP address, browser and device information and the requested address to deliver the files, as every web server does, and may keep short-lived logs. The provider follows from the domain in the address bar: GitHub, Inc. (USA) for github.io addresses, Netlify, Inc. (USA) for netlify.app addresses, each under its own privacy policy. On its free plan Netlify may show its own badge ("Powered by Netlify").</p>

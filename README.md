@@ -44,6 +44,10 @@ and some other structures come from separate sources (see [Data sources and lice
   connection with Aanki, Fachschaft Medizin Aachen or RWTH Aachen.
 - Deep links: the current view is kept in the address (`#s=<part>`, `#t=<topic>`, `#m=<mode>:<tab>`), so a link
   opens the same view.
+- Personal welcome link: anyone can make a link (About, "Birine özel bağlantı oluştur") that opens the app with a short
+  note for one person, an accent colour and an optional app title. The text lives only in the link fragment
+  (`#g=<base64url JSON>`, never sent to a server by the app) and on the device that accepts it; like any link it also
+  stays in the messenger it was sent through and in browser history, and anyone who has the link can read it.
 
 **Study modes** (each with its own panel, labels and a test tab):
 
@@ -150,6 +154,8 @@ Tests:
 
 - `node tools/_qawork/users-test.mjs` (in `app/`): 115 checks for the profile module (password hashing, attempt limit,
   per-profile keys, export and import validation, merge rules, broken or full storage). No browser needed.
+- `node tools/_qawork/welcome-test.mjs` (in `app/`): checks for the personal welcome link (round trip, length limits,
+  wrong types, oversized or broken input, prototype keys).
 - `.github/workflows/android.yml`: run it by hand from the Actions tab to build the debug APK and run the emulator
   smoke test.
 
