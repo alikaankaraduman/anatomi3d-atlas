@@ -44,11 +44,11 @@ Uygulama telefonda da çalışır ve ana ekrana eklenebilir (PWA).
 
 ## Kişisel bağlantı (sana özel not)
 
-Birine, uygulamayı kısa bir notla açan bir bağlantı gönderebilirsin.
+Uygulama, kendisine özel bir notla açılan bir bağlantıyı tanır (#g=...). Böyle bir bağlantıyı yalnız bu yayının
+özel imza anahtarına sahip olan kişi oluşturabilir; uygulamada bağlantı oluşturan bir bölüm yoktur. Uygulama her
+bağlantının imzasını denetler: imzasız, başka bir anahtarla imzalanmış ya da değiştirilmiş bir bağlantı açılmaz
+(kısa bir "Kişisel bağlantı açılamadı." uyarısı çıkar, hiçbir şey saklanmaz).
 
-- **Oluşturmak**: ⓘ › "Birine özel bağlantı oluştur". Kime (gerekli, en çok 40 karakter), Kimden, Not (en çok 600
-  karakter, satır sonları kalır), Tarih, Renk ve Uygulama adı (en çok 30 karakter) doldurulur; kartın önizlemesi ve
-  bağlantı anında görünür, "Kopyala" ile alınır. Yazılanlar hiçbir yerde saklanmaz ve gönderilmez.
 - **Açılınca**: bağlantıyı açan kişi önce bu kartı görür. "Başla"ya basarsa not, renk ve uygulama adı onun
   cihazında saklanır (× ya da Geri ile kapatırsa hiçbir şey saklanmaz): kart ⓘ › "Sana özel not" ile yeniden açılır, oradan "Bu cihazdan kaldır" ile silinir. Cihazda
   henüz kullanıcı yoksa Kullanıcılar penceresi notun adıyla kullanıcı oluşturmayı önerir (şifreyi kişi kendisi

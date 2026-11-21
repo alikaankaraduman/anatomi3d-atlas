@@ -1,17 +1,40 @@
 // Kişisel bağlantı ("sana özel not"): saf mantık, DOM'a ve depolamaya dokunmaz (Node da içe aktarabilir:
-// tools/_qawork/welcome-test.mjs). Bağlantı, sitenin normal adresi ve bir parçadır: #g=<UTF-8 JSON'un base64url hâli>.
+// tools/_qawork/welcome-test.mjs). Bağlantı, sitenin normal adresi ve bir parçadır:
+//   #g=<yük>.<imza>   yük = UTF-8 JSON'un base64url hâli, imza = yükün METNİ (base64url karakterleri, ASCII baytları)
+//                      üzerinde ECDSA P-256 / SHA-256 imzası, ham 64 bayt, base64url (86 karakter).
 // Parça (#...) sunucuya hiç gitmez; metin yalnız bağlantının içinde ve onu açan cihazda (localStorage) durur.
+//
+// İmza: bağlantıyı yalnız bu yayının ÖZEL anahtarına sahip olan kişi yapabilir. Uygulamada yalnız AÇIK anahtar vardır
+// (PUBLIC_KEY, aşağıda) ve kart yalnız crypto.subtle.verify başarılı olunca gösterilir. İmzasız, başka anahtarla
+// imzalanmış, değiştirilmiş ya da eski (imzasız, sürüm 1 biçimli) bağlantılar herhangi bir bozuk bağlantı gibi
+// reddedilir: hep aynı kısa ileti (INVALID), imzadan söz edilmez. crypto.subtle olmayan yerde (güvensiz bağlam)
+// bağlantılar yok sayılır. Bağlantı oluşturan kod tarayıcı paketinde yoktur (tools/welcome-sign.mjs, yalnız Node).
+//
 // JSON: { v: 1, to, from?, msg?, date?, color?, title? }. Okuma katıdır: çözmeden önce boyut sınırı, bilinen alanlar
 // tür ve uzunluk denetimiyle, bilinmeyen alanlar yok sayılır, __proto__ / constructor / prototype anahtarı olan bağlantı
 // geçersizdir. Metinler düz metindir; ekrana yalnız textContent ya da esc() ile yazılır, asla HTML olarak değil.
 
+// Bu yayının AÇIK anahtarı (ECDSA P-256, JWK). Özel anahtar hiçbir depoda değildir (sahibinin bilgisayarında,
+// app/private/welcome-key.json). Bu kodu kendi yayını için kullanan biri kendi kişisel bağlantılarını yapmak isterse
+// kendi ECDSA P-256 anahtar çiftini üretir ve bu sabiti kendi açık anahtarıyla değiştirir.
+export const PUBLIC_KEY = Object.freeze({
+  kty: 'EC', crv: 'P-256',
+  x: 'ru3r2p9vZIN5YbLt0YJhMGVSr5GEfIfsSZgm38VgRl0',
+  y: 'PAw9mydfiI3cDo4KV_KvXooQqIyAh8_Klame4xn2sgs',
+});
+
 export const VERSION = 1;
 export const STORE_KEY = 'anatomi3d.welcome.v1';
+export const STORE_VERSION = 2;    // { v: 2, link: '<yük>.<imza>', saved } (sürüm 1: imzasız veri, artık okunmaz)
+// Her geçersiz bağlantı için aynı ileti (neden geçersiz olduğu söylenmez)
+export const INVALID = 'Kişisel bağlantı açılamadı.';
 // uzunluklar karakter (kod noktası) sayısıdır: bir emoji bir karakter sayılır
 export const LIMITS = Object.freeze({ to: 40, from: 40, msg: 600, title: 30 });
-// base64url metninin en çok uzunluğu (çözmeden önce denetlenir). En kötü durum: 600 karakterlik not, her biri 4 bayt
+// base64url yükünün en çok uzunluğu (çözmeden önce denetlenir). En kötü durum: 600 karakterlik not, her biri 4 bayt
 // ya da JSON'da kaçışlı tırnak; ad alanları ve öteki alanlarla birlikte ~3200 bayt, base64 ile ~4300 karakter.
 export const PAYLOAD_MAX = 4600;
+export const SIG_LEN = 86;         // 64 bayt base64url
+export const LINK_MAX = PAYLOAD_MAX + 1 + SIG_LEN;
 
 // Vurgu renkleri: anahtar bağlantıya yazılır, değerler yalnız buradadır (bağlantıdan renk kodu okunmaz).
 // accent: düğmeler ve vurgular (--accent), ink: vurgu zemini üstündeki yazı (--accent-ink).
@@ -29,7 +52,7 @@ export const COLOR_KEYS = Object.freeze(Object.keys(PALETTE));
 export const isColor = k => typeof k === 'string' && Object.prototype.hasOwnProperty.call(PALETTE, k);
 
 const BAD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-const FIELDS = ['to', 'from', 'msg', 'date', 'color', 'title'];
+export const FIELDS = Object.freeze(['to', 'from', 'msg', 'date', 'color', 'title']);
 
 // Görünmeyen ve yön değiştiren karakterler (sıfır genişlikli boşluk, LRM/RLM, yön gömme/geçersiz kılma, BOM, sözcük
 // birleştirici) atılır. ZWJ (U+200D) ve ZWNJ (U+200C) kalır: emoji dizileri ve bazı yazı sistemleri onlarla yazılır.
@@ -67,7 +90,8 @@ const fail = (code, message) => ({ ok: false, code, error: message });
 
 // Bir nesneyi denetler ve temiz kopyasını döner: { ok: true, data } ya da { ok: false, code, error } (Türkçe ileti).
 // Bilinen alanlarda yanlış tür ya da uzunluk bağlantıyı geçersiz kılar; bilinmeyen alanlar yok sayılır. Bilinmeyen bir
-// renk anahtarı (ör. ileride eklenen bir renk) yalnız rengi düşürür: renk süsten ibarettir.
+// renk anahtarı (ör. ileride eklenen bir renk) yalnız rengi düşürür: renk süsten ibarettir. Bağlantıyı yapan araç
+// (sahibinin özel depodaki komut satırı aracı) da aynı denetimi kullanır; ayrıntılı iletiler yalnız orada görünür, uygulamada INVALID.
 export function validate(o) {
   if (!o || typeof o !== 'object' || Array.isArray(o)) return fail('shape', 'Bağlantının içeriği okunamadı.');
   for (const k of Object.keys(o)) if (BAD_KEYS.has(k)) return fail('shape', 'Bağlantının içeriği okunamadı.');
@@ -100,50 +124,78 @@ export function validate(o) {
   return { ok: true, data };
 }
 
-// Kanonik JSON: alanlar sabit sırayla, boş alanlar yok (aynı içerik her zaman aynı metni verir)
-export function canonical(data) {
-  const o = { v: VERSION };
-  for (const k of FIELDS) if (data[k]) o[k] = data[k];
-  return JSON.stringify(o);
-}
-export const same = (a, b) => !!a && !!b && canonical(a) === canonical(b);
-
 // ---------- base64url ----------
-function toB64url(bytes) {
+const B64URL = /^[A-Za-z0-9_-]+$/;
+export function toB64url(bytes) {
   let bin = '';
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-function fromB64url(s) {
-  if (typeof s !== 'string' || !s || !/^[A-Za-z0-9_-]+$/.test(s) || s.length % 4 === 1) return null;
+export function fromB64url(s) {
+  if (typeof s !== 'string' || !s || !B64URL.test(s) || s.length % 4 === 1) return null;
   let bin;
   try { bin = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)); } catch { return null; }
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
 }
+const ascii = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b; };
 
-// Veriyi bağlantı parçasına çevirir; geçersizse hata fırlatır (e.code: alan adı, e.message Türkçe)
-export function encode(input) {
-  const r = validate({ ...input, v: VERSION });
-  if (!r.ok) { const e = new Error(r.error); e.code = r.code; throw e; }
-  return toB64url(new TextEncoder().encode(canonical(r.data)));
-}
-
-// Bağlantı parçasını çözer: { ok: true, data } ya da { ok: false, code, error }. Hiçbir zaman hata fırlatmaz.
-export function decode(payload) {
+// Yükü (imza denetlendikten SONRA) çözer: { ok: true, data } ya da { ok: false, code, error }. Hata fırlatmaz.
+export function decodePayload(payload) {
   if (typeof payload !== 'string' || !payload) return fail('empty', 'Bağlantı boş.');
   if (payload.length > PAYLOAD_MAX) return fail('size', 'Bağlantı çok uzun.');
   const bytes = fromB64url(payload);
-  if (!bytes) return fail('base64', 'Bağlantı bozuk (eksik ya da yanlış kopyalanmış olabilir).');
+  if (!bytes) return fail('base64', 'Bağlantı bozuk.');
   let text;
-  try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch { return fail('utf8', 'Bağlantı bozuk (eksik ya da yanlış kopyalanmış olabilir).'); }
+  try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch { return fail('utf8', 'Bağlantı bozuk.'); }
   let o, bad = false;
   try {
     o = JSON.parse(text, (k, v) => { if (BAD_KEYS.has(k)) bad = true; return v; });
-  } catch { return fail('json', 'Bağlantı bozuk (eksik ya da yanlış kopyalanmış olabilir).'); }
+  } catch { return fail('json', 'Bağlantı bozuk.'); }
   if (bad) return fail('shape', 'Bağlantının içeriği okunamadı.');
   return validate(o);
+}
+
+// "<yük>.<imza>" metnini parçalar (yalnız biçim: boyut, alfabe, imzanın tam 64 bayt ve kanonik base64url olması;
+// son karakterin kullanılmayan bitleri değiştirilmiş bir imza aynı baytlara çözülmesin diye). Değilse null.
+export function splitSigned(s) {
+  if (typeof s !== 'string' || !s || s.length > LINK_MAX) return null;
+  const i = s.indexOf('.');
+  if (i <= 0 || i !== s.lastIndexOf('.')) return null;
+  const payload = s.slice(0, i), sig = s.slice(i + 1);
+  if (payload.length > PAYLOAD_MAX || !B64URL.test(payload) || sig.length !== SIG_LEN) return null;
+  const sigBytes = fromB64url(sig);
+  if (!sigBytes || sigBytes.length !== 64 || toB64url(sigBytes) !== sig) return null;
+  return { payload, sig, sigBytes };
+}
+
+const keyCache = new Map();
+function importKey(subtle, jwk) {
+  const id = jwk.x + '.' + jwk.y;
+  if (!keyCache.has(id)) {
+    keyCache.set(id, subtle.importKey('jwk', { kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y, ext: true }, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']));
+  }
+  return keyCache.get(id);
+}
+export const cryptoReady = () => !!globalThis.crypto?.subtle;
+
+// İmzalı bağlantı metnini ("<yük>.<imza>") denetler ve çözer. Hiçbir zaman hata fırlatmaz.
+// { ok: true, data, payload, signed } ya da { ok: false, code, error: INVALID }; crypto.subtle yoksa code 'nocrypto'.
+// key: yalnız sınamalar için (varsayılan bu yayının açık anahtarı).
+export async function verifyLink(signed, key = PUBLIC_KEY) {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) return fail('nocrypto', INVALID);
+  const parts = splitSigned(signed);
+  if (!parts) return fail('invalid', INVALID);
+  let good = false;
+  try {
+    good = await subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, await importKey(subtle, key), parts.sigBytes, ascii(parts.payload));
+  } catch { good = false; }
+  if (!good) return fail('invalid', INVALID);
+  const r = decodePayload(parts.payload);
+  if (!r.ok) return fail('invalid', INVALID);
+  return { ok: true, data: r.data, payload: parts.payload, signed };
 }
 
 // Adres parçasından g değerini çıkarır ("#g=...&t=..." ya da "#t=...&g=..."); yoksa null
@@ -156,37 +208,34 @@ export function payloadFromHash(hash) {
 export function hashWithout(hash) {
   return String(hash ?? '').replace(/^#/, '').split('&').filter(p => p && !p.startsWith('g=')).join('&');
 }
-// Yapıştırılan metinden parça: tam adres, "#g=...", "g=..." ya da yalnız base64url metni
+// Yapıştırılan metinden parça: tam adres, "#g=...", "g=..." ya da yalnız "<yük>.<imza>" metni
 export function payloadFromText(text) {
   const s = String(text ?? '').trim().replace(/\s+/g, '');
   if (!s) return null;
   const i = s.indexOf('#');
   if (i >= 0) return payloadFromHash(s.slice(i));
   if (s.startsWith('g=')) return s.slice(2).split('&')[0];
-  if (/^[A-Za-z0-9_-]+$/.test(s)) return s;
+  if (/^[A-Za-z0-9_.-]+$/.test(s) && s.includes('.') && !/^https?:/i.test(s)) return s;
   return null;
 }
 
-// Sitenin adresi (var olan parça atılır) + #g=...
-export function buildLink(base, data) {
-  return String(base).split('#')[0] + '#g=' + encode(data);
-}
-
-// Cihazda saklanan kayıt: { v: 1, data, saved } (data yeniden denetlenir; bozuk kayıt = kayıt yok)
+// Cihazda saklanan kayıt: { v: 2, link: '<yük>.<imza>', saved }. Burada yalnız biçim denetlenir ve imzalı metin
+// döner; imza okunduğu her seferde verifyLink ile yeniden denetlenir (depolamayı elle değiştirmek not uyduramaz).
+// Bozuk ya da eski (sürüm 1, imzasız) kayıt = kayıt yok.
 export function parseStored(text) {
   if (typeof text !== 'string' || !text || text.length > 20000) return null;
   try {
     let bad = false;
     const o = JSON.parse(text, (k, v) => { if (BAD_KEYS.has(k)) bad = true; return v; });
-    if (bad || !o || typeof o !== 'object' || o.v !== VERSION || !o.data || typeof o.data !== 'object') return null;
-    const r = validate({ ...o.data, v: VERSION });
-    return r.ok ? r.data : null;
+    if (bad || !o || typeof o !== 'object' || o.v !== STORE_VERSION || typeof o.link !== 'string') return null;
+    return splitSigned(o.link) ? o.link : null;
   } catch { return null; }
 }
-export function storedText(data) {
-  const d = JSON.parse(canonical(data)); delete d.v;
-  return JSON.stringify({ v: VERSION, data: d, saved: new Date().toISOString().slice(0, 10) });
+export function storedText(signed) {
+  return JSON.stringify({ v: STORE_VERSION, link: signed, saved: new Date().toISOString().slice(0, 10) });
 }
+// İki bağlantı aynı notu mu taşıyor (yük metni aynı; imza aynı içerik için farklı olabilir)
+export const sameLink = (a, b) => !!a && !!b && String(a).split('.')[0] === String(b).split('.')[0];
 
 // Tarih metni: "21 Kasım 2026" (saat dilimi kaymasın diye UTC)
 export function dateText(s) {

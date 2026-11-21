@@ -115,7 +115,12 @@ function anatomiSW() {
   };
 }
 
+// Geliştirme sunucusu: app/private/ (kişisel bağlantıların özel imza anahtarı, not.json, OKU.txt) Vite kökünün içindedir
+// ve yasaklanmazsa /private/... adresinden sunulur (vite --host ya da bir tünelle bütün ağa açılır). İlk dört kalıp
+// Vite'ın varsayılan yasak listesidir: deny verilince varsayılanın yerine geçer, bu yüzden aynen tekrarlanır.
+// Derleme (dist) app/private/'ı zaten kopyalamaz; bu kural yalnız geliştirme sunucusu içindir.
 export default defineConfig({
   base: './',
   plugins: [anatomiSW()],
+  server: { fs: { deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/private/**'] } },
 });

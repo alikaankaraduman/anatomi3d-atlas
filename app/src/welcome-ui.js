@@ -1,11 +1,16 @@
-// Kişisel bağlantı ("sana özel not"): karşılama kartı (#welcome), bağlantı oluşturma penceresi (#welcome-make) ve
-// Hakkında penceresindeki girişler. Mantık (kodlama, çözme, denetim, renk paleti) src/welcome.js'tedir.
-// Bağlantı: sitenin adresi + #g=<base64url>. Geçerli bir bağlantı açılınca kart gösterilir; kişi "Başla"ya basınca
-// (önce değil) kişiselleştirme bu cihazda saklanır (localStorage anatomi3d.welcome.v1): vurgu rengi (CSS değişkenleri --accent / --accent-ink), isteğe bağlı
-// uygulama adı (sayfa başlığı ve apple-mobile-web-app-title, böylece "Ana Ekrana Ekle" o adı önerir) ve kartın Hakkında'dan
-// yeniden açılması. Bağlantı açmayan bir ziyaretçi için hiçbir şey değişmez: depolamaya yazılmaz, soru sorulmaz.
-// Bütün metinler textContent ile yazılır (HTML olarak asla). Pencereler index.html'de durur; main.js'teki Geri tuşu
-// katmanı (topLayer) onları da kapatır. Satır içi betik ya da olay özniteliği yoktur (Pages derlemesinin sıkı CSP'si).
+// Kişisel bağlantı ("sana özel not"): karşılama kartı (#welcome) ve Hakkında penceresindeki girişler ("Sana özel not",
+// en sonda küçük "Kişisel bağlantın var mı?" yapıştırma alanı). Mantık (imza denetimi, çözme, renk paleti)
+// src/welcome.js'tedir. Uygulamada bağlantı OLUŞTURAN kod yoktur: bağlantıyı yalnız yayının özel anahtarına sahip olan
+// kişi yapar (özel depodaki komut satırı aracı); uygulama yalnız açık anahtarla imzayı denetler.
+// Bağlantı: sitenin adresi + #g=<yük>.<imza>. İmzası doğrulanan bir bağlantı açılınca kart gösterilir; kişi "Başla"ya
+// basınca (önce değil) imzalı bağlantı bu cihazda saklanır (localStorage anatomi3d.welcome.v1) ve her okunuşta imzası
+// yeniden denetlenir: vurgu rengi (CSS değişkenleri --accent / --accent-ink), isteğe bağlı uygulama adı (sayfa başlığı
+// ve apple-mobile-web-app-title, böylece "Ana Ekrana Ekle" o adı önerir) ve kartın Hakkında'dan yeniden açılması.
+// Geçersiz (imzasız, başka anahtarla imzalı, değiştirilmiş, eski biçimli) bağlantılar hep aynı kısa iletiyle yok sayılır.
+// Bağlantı açmayan bir ziyaretçi için hiçbir şey değişmez: depolamaya yazılmaz, soru sorulmaz.
+// Bütün metinler textContent ile yazılır (HTML olarak asla). Pencere index.html'de durur; main.js'teki Geri tuşu
+// katmanı (topLayer) onu da kapatır. Satır içi betik ya da olay özniteliği yoktur (Pages derlemesinin sıkı CSP'si).
+// İmza denetimi eşzamansızdır (crypto.subtle.verify); sonuçlar sıra numarasıyla eşlenir, eskimiş bir denetim yok sayılır.
 //
 // iOS: ana ekrana eklenen web uygulamasının depolaması Safari'ninkinden ayrıdır; Safari'de saklanan not ana ekrandaki
 // uygulamada yoktur (macOS Safari'nin "Dock'a Ekle" uygulaması için de aynısı geçerli). Bu yüzden (a) kart iOS / iPadOS
@@ -36,10 +41,11 @@ const isMacSafari = () => /Macintosh/.test(ua()) && !(navigator.maxTouchPoints >
 // kalır. Öteki tarayıcılarda hemen silinir: kişi bir yapıyı ya da konuyu paylaşmak için adresi kopyalarsa not gitmesin.
 const keepFragment = () => !inApp() && (isIOS() || isMacSafari());
 
-// Cihazda saklanan kişisel not (yoksa ya da bozuksa null). Yalnız okur.
-export function storedWelcome() {
-  try { return W.parseStored(localStorage.getItem(W.STORE_KEY)); } catch { return null; }
-}
+// Cihazda saklanan ve imzası DOĞRULANMIŞ kişisel not (yoksa, bozuksa ya da denetim henüz bitmediyse null).
+// Yalnız okur; doğrulama setupWelcome içinde açılışta yapılır.
+let verified = null;
+export function storedWelcome() { return verified?.data || null; }
+const readStored = () => { try { return W.parseStored(localStorage.getItem(W.STORE_KEY)); } catch { return null; } };
 
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -49,7 +55,7 @@ const el = (tag, cls, text) => {
 };
 const button = (text, act, cls = '') => { const b = el('button', cls, text); b.type = 'button'; b.dataset.a = act; return b; };
 
-// Kartın kendisi (karşılama ve oluşturma önizlemesi aynı görünür). Bütün metinler textContent.
+// Kartın kendisi. Bütün metinler textContent.
 function cardNode(d) {
   const c = el('div', 'wl-card');
   c.append(el('p', 'wl-kicker', 'Sana özel not'));
@@ -68,16 +74,18 @@ const paint = (node, d) => {
 };
 
 export function setupWelcome({ notify, onHash } = {}) {
-  const card = $('#welcome'), maker = $('#welcome-make');
-  const openBtn = $('#wl-open'), makeBtn = $('#wl-make-btn'), paste = $('#wl-paste');
+  const card = $('#welcome');
+  const openBtn = $('#wl-open'), paste = $('#wl-paste');
   const metaTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
   const orig = { title: document.title, meta: metaTitle?.getAttribute('content') || document.title };
-  let stored = storedWelcome();
+  // stored / fresh / pending: { data, signed } (imzası doğrulanmış)
+  let stored = null;
   let keep = '';            // adreste tutulan 'g=...' (yalnız Apple Safari sekmesinde, geçerli bağlantıyla)
   let prevKeep = '';        // değiştirme sorusu açılırken adreste olan eski 'g=...' ("Eskisi kalsın" onu geri yazar)
   let manifest = null;      // iOS / macOS Safari'de kaldırılan <link rel="manifest"> (geri takmak için)
   let fresh = null;         // bağlantıyla gelen, kartta gösterilen ama henüz kabul edilmemiş not ("Başla" saklar)
   let view = 'card', pending = null, pendingFromHash = false, manage = false, armed = false, saveFailed = false;
+  let seq = 0;              // son başlatılan bağlantı denetimi (eskimiş sonuçlar yok sayılır)
 
   // ---------- görünüm: renk, başlık, Hakkında düğmesi ----------
   function look(d) {
@@ -86,8 +94,6 @@ export function setupWelcome({ notify, onHash } = {}) {
     metaTitle?.setAttribute('content', d?.title || orig.meta);
     const row = openBtn?.closest('.wl-mine-row'); if (row) row.hidden = !d;
   }
-  look(stored);
-  if (makeBtn && native()) makeBtn.hidden = true;   // uygulama kabuğunun adresi (https://localhost) başka cihazda açılmaz
 
   // ---------- adres ----------
   // iOS ana ekran / macOS Dock yer imi bu sayfanın adresini alsın diye manifest bağlantısı kaldırılır (yalnız iOS ve
@@ -108,13 +114,13 @@ export function setupWelcome({ notify, onHash } = {}) {
   }
 
   // ---------- kayıt ----------
-  function save(d) {
-    try { localStorage.setItem(W.STORE_KEY, W.storedText(d)); saveFailed = false; } catch { saveFailed = true; }
-    stored = d; look(d);
+  function save(rec) {
+    try { localStorage.setItem(W.STORE_KEY, W.storedText(rec.signed)); saveFailed = false; } catch { saveFailed = true; }
+    stored = rec; verified = rec; look(rec.data);
   }
   function removeStored() {
     try { localStorage.removeItem(W.STORE_KEY); } catch { /* depolama kapalı */ }
-    stored = null; look(null);
+    stored = null; verified = null; look(null);
     if (keep) setKeep('');
   }
 
@@ -128,14 +134,14 @@ export function setupWelcome({ notify, onHash } = {}) {
       paint(card, null);
       body.append(el('p', 'wl-kicker', 'Kişisel bağlantı'));
       const p = el('p', 'wl-text');
-      p.append('Bu cihazda zaten bir kişisel not var (', el('b', '', `${stored?.to || ''} için`), '). Bu bağlantıdaki notla (', el('b', '', `${pending.to} için`), ') değiştirilsin mi?');
+      p.append('Bu cihazda zaten bir kişisel not var (', el('b', '', `${stored?.data.to || ''} için`), '). Bu bağlantıdaki notla (', el('b', '', `${pending.data.to} için`), ') değiştirilsin mi?');
       body.append(p);
       const row = el('div', 'wl-row');
       row.append(button('Değiştir', 'replace', 'pri'), button('Eskisi kalsın', 'keep-old'));
       body.append(row);
       return;
     }
-    const d = manage ? stored : (fresh || stored); if (!d) return;
+    const d = (manage ? stored : (fresh || stored))?.data; if (!d) return;
     paint(card, d);   // kabul edilene kadar yalnız kart boyanır; renk ve başlık "Başla" ile gelir
     body.append(cardNode(d));
     if (!manage && isIOSSafari() && !inApp()) {
@@ -172,13 +178,13 @@ export function setupWelcome({ notify, onHash } = {}) {
     const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
     if (a === 'start' && fresh && !manage) {
       // kişiselleştirme yalnız burada saklanır ve uygulanır (×, Esc ya da Geri: hiçbir şey saklanmaz)
-      const d = fresh; fresh = null; save(d);
+      const rec = fresh; fresh = null; save(rec);
       if (saveFailed) notify?.('Bu cihazın tarayıcı depolaması kapalı: not yalnız bu açılışta görünür.');
     }
     if (a === 'close' || a === 'start') { card.close(); return; }
     if (a === 'replace') {
-      const d = pending; pending = null; pendingFromHash = false;
-      if (d) save(d);
+      const rec = pending; pending = null; pendingFromHash = false;
+      if (rec) save(rec);
       openCard('card');
       return;
     }
@@ -195,145 +201,70 @@ export function setupWelcome({ notify, onHash } = {}) {
   });
 
   // ---------- bağlantıyı uygula (adres ya da yapıştırma) ----------
-  // { ok, error }: geçersiz bağlantı yok sayılır (adresten gelende kısa bir uyarı)
-  function handle(payload, source) {
-    const r = W.decode(payload);
-    if (!r.ok) return r;
-    const d = r.data;
-    if (stored && W.same(stored, d)) {
+  // İmzası doğrulanmış bağlantı için kartı açar. Dönüş: { ok } ya da { ok: false, code } (geçersiz: W.INVALID).
+  function show(r, source) {
+    const rec = { data: r.data, signed: r.signed };
+    if (stored && W.sameLink(stored.signed, rec.signed)) {
       // aynı not zaten bu cihazda: kart kendiliğinden yeniden açılmaz (yeniden yükleme); yapıştırınca gösterilir
-      look(stored);
+      look(stored.data);
       if (source === 'paste') openCard('card', { asManager: true });
-      return r;
+      return;
     }
-    if (stored) { pending = d; pendingFromHash = source === 'hash'; prevKeep = keep; openCard('replace'); return r; }
-    fresh = d;          // "Başla"ya kadar depolamaya yazılmaz, renk ve başlık değişmez
+    if (stored) { pending = rec; pendingFromHash = source === 'hash'; prevKeep = keep; openCard('replace'); return; }
+    fresh = rec;          // "Başla"ya kadar depolamaya yazılmaz, renk ve başlık değişmez
     openCard('card');
-    return r;
   }
-  function fromHash(hash, sync = true) {
-    const payload = W.payloadFromHash(hash);
-    if (payload == null) { if (keep) setKeep('', sync); return; }
-    if (keep === 'g=' + payload) return;
-    const r = handle(payload, 'hash');
-    if (!r.ok) { notify?.('Kişisel bağlantı açılamadı: ' + r.error); setKeep('', sync); return; }
+  async function fromHash(hash, sync = true) {
+    const signed = W.payloadFromHash(hash);
+    if (signed == null) { seq++; if (keep) setKeep('', sync); return; }
+    if (keep === 'g=' + signed) return;
+    const my = ++seq;
+    const r = await W.verifyLink(signed);
+    if (my !== seq) return;   // bu arada başka bir bağlantı geldi
+    // Geçersiz bağlantı: hep aynı kısa uyarı. crypto.subtle yoksa (güvensiz bağlam) bağlantı sessizce yok sayılır.
+    if (!r.ok) { if (r.code !== 'nocrypto') notify?.(W.INVALID); setKeep('', sync); return; }
+    show(r, 'hash');
     // Apple Safari sekmesinde bağlantı adreste kalır; öteki tarayıcılarda, kurulu uygulamada ve Android kabuğunda tüketilir
-    setKeep(keepFragment() ? 'g=' + payload : '', sync);
+    setKeep(keepFragment() ? 'g=' + signed : '', sync);
   }
 
-  // ---------- Hakkında: sana özel not, oluştur, yapıştır ----------
+  // ---------- Hakkında: sana özel not, yapıştır ----------
   openBtn?.addEventListener('click', () => { if (stored) openCard('card', { asManager: true }); });
-  makeBtn?.addEventListener('click', () => openMaker());
   if (paste) {
     const input = paste.querySelector('input'), go = paste.querySelector('[data-a=apply]'), msg = paste.querySelector('.wl-paste-msg');
     const say = t => { msg.textContent = t || ''; msg.hidden = !t; };
-    const apply = () => {
-      const payload = W.payloadFromText(input.value);
-      if (!payload) { say('Bu bir kişisel bağlantı değil: içinde "#g=" olan bağlantının tamamını yapıştır.'); input.focus(); return; }
-      const r = handle(payload, 'paste');
-      if (!r.ok) { say(r.error); input.focus(); return; }
-      say(''); input.value = '';
+    let busy = false;
+    const apply = async () => {
+      if (busy) return;
+      const signed = W.payloadFromText(input.value);
+      if (!signed) { say('Bağlantının tamamını yapıştır (içinde "#g=" olan adres).'); input.focus(); return; }
+      busy = true;
+      try {
+        await ready;
+        const r = await W.verifyLink(signed);
+        if (!r.ok) { say(W.INVALID); input.focus(); return; }
+        seq++;   // bekleyen bir adres denetimi bu yapıştırmanın kartını ezmesin
+        say(''); input.value = '';
+        show(r, 'paste');
+      } finally { busy = false; }
     };
     go?.addEventListener('click', apply);
     input?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
     input?.addEventListener('input', () => say(''));
   }
 
-  // ---------- bağlantı oluşturma ----------
-  const FIELDS = [
-    ['to', 'Kime', 'text', 'Bağlantının kimin için olduğu (gerekli)'],
-    ['from', 'Kimden', 'text', 'İsteğe bağlı'],
-  ];
-  let makerOut = '';
-  function openMaker() {
-    maker.replaceChildren();
-    const head = el('div', 'wl-head');
-    const h = el('h2', '', 'Birine özel bağlantı'); h.id = 'wl-make-title';
-    const x = button('×', 'close', 'wl-x'); x.setAttribute('aria-label', 'Kapat'); x.title = 'Kapat (Esc)';
-    head.append(h, x);
-    const body = el('div', 'wl-body');
-    body.append(el('p', 'wl-text', 'Bir kişi için kısa bir not yaz: bağlantıyı açan kişi uygulamayı önce bu kartla görür. Not, renk ve uygulama adı onun cihazında saklanır.'));
-    const form = el('form', 'wl-form'); form.noValidate = true; form.autocomplete = 'off';
-    const field = (name, label, type, hint) => {
-      const l = el('label', 'wl-field'); l.append(el('span', '', label));
-      const i = el('input'); i.name = name; i.type = type; i.spellcheck = false; i.autocomplete = 'off';
-      if (hint) i.placeholder = hint;
-      l.append(i); return l;
-    };
-    for (const [n, l, t, hint] of FIELDS) form.append(field(n, l, t, hint));
-    const ml = el('label', 'wl-field'); const mh = el('span', 'wl-field-top');
-    const counter = el('small', 'wl-count'); mh.append(el('span', '', 'Not'), counter); ml.append(mh);
-    const ta = el('textarea'); ta.name = 'msg'; ta.rows = 5; ml.append(ta); form.append(ml);
-    form.append(field('date', 'Tarih', 'date', ''));
-    const fs = el('fieldset', 'wl-colors'); fs.append(el('legend', '', 'Renk'));
-    for (const k of W.COLOR_KEYS) {
-      const p = W.PALETTE[k], lab = el('label', 'wl-swatch'); lab.title = p.label;
-      const r = el('input'); r.type = 'radio'; r.name = 'color'; r.value = k; r.checked = k === W.DEFAULT_COLOR;
-      r.setAttribute('aria-label', p.label);
-      const s = el('span'); s.style.background = p.accent;
-      lab.append(r, s); fs.append(lab);
-    }
-    form.append(fs);
-    const tl = field('title', 'Uygulama adı', 'text', orig.title);
-    tl.append(el('small', 'wl-small', 'İsteğe bağlı: sayfanın başlığı olur ve ana ekrana eklerken önerilen ad.'));
-    form.append(tl);
-    body.append(form);
-    body.append(el('p', 'wl-small', 'Yazdıkların hiçbir yerde saklanmaz ve hiçbir yere gönderilmez; bağlantı yalnız bu sayfada oluşturulur.'));
-    body.append(el('h3', '', 'Önizleme'));
-    const prev = el('div', 'wl-preview'); body.append(prev);
-    body.append(el('h3', '', 'Bağlantı'));
-    const status = el('p', 'wl-small wl-status'); status.setAttribute('aria-live', 'polite');
-    const out = el('textarea', 'wl-out'); out.readOnly = true; out.rows = 3; out.setAttribute('aria-label', 'Oluşan bağlantı');
-    const row = el('div', 'wl-row'); const copy = button('Kopyala', 'copy', 'pri'); const len = el('small', 'wl-len');
-    row.append(copy, len);
-    body.append(status, out, row);
-    body.append(el('p', 'wl-small', 'Bağlantıyı açan kişi iPhone, iPad ya da Mac\'te Safari kullanıyorsa ana ekrana ya da Dock\'a eklemeyi bağlantıyla açılan sayfadan yapmalı; kart bunu ona söyler. Olmazsa ⓘ › "Kişisel bağlantın var mı?" alanına bağlantıyı yapıştırabilir.'));
-    maker.append(head, body);
-
-    const update = () => {
-      const v = n => form.elements[n]?.value ?? '';
-      const data = { to: v('to'), from: v('from'), msg: v('msg'), date: v('date'), color: form.querySelector('input[name=color]:checked')?.value || '', title: v('title') };
-      const n = W.cpLength(W.cleanText(data.msg));
-      counter.textContent = `${n} / ${W.LIMITS.msg}`;
-      counter.classList.toggle('over', n > W.LIMITS.msg);
-      prev.replaceChildren(cardNode({ ...data, to: W.cleanLine(data.to) || 'Kime', msg: W.cleanText(data.msg), from: W.cleanLine(data.from), date: W.isDate(data.date) ? data.date : '' }));
-      paint(prev, W.isColor(data.color) ? data : null);
-      try {
-        if (!W.cleanLine(data.to)) throw Object.assign(new Error('Bağlantı için Kime alanını doldur.'), { soft: true });
-        makerOut = W.buildLink(location.href, data);
-        out.value = makerOut; copy.disabled = false; len.textContent = `${makerOut.length} karakter`;
-        status.textContent = ''; status.classList.remove('err');
-      } catch (e) {
-        makerOut = ''; out.value = ''; copy.disabled = true; len.textContent = '';
-        status.textContent = e.message; status.classList.toggle('err', !e.soft);
-      }
-    };
-    form.addEventListener('input', update);
-    form.addEventListener('change', update);
-    form.addEventListener('submit', e => e.preventDefault());
-    update();
-    if (!maker.open) maker.showModal();
-    form.elements.to?.focus();
-  }
-  async function copyLink() {
-    const out = maker.querySelector('.wl-out'); if (!out || !makerOut) return;
-    try { await navigator.clipboard.writeText(makerOut); notify?.('Bağlantı kopyalandı'); return; } catch { /* izin yok: seçip eski yolla */ }
-    out.focus(); out.select();
-    let done = false;
-    try { done = document.execCommand('copy'); } catch { done = false; }
-    if (done) notify?.('Bağlantı kopyalandı');
-    else { const s = maker.querySelector('.wl-status'); if (s) { s.textContent = 'Kopyalanamadı: bağlantı seçili, elle kopyala.'; s.classList.add('err'); } }
-  }
-  maker?.addEventListener('click', e => {
-    const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
-    if (a === 'close') maker.close();
-    else if (a === 'copy') copyLink();
-  });
-  // yazılanlar kapalı pencerenin DOM'unda kalmasın
-  maker?.addEventListener('close', () => { makerOut = ''; maker.replaceChildren(); });
-
   // ---------- açılış ----------
-  if (card) fromHash(location.hash);
+  // Saklanan not (varsa) önce imzasıyla yeniden denetlenir; elle değiştirilmiş ya da eski biçimli kayıt yok sayılır
+  // (silinmez, yazılmaz). Ardından adresteki bağlantı (varsa) denetlenir.
+  const startHash = location.hash;   // main.js adresi denetim bitmeden yeniden yazabilir: açılıştaki parça şimdi alınır
+  const ready = (async () => {
+    const text = readStored();
+    if (text) {
+      const r = await W.verifyLink(text);
+      if (r.ok) { stored = { data: r.data, signed: r.signed }; verified = stored; look(stored.data); }
+    }
+  })().catch(err => console.error(err));
+  if (card) ready.then(() => fromHash(startHash)).catch(err => console.error(err));
 
   // Geri tuşu (main.js topLayer): "Bu cihazdan kaldır" onayındaysa önce karta döner; true dönerse pencere açık kalır
   function back() {
@@ -344,8 +275,9 @@ export function setupWelcome({ notify, onHash } = {}) {
 
   return {
     hashParam: () => keep,                       // main.js syncHash adresin başına ekler
-    onHashChange: hash => { try { fromHash(hash, false); } catch (err) { console.error(err); } },
-    stored: () => stored,
+    onHashChange: hash => { ready.then(() => fromHash(hash, false)).catch(err => console.error(err)); },
+    stored: () => stored?.data || null,
+    ready,
     back,
   };
 }

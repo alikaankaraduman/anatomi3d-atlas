@@ -142,22 +142,8 @@
         <p>Türkçe ve Almanca adlar, Latince düzeltmeler, bütün çalışma modlarının metinleri ve klinik notları (kalp ve ileti sistemi, beyin, hareket sistemi, Situs, göğüs ve solunum, ürogenital, baş-boyun, ekstremite damarları, lenf sistemi, kesit atlası), kas kartları (origo, insersiyo, innervasyon, fonksiyon), bütün test ve deneme sınavı soruları ve Aanki konu eşleştirmeleri bu uygulama için <b>yapay zekâ ile yazılmış ve yapay zekâ denetçileriyle kontrol edilmiştir</b>. Bir anatomi uzmanı tarafından gözden geçirilmemiştir; hata olabilir. Şüphede ders kitabınız ve hocanız esastır.</p>
         <h3>Tıbbi uyarı</h3>
         <p>Anatomi 3D yalnızca <b>öğrenme ve tekrar</b> içindir. Tıbbi tanı, tedavi, girişim planlaması ya da hasta bakımı için kullanılamaz. Modeller tek bir erkek bedenine (kadın yapıları ayrı kaynaklardan uyarlanmıştır) dayanır; bireysel farklılıkları göstermez, bazı yapılar şematiktir ya da eksiktir.</p>
-        <h3>Kişisel bağlantı</h3>
-        <div id="wl-about" class="wl-about">
-          <p class="dim">Birine kısa bir notla açılan bir bağlantı gönderebilirsin: açan kişi uygulamayı önce senin notunla görür.</p>
-          <div class="btns"><button id="wl-make-btn" type="button">Birine özel bağlantı oluştur</button></div>
-          <details id="wl-paste" class="wl-paste">
-            <summary>Kişisel bağlantın var mı?</summary>
-            <p class="dim">Ana ekrandaki uygulamada notun görünmüyorsa sana gönderilen bağlantının tamamını buraya yapıştır.</p>
-            <div class="wl-paste-row">
-              <input type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Kişisel bağlantı" placeholder="https://…#g=…" />
-              <button type="button" data-a="apply">Uygula</button>
-            </div>
-            <p class="wl-paste-msg" role="alert" hidden></p>
-          </details>
-        </div>
         <h3>Gizlilik</h3>
-        <p class="dim">Uygulama hesap istemez; reklam, çerez ve izleme içermez, kendisi hiçbir kişisel veri toplamaz ve göndermez. Sayfayı sunan barındırma hizmeti, her web sitesinde olduğu gibi, ziyaret sırasında IP adresini ve tarayıcı bilgisini teknik olarak işler; ücretsiz barındırmada sayfanın köşesinde barındırıcının kendi rozeti görünebilir. Beden seçimi, ayarlar, test ilerlemesi ve indirilen modeller yalnız bu cihazda (tarayıcı depolaması) saklanır. İsteğe bağlı kullanıcı profilleri (ad, şifrenin özeti ve her profilin ilerlemesi) de yalnız bu cihazda saklanır; şifrenin kendisi saklanmaz, veriler şifrelenmez ve hiçbir yere gönderilmez. Kısa bir şifre cihaza erişen biri tarafından tahmin edilebilir: başka bir yerde kullandığın şifreyi kullanma. Kişisel bir bağlantının notu bağlantının kendisinde ve onu açıp "Başla" diyen cihazda durur; uygulama onu hiçbir sunucuya göndermez. Bağlantı, gönderildiği uygulamada (ör. mesajlaşma) ve tarayıcı geçmişinde de durur; bağlantıyı alan herkes notu okuyabilir. Ayrıntılar: <a href="gizlilik.html" target="_blank" rel="noopener">gizlilik bildirimi</a>.</p>
+        <p class="dim">Uygulama hesap istemez; reklam, çerez ve izleme içermez, kendisi hiçbir kişisel veri toplamaz ve göndermez. Sayfayı sunan barındırma hizmeti, her web sitesinde olduğu gibi, ziyaret sırasında IP adresini ve tarayıcı bilgisini teknik olarak işler; ücretsiz barındırmada sayfanın köşesinde barındırıcının kendi rozeti görünebilir. Beden seçimi, ayarlar, test ilerlemesi ve indirilen modeller yalnız bu cihazda (tarayıcı depolaması) saklanır. İsteğe bağlı kullanıcı profilleri (ad, şifrenin özeti ve her profilin ilerlemesi) de yalnız bu cihazda saklanır; şifrenin kendisi saklanmaz, veriler şifrelenmez ve hiçbir yere gönderilmez. Kısa bir şifre cihaza erişen biri tarafından tahmin edilebilir: başka bir yerde kullandığın şifreyi kullanma. Kişisel bir bağlantıyı yalnız bu yayının özel imza anahtarına sahip olan kişi oluşturabilir; uygulama bağlantının imzasını denetler. Notun metni bağlantının kendisinde ve onu açıp "Başla" diyen cihazda durur; uygulama onu hiçbir sunucuya göndermez. Bağlantı, gönderildiği uygulamada (ör. mesajlaşma) ve tarayıcı geçmişinde de durur; bağlantıyı alan herkes notu okuyabilir. Ayrıntılar: <a href="gizlilik.html" target="_blank" rel="noopener">gizlilik bildirimi</a>.</p>
         <h3>Çevrimdışı kullanım</h3>
         <div id="offline">
           <p id="off-status" class="dim">…</p>
@@ -168,14 +154,23 @@
           </div>
           <p class="dim">Telefonda ana ekrana ekleyin: Android'de Chrome menüsünden "Uygulamayı yükle" ya da "Ana ekrana ekle", iPhone'da Safari'de Paylaş › "Ana Ekrana Ekle". Bir kez açılan her şey sonra internetsiz de açılır. iPhone'da Safari, yaklaşık bir hafta açılmayan sitelerin verisini (test ilerlemesi, indirilen modeller) silebilir; ana ekrana eklenen uygulamada bu süre sınırı uygulanmaz.</p>
         </div>
+        <!-- bağlantıyla gelen notu ana ekrandaki uygulamaya taşımak için (src/welcome-ui.js); bağlantıyı uygulama yapmaz -->
+        <details id="wl-paste" class="wl-paste">
+          <summary>Kişisel bağlantın var mı?</summary>
+          <p class="dim">Sana gönderilen bir bağlantının notu ana ekrandaki uygulamada görünmüyorsa bağlantının tamamını buraya yapıştır.</p>
+          <div class="wl-paste-row">
+            <input type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Kişisel bağlantı" placeholder="https://…#g=…" />
+            <button type="button" data-a="apply">Uygula</button>
+          </div>
+          <p class="wl-paste-msg" role="alert" hidden></p>
+        </details>
         <form method="dialog"><button>Kapat</button></form>
       </dialog>
       <!-- Uygulama kabuğunda (Capacitor) aynı kökenli belgeler (lisanslar.txt, gizlilik.html) uygulamanın yerine açılmasın: burada gösterilir (src/pwa.js) -->
       <!-- Kullanıcılar: bu cihazdaki profiller; içerik src/users-ui.js tarafından yazılır -->
       <dialog id="users" aria-labelledby="users-title"></dialog>
-      <!-- Kişisel bağlantı: karşılama kartı ve bağlantı oluşturma; içerik src/welcome-ui.js tarafından yazılır -->
+      <!-- Kişisel bağlantı: karşılama kartı; içerik src/welcome-ui.js tarafından yazılır -->
       <dialog id="welcome" aria-label="Sana özel not"></dialog>
-      <dialog id="welcome-make" aria-labelledby="wl-make-title"></dialog>
       <dialog id="doc" aria-label="Belge">
         <div class="doc-frame"></div>
         <form method="dialog"><button>Kapat</button></form>

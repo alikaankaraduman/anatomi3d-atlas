@@ -1,6 +1,19 @@
-// Node testi: src/welcome.js (kişisel bağlantı). Çalıştır: node tools/_qawork/welcome-test.mjs (app/ içinde)
-// İçerik uydurmadır ("Deneme Kişi", "Deneme Veren", nötr deneme cümleleri).
-import * as W from '../../src/welcome.js';
+// Node testi: src/welcome.js (kişisel bağlantı, imzalı biçim) ve tools/welcome-sign.mjs. Çalıştır (app/ içinde):
+// node tools/_qawork/welcome-test.mjs. İçerik uydurmadır ("Deneme Kişi", "Deneme Veren", nötr deneme cümleleri).
+// İmzalar her çalıştırmada burada üretilen ATILACAK bir anahtar çiftiyle yapılır; yayının gerçek anahtarı kullanılmaz.
+import { readFileSync } from 'node:fs';
+import * as W0 from '../../src/welcome.js';
+import * as S from '../welcome-sign.mjs';
+const { subtle } = globalThis.crypto;
+const gen = async () => {
+  const k = await subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+  const pub = await subtle.exportKey('jwk', k.publicKey);
+  return { priv: k.privateKey, pub: { kty: 'EC', crv: 'P-256', x: pub.x, y: pub.y } };
+};
+const K = await gen(), K2 = await gen();
+// içerik kuralları: kodlama Node yardımcısıyla (tools/welcome-sign.mjs), çözme yalnız yük (imza aşağıda ayrıca sınanır)
+const W = { ...W0, encode: d => S.encodePayload(d).payload, decode: p => W0.decodePayload(p),
+  same: (a, b) => S.canonical(S.encodePayload(a).data) === S.canonical(S.encodePayload(b).data) };
 
 let fails = 0, passes = 0;
 const ok = (cond, msg) => { if (cond) passes++; else { fails++; console.error('HATA:', msg); } };
@@ -104,19 +117,15 @@ ok(W.payloadFromHash('#t=abc&g=' + p + '&s=x') === p, 'payloadFromHash: derin ba
 ok(W.payloadFromHash('#t=abc') === null && W.payloadFromHash('') === null, 'payloadFromHash: yok');
 ok(W.hashWithout('#g=' + p + '&t=a%20b&m=heart:flow') === 't=a%20b&m=heart:flow', 'hashWithout öteki parçaları korur');
 ok(W.hashWithout('#g=' + p) === '', 'hashWithout: yalnız g');
-const link = W.buildLink('https://example.org/app/index.html?x=1#t=old', base);
-ok(link === 'https://example.org/app/index.html?x=1#g=' + p, 'buildLink var olan parçayı atar');
-ok(W.payloadFromText('  ' + link + '\n') === p, 'yapıştırma: tam adres');
-ok(W.payloadFromText('#g=' + p) === p && W.payloadFromText('g=' + p) === p && W.payloadFromText(p) === p, 'yapıştırma: #g=, g= ve çıplak');
-ok(W.payloadFromText(link.slice(0, 40) + '\n' + link.slice(40)) === p, 'yapıştırma: satıra bölünmüş adres');
+const sp0 = await S.signPayload(p, K.priv);
+const link = S.buildLink('https://example.org/app/index.html?x=1#t=old', sp0);
+ok(link === 'https://example.org/app/index.html?x=1#g=' + sp0, 'buildLink var olan parçayı atar');
+ok(W.payloadFromText('  ' + link + '\n') === sp0, 'yapıştırma: tam adres');
+ok(W.payloadFromText('#g=' + sp0) === sp0 && W.payloadFromText('g=' + sp0) === sp0 && W.payloadFromText(sp0) === sp0, 'yapıştırma: #g=, g= ve çıplak');
+ok(W.payloadFromText(link.slice(0, 40) + '\n' + link.slice(40)) === sp0, 'yapıştırma: satıra bölünmüş adres');
 ok(W.payloadFromText('merhaba dünya') === null && W.payloadFromText('https://example.org/') === null, 'yapıştırma: bağlantı değil');
 
-// ---------- cihaz kaydı ----------
-const st = W.storedText(r.data);
-ok(W.same(W.parseStored(st), base), 'kayıt gidiş-dönüş');
-ok(W.parseStored('{bozuk') === null && W.parseStored(null) === null && W.parseStored('{"v":1}') === null, 'bozuk kayıt = yok');
-ok(W.parseStored('{"v":1,"data":{"to":"A","__proto__":{}}}') === null, 'kayıtta prototip anahtarı');
-ok(W.parseStored(JSON.stringify({ v: 1, data: { to: rep('a', 41) } })) === null, 'kayıtta sınır aşımı');
+// (cihaz kaydı: aşağıdaki imza bölümünde)
 ok(W.dateText('2026-11-21') === '21 Kasım 2026', 'tarih metni: ' + W.dateText('2026-11-21'));
 ok(W.dateText('x') === '', 'geçersiz tarih metni boş');
 ok(W.cpLength('a🙂b') === 3, 'cpLength');
@@ -138,6 +147,105 @@ ok(W.cleanText('🙂\ud83d') === '🙂', 'eşli vekil (emoji) kalır, sondaki e�
 {
   const big = W.encode({ to: '🙂'.repeat(40), from: '🫀'.repeat(40), msg: '🙂"'.repeat(300), date: '2026-11-21', color: 'mor', title: '🙂'.repeat(30) });
   ok(big.length <= W.PAYLOAD_MAX && W.decode(big).ok, `en kötü durum sınırın altında (${big.length} / ${W.PAYLOAD_MAX})`);
+}
+
+// ---------- imza ----------
+const vk = (signed, key = K.pub) => W.verifyLink(signed, key);
+const rejected = async (signed, msg, key) => { const v = await vk(signed, key); ok(!v.ok && v.error === W.INVALID && !('data' in v), msg + (v.ok ? ' (kabul edildi)' : '')); };
+{
+  const { link: L, signed } = await S.makeLink('https://example.org/', base, K.priv);
+  ok(L === 'https://example.org/#g=' + signed, 'makeLink adresi');
+  const [pl, sg] = signed.split('.');
+  ok(sg.length === W.SIG_LEN && /^[A-Za-z0-9_-]+$/.test(sg), 'imza 86 karakter base64url');
+  const v = await vk(W.payloadFromHash(new URL(L).hash));
+  ok(v.ok && W.sameLink(v.signed, signed) && v.data.to === base.to && v.data.msg === base.msg && v.data.color === 'mor', 'gidiş-dönüş: imzalı bağlantı doğrulanır ve çözülür');
+  ok((await vk(signed)).ok, 'doğrulama tekrarlanabilir');
+  // yayının açık anahtarı bu atılacak anahtarla yapılmış bağlantıyı kabul etmez
+  await rejected(signed, 'yayının açık anahtarı atılacak anahtarın imzasını reddeder', W.PUBLIC_KEY);
+  ok(W.PUBLIC_KEY.kty === 'EC' && W.PUBLIC_KEY.crv === 'P-256' && !('d' in W.PUBLIC_KEY), 'PUBLIC_KEY yalnız açık anahtar');
+  // değiştirilmiş yük: çeşitli konumlarda bir karakter
+  const swap = (str, i) => str.slice(0, i) + (str[i] === 'A' ? 'B' : 'A') + str.slice(i + 1);
+  let allBad = true;
+  for (const i of [0, 1, Math.floor(pl.length / 2), pl.length - 2, pl.length - 1]) if ((await vk(swap(pl, i) + '.' + sg)).ok) allBad = false;
+  ok(allBad, 'yükte tek karakter değişince reddedilir (son karakter dahil)');
+  await rejected(S.encodePayload({ ...base, to: 'Başka Kişi' }).payload + '.' + sg, 'başka yük + eski imza');
+  allBad = true;
+  for (const i of [0, 10, 42, 84, 85]) if ((await vk(pl + '.' + swap(sg, i))).ok) allBad = false;
+  ok(allBad, 'imzada tek karakter değişince reddedilir (son karakter dahil)');
+  // son karakterin kullanılmayan bitleri: aynı baytlara çözülen kanonik olmayan imza da reddedilir
+  const last = sg[85], idx = 'AQgw'.indexOf(last);
+  if (idx >= 0) await rejected(pl + '.' + sg.slice(0, 85) + 'BRhx'[idx], 'kanonik olmayan imza (kullanılmayan bitler)');
+  // başka anahtarla imza
+  const other = await S.signPayload(pl, K2.priv);
+  await rejected(other, 'başka anahtarın imzası');
+  ok((await vk(other, K2.pub)).ok, 'başka anahtar kendi açık anahtarıyla doğrulanır');
+  // imzasız, eski biçim ve bozuk biçimler
+  await rejected(pl, 'imzasız yük (eski biçim, sürüm 1 bağlantısı)');
+  await rejected(pl + '.', 'boş imza');
+  await rejected('.' + sg, 'boş yük');
+  await rejected(pl + '.' + sg + '.' + sg, 'iki nokta');
+  await rejected(pl + '.' + sg.slice(0, 80), 'kısa imza');
+  await rejected(pl + '.' + sg + 'AA', 'uzun imza');
+  await rejected(pl.slice(0, -5) + '.' + sg, 'kesik yük');
+  await rejected(signed.slice(0, 40), 'kesik bağlantı');
+  await rejected(signed.slice(0, -1), 'son karakteri eksik bağlantı');
+  await rejected('', 'boş'); await rejected(null, 'null'); await rejected(42, 'sayı');
+  await rejected(pl + '.$' + sg.slice(1), 'imzada base64url dışı karakter');
+  await rejected('A'.repeat(W.PAYLOAD_MAX + 1) + '.' + sg, 'çok uzun yük (doğrulamadan önce)');
+  await rejected('A'.repeat(W.LINK_MAX + 10), 'çok uzun metin');
+  ok(W.splitSigned('A'.repeat(W.PAYLOAD_MAX + 1) + '.' + sg) === null, 'splitSigned boyut sınırı');
+  // geçerli imza ama kurala aykırı içerik: uygulama yine açmaz
+  await rejected(await S.signPayload(b64(JSON.stringify({ v: 1, to: 'A'.repeat(41) })), K.priv), 'imzalı ama sınırı aşan yük');
+  await rejected(await S.signPayload(b64('{"v":1,"to":"A","__proto__":{}}'), K.priv), 'imzalı ama prototip anahtarlı yük');
+  await rejected(await S.signPayload(b64(JSON.stringify({ v: 2, to: 'A' })), K.priv), 'imzalı ama başka sürüm');
+  // en büyük geçerli bağlantı imzalanır ve doğrulanır
+  const bigS = await S.makeLink('https://example.org/', { to: '🙂'.repeat(40), from: '🫀'.repeat(40), msg: '🙂"'.repeat(300), date: '2026-11-21', color: 'mor', title: '🙂'.repeat(30) }, K.priv);
+  ok(bigS.signed.length <= W.LINK_MAX && (await vk(bigS.signed)).ok, `en büyük imzalı bağlantı (${bigS.signed.length} / ${W.LINK_MAX})`);
+  // aynı içerik için iki imza farklı olabilir; sameLink yükü karşılaştırır
+  const again = await S.signPayload(pl, K.priv);
+  ok(W.sameLink(again, signed) && !W.sameLink('eyJ2IjoxfQ.' + sg, signed), 'sameLink yükü karşılaştırır');
+  ok(S.encodePayload({ title: base.title, color: 'mor', date: base.date, msg: base.msg, from: base.from, to: base.to }).payload === pl, 'kanonik yük');
+  throwsCode(() => S.encodePayload({ to: 'A', date: '2026-02-30' }), 'date', 'yapıcı da aynı kuralla reddeder');
+
+  // ---------- cihaz kaydı (imzalı metin; her okunuşta yeniden doğrulanır) ----------
+  const st = W.storedText(signed);
+  ok(W.parseStored(st) === signed, 'kayıt gidiş-dönüş (imzalı metin)');
+  ok((await vk(W.parseStored(st))).ok, 'kayıttaki bağlantı doğrulanır');
+  const edited = JSON.parse(st); edited.link = S.encodePayload({ ...base, to: 'Başka Kişi' }).payload + '.' + sg;
+  const ep = W.parseStored(JSON.stringify(edited));
+  ok(ep !== null && !(await vk(ep)).ok, 'elle değiştirilmiş kayıt biçimce okunur ama imzası tutmaz');
+  ok(W.parseStored(JSON.stringify({ v: 1, data: { to: 'Deneme Kişi' }, saved: '2026-11-21' })) === null, 'eski (sürüm 1, imzasız) kayıt = yok');
+  ok(W.parseStored(JSON.stringify({ v: 2, link: pl })) === null, 'imzasız kayıt = yok');
+  ok(W.parseStored('{bozuk') === null && W.parseStored(null) === null && W.parseStored('{"v":2}') === null, 'bozuk kayıt = yok');
+  ok(W.parseStored('{"v":2,"link":"' + signed + '","__proto__":{}}') === null, 'kayıtta prototip anahtarı');
+  ok(W.parseStored('x'.repeat(20001)) === null, 'çok büyük kayıt');
+}
+// crypto.subtle yok (güvensiz bağlam): bağlantılar yok sayılır
+{
+  const desc = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  Object.defineProperty(globalThis, 'crypto', { value: undefined, configurable: true });
+  const v = await W.verifyLink('a.b');
+  ok(!v.ok && v.code === 'nocrypto' && !W.cryptoReady(), 'crypto.subtle yokken bağlantı yok sayılır');
+  Object.defineProperty(globalThis, 'crypto', desc);
+}
+// tarayıcı modüllerinde bağlantı yapan kod yok
+{
+  const src = readFileSync(new URL('../../src/welcome.js', import.meta.url), 'utf8') + readFileSync(new URL('../../src/welcome-ui.js', import.meta.url), 'utf8');
+  ok(!/subtle\.sign\(|generateKey|buildLink|encodePayload|canonical\(|welcome-make|Birine özel/.test(src), 'src/ içinde bağlantı yapan kod yok');
+}
+
+// geliştirme sunucusu app/private/'ı (özel imza anahtarı) sunmaz: Vite yasak listesi ve varsayılan kalıplar.
+// Yapılandırma içe aktarılır (vite paketi gerekir: npm ci); paket kurulu değilse dosyanın metnindeki liste denetlenir.
+{
+  let deny = null;
+  try { deny = (await import('../../vite.config.js')).default?.server?.fs?.deny || []; }
+  catch (e) { if (e?.code !== 'ERR_MODULE_NOT_FOUND') throw e; }
+  if (!deny) {
+    const m = /deny\s*:\s*\[([^\]]*)\]/.exec(readFileSync(new URL('../../vite.config.js', import.meta.url), 'utf8'));
+    deny = m ? [...m[1].matchAll(/'([^']*)'|"([^"]*)"/g)].map(x => x[1] ?? x[2]) : [];
+  }
+  ok(deny.includes('**/private/**'), 'vite server.fs.deny app/private/ klasörünü yasaklar');
+  ok(['.env', '.env.*', '*.{crt,pem}', '**/.git/**'].every(p => deny.includes(p)), 'vite varsayılan yasak kalıpları korunur');
 }
 
 console.log(`welcome-test: ${passes} geçti, ${fails} hata`);

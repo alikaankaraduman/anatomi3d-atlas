@@ -610,7 +610,8 @@ document.getElementById('about-btn').addEventListener('click', () => { document.
 // Kullanıcılar (bu cihazdaki profiller, src/users.js): sol paneldeki giriş düğmesi ve pencere. Öğrenme verisi
 // (progress.js, exam.js) açık kullanıcının anahtarlarıyla yüklenir; kullanıcı değişince sayfa yeniden yüklenir.
 // Açılışta şifre bekleyen profil ya da kullanıcı listesi burada açılır (Geri tuşu katmanı #users'ı da kapatır).
-// Cihazda kullanıcı yoksa ve bir kişisel not saklıysa pencere notun adıyla kullanıcı oluşturmayı önerir (src/welcome-ui.js).
+// Cihazda kullanıcı yoksa ve imzası doğrulanmış bir kişisel not saklıysa pencere notun adıyla kullanıcı oluşturmayı önerir
+// (src/welcome-ui.js; storedWelcome() doğrulama bitene kadar null döner).
 const usersUI = setupUsers({ notify: t => ui.notify(t), suggestName: () => storedWelcome()?.to });
 
 // "Sistemleri gerektiğinde yükle" ayarı (Araçlar)
@@ -754,7 +755,7 @@ function applyHash(raw) {
   }
   syncHash();   // tanınmayan bağlantı (ya da yalnız kişisel bağlantı, #g=)
 }
-// Kişisel bağlantı (#g=..., src/welcome-ui.js): bir görünüm değildir. Geçerliyse yalnız iOS / macOS Safari sekmesinde adreste kalır
+// Kişisel bağlantı (#g=<yük>.<imza>, src/welcome-ui.js): bir görünüm değildir. İmzası eşzamansız denetlenir; geçerliyse yalnız iOS / macOS Safari sekmesinde adreste kalır
 // (ana ekran / Dock yer imi onu taşısın diye): syncHash onu görünümün önüne ekler (fullHash). applyHash g'yi yok sayar,
 // derin bağlantılar (#g=...&t=...) eskisi gibi uygulanır. Öteki tarayıcılarda, kurulu uygulamada ve Android kabuğunda adresten silinir.
 // Kart açılıştan önce gösterilir; Geri tuşu katmanı onu da kapatır.
