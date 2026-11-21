@@ -1,0 +1,23 @@
+# Satır sonları: depoda LF. Windows'ta çalışma kopyası olduğu gibi kalır; Linux'ta (bulut derlemesi) betikler LF ister.
+* text=auto
+
+# Linux'ta çalıştırılan betikler her zaman LF
+gradlew text eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+_headers text eol=lf
+
+# Windows betikleri CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# ikili dosyalar (satır sonu dönüşümü ve metin karşılaştırması yapılmaz)
+*.glb binary
+*.bin binary
+*.png binary
+*.jpg binary
+*.jar binary
+*.stl binary
+*.fbx binary
+*.jks binary
+*.keystore binary

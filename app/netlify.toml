@@ -1,0 +1,9 @@
+# Netlify yayın ayarları. Uygulamanın kendisi bu dosyaya ihtiyaç duymaz; yalnızca `netlify deploy` okur.
+# Yayın başlıkları (noindex, Content-Security-Policy, önbellek kuralları) burada DEĞİL, public/_headers dosyasındadır:
+# o dosya derlemeyle dist'e kopyalandığı için her yükleme yolunda geçerli olur.
+# Yayınlama: docs/MOBILE.md, "Statik bir barındırıcıya yayınlamak" bölümü.
+
+# command: `netlify deploy` --no-build verilmeden çalıştırılırsa önce bu komut yerelde çalışır (eski bir dist yüklenmez).
+[build]
+  publish = "dist"
+  command = "npm run build"

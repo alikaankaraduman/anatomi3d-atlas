@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Anatomi 3D</string>
+    <string name="title_activity_main">Anatomi 3D</string>
+    <string name="package_name">app.anatomi3d.atlas</string>
+    <string name="custom_url_scheme">app.anatomi3d.atlas</string>
+</resources>

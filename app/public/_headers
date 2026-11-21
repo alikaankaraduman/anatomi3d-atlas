@@ -1,0 +1,38 @@
+# Yayın başlıkları (Netlify ve Cloudflare Pages bu dosyayı okur; başka sunucularda etkisizdir).
+# Tek kaynak budur: dosya derlemeyle dist'e kopyalanır, böylece hem `netlify deploy` hem sürükle-bırak yüklemede geçerli olur.
+# Yerelde sınamak için: node tools/_qawork/swtest/serve.mjs (dist'i bu kurallarla sunar).
+# Not: service worker yanıtları başlıklarıyla birlikte önbellekte saklar; buradaki bir değişiklik kurulu telefonlara
+# ancak uygulamanın yeni bir sürümü (içeriği değişen bir dosya) yayınlanınca ulaşır.
+
+/*
+  # Deneme aşaması: arama motorları siteyi dizine eklemesin. Site herkese duyurulacağı zaman bu satır silinir.
+  X-Robots-Tag: noindex
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  # Yalnız kendi adresimizden betik, veri, resim ve bağlantı: başka adrese istek gidemez. 'wasm-unsafe-eval': meshopt
+  # çözücüsü WebAssembly kullanır (blob işçilerinde). Stilde 'unsafe-inline': arayüz öğelere satır içi stil yazar.
+  # Derleme hedefi olan tarayıcılar (Vite varsayılanı: Safari 16.4+, Chrome 111+, Firefox 114+) 'wasm-unsafe-eval' anahtarını tanır.
+  # Betikte 'unsafe-inline' ve form-action'da app.netlify.com YALNIZ Netlify içindir: Netlify ücretsiz planda herkese açık
+  # sitelerin sayfasına "Powered by Netlify" rozetini ekler (/.netlify/scripts/hud; rozet bir srcdoc çerçevesinde satır
+  # içi betikle çalışır ve içindeki form app.netlify.com'a gider). Bu ikisi olmadan rozet engellenir. Uygulamanın kendi
+  # satır içi betiği ya da olay özniteliği yoktur. Sayfaya ek yapmayan bir barındırıcıya (GitHub Pages, Cloudflare
+  # Pages) geçilirse sıkı hâline dönülür: script-src 'self' 'wasm-unsafe-eval'; form-action 'none'.
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' blob: data:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action https://app.netlify.com; frame-ancestors 'none'
+
+# Adında içerik özeti olan dosyalar (Vite: assets/index-<özet>.js/.css) hiç değişmez.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Service worker her açılışta sunucudan denetlensin ki yeni sürüm hemen fark edilsin.
+/sw.js
+  Cache-Control: no-cache
+
+# Lisans dosyası UTF-8 olarak bildirilsin (Türkçe karakterler; service worker bu başlığı da önbellekte saklar).
+/lisanslar.txt
+  Content-Type: text/plain; charset=utf-8
+
+# Uygulama bildirimi doğru içerik türüyle gitsin (Netlify .webmanifest uzantısını tanımaz, octet-stream verir).
+/manifest.webmanifest
+  Content-Type: application/manifest+json

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Uyarlanabilir simgenin arka planı: uygulamanın zemin rengi (index.html ve manifest.webmanifest ile aynı) -->
+    <color name="ic_launcher_background">#26282D</color>
+</resources>

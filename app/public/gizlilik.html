@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#26282d">
+<title>Gizlilik · Anatomi 3D</title>
+<style>
+  /* Betiksiz, dış kaynaksız statik sayfa; renkler uygulamanın koyu temasıyla aynı. */
+  :root { color-scheme: dark; --bg: #26282d; --panel: #2c2f36; --line: rgba(255,255,255,.10); --text: #dfe2e8; --dim: #979daa; --accent: #19c8f5; --warn: #f0c53a; }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  main { max-width: 760px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 12px; margin: 8px 0 20px; }
+  header img { width: 44px; height: 44px; border-radius: 10px; }
+  h1 { font-size: 1.5rem; margin: 0; line-height: 1.25; }
+  h2 { font-size: 1.2rem; margin: 2.2em 0 .4em; padding-top: 1em; border-top: 1px solid var(--line); }
+  h3 { font-size: 1rem; margin: 1.4em 0 .3em; color: var(--accent); }
+  p, li { margin: .4em 0; }
+  ul { padding-left: 1.3em; }
+  a { color: var(--accent); }
+  nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  nav a { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; background: var(--panel); }
+  .dim { color: var(--dim); font-size: .92rem; }
+  code { font-size: .9em; background: var(--panel); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="icons/icon-192.png" alt="" width="44" height="44">
+    <div>
+      <h1>Gizlilik bildirimi</h1>
+      <div class="dim">Anatomi 3D · web sürümü ve mağaza uygulaması · son güncelleme: 21 Kasım 2026</div>
+    </div>
+  </header>
+  <nav aria-label="Dil">
+    <a href="./" target="_top">← Uygulamaya dön</a>
+    <a href="#tr" hreflang="tr">Türkçe</a>
+    <a href="#de" hreflang="de">Deutsch</a>
+    <a href="#en" hreflang="en">English</a>
+  </nav>
+
+  <section id="tr" lang="tr">
+    <h2>Türkçe</h2>
+    <p><b>Kısaca:</b> Anatomi 3D hesap istemez; reklam, çerez, analiz ve izleme içermez. Uygulama kendisi hiçbir kişisel veriyi toplamaz, bir sunucuya göndermez ve kimseyle paylaşmaz.</p>
+
+    <h3>İletişim</h3>
+    <p>Sorular, düzeltmeler ve hata bildirimleri için projenin GitHub deposundaki konu (issue) sayfasını kullanın: <a href="https://github.com/alikaankaraduman/anatomi3d-atlas/issues" target="_blank" rel="noopener">https://github.com/alikaankaraduman/anatomi3d-atlas/issues</a>. Oraya yazdıklarınız herkese açıktır; kişisel bilgi yazmayın.</p>
+
+    <h3>Cihazınızda saklananlar</h3>
+    <p>Aşağıdakiler yalnız bu cihazda, tarayıcının ya da uygulamanın yerel depolamasında (localStorage, önbellek) durur ve cihazdan dışarı gönderilmez:</p>
+    <ul>
+      <li>beden seçimi (kadın / erkek) ve ayarlar (ör. sistemlerin gerektiğinde yüklenmesi, yapı ağacı görünümü, kesit ayarları),</li>
+      <li>test ve deneme sınavı ilerlemesi (doğru / yanlış sayıları, son sınavlar),</li>
+      <li>isteğe bağlı kullanıcı profilleri: ad, şifrenin özeti (PBKDF2; şifrenin kendisi saklanmaz; kısa bir şifre, cihaza erişen biri tarafından özetten tahmin edilebilir, bu yüzden başka bir yerde kullandığınız şifreyi kullanmayın) ve her profilin ilerlemesi. Profiller yalnız oluşturuldukları cihazda vardır; şifre profilleri bu cihazda birbirinden ayırır, veriler şifrelenmez. Dışa aktarılan profil dosyası şifre bilgisi içermez ve yalnız sizin seçtiğiniz yere kaydedilir,</li>
+      <li>çevrimdışı kullanım için indirilen uygulama dosyaları ve 3B modeller (web sürümünde service worker önbelleği).</li>
+    </ul>
+    <p>Bu veriler bir kişiye bağlanmaz ve uygulamanın geliştiricisi bunlara erişemez.</p>
+
+    <h3>Web sürümü: barındırma hizmeti</h3>
+    <p>Web sürümü açıldığında sayfayı sunan barındırma hizmeti, her web sitesinde olduğu gibi, dosyaları iletebilmek için IP adresinizi, tarayıcı ve cihaz bilgisini ve istenen adresi teknik olarak işler ve kısa süre kayıt tutabilir. Barındırıcı adres çubuğundaki alan adından anlaşılır: github.io adreslerinde GitHub, Inc. (ABD), netlify.app adreslerinde Netlify, Inc. (ABD); işleme onun gizlilik politikasına göre yapılır. Netlify ücretsiz planda sayfaya kendi rozetini ("Powered by Netlify") ekleyebilir; bu rozet barındırıcının kendi içeriğidir.</p>
+
+    <h3>Mağaza uygulaması</h3>
+    <p>Mağazadan (Google Play, App Store) kurulan uygulama dosyalarını ve modellerini kendi içinde taşır, açılırken internete bağlanmaz. Uygulama mağazası, uygulamayı indirmeniz ve güncellemeniz sırasında kendi koşullarına göre veri işler; bu, uygulamanın denetiminde değildir. Android, cihazınızda yedekleme açıksa uygulamanın yerel verisini (ayarlar, ilerleme) Google hesabınızdaki şifreli yedeğe alabilir; bu yedek sizin hesabınızdadır, geliştirici erişemez.</p>
+
+    <h3>Olmayanlar</h3>
+    <ul>
+      <li>Sunucuda hesap, giriş ya da kayıt yok (isteğe bağlı kullanıcı profilleri yalnız bu cihazdadır, yukarıya bakın).</li>
+      <li>Reklam, analiz (istatistik), çerez, parmak izi ya da izleme yok.</li>
+      <li>Kamera, mikrofon, konum ya da kişiler gibi izinler istenmez.</li>
+      <li>Başka bir adrese veri gönderilmez; uygulama yalnız kendi dosyalarını yükler.</li>
+    </ul>
+
+    <h3>Verileri silmek</h3>
+    <ul>
+      <li>Web sürümü: tarayıcı ayarlarından bu sitenin verilerini silin, ya da uygulamada ⓘ › Çevrimdışı kullanım › "Önbelleği temizle" (indirilen modeller için).</li>
+      <li>Ana ekrana eklenen web uygulaması ya da mağaza uygulaması: uygulamayı kaldırmak cihazdaki bütün yerel verileri siler; Android'de Ayarlar › Uygulamalar › Anatomi 3D › Depolama › "Verileri temizle" de olur. Android yedeklemesi açıksa uygulama yeniden kurulunca ilerleme Google hesabınızdaki yedekten geri gelebilir; bu kopyayı Google Drive › Yedekler bölümünden silebilir ya da cihazda yedeklemeyi kapatabilirsiniz.</li>
+    </ul>
+
+    <h3>Haklarınız</h3>
+    <p>Geliştirici sizinle ilgili hiçbir veri tutmadığı için erişim, düzeltme ya da silme talebine konu olacak bir kayıt yoktur. Sorularınız için yukarıdaki konu sayfasını kullanabilirsiniz. Barındırıcının ve mağazanın işlediği veriler için onlara başvurabilirsiniz.</p>
+
+    <h3>Not</h3>
+    <p class="dim">Anatomi 3D yalnız öğrenme ve tekrar içindir; tanı ya da tedavi için kullanılamaz. Metinler ve sorular yapay zekâ ile yazılmış ve denetlenmiştir, bir anatomi uzmanınca gözden geçirilmemiştir. Bu bildirim değişirse tarih güncellenir.</p>
+  </section>
+
+  <section id="de" lang="de">
+    <h2>Deutsch</h2>
+    <p><b>Kurz:</b> Anatomi 3D braucht kein Konto und enthält keine Werbung, keine Cookies, keine Analyse und kein Tracking. Die App selbst erhebt keine personenbezogenen Daten, sendet keine an einen Server und gibt keine weiter.</p>
+
+    <h3>Kontakt</h3>
+    <p>Für Fragen, Korrekturen und Fehlermeldungen nutzen Sie bitte die Issue-Seite des GitHub-Repositorys: <a href="https://github.com/alikaankaraduman/anatomi3d-atlas/issues" target="_blank" rel="noopener">https://github.com/alikaankaraduman/anatomi3d-atlas/issues</a>. Was Sie dort schreiben, ist öffentlich; geben Sie keine persönlichen Daten an.</p>
+
+    <h3>Was auf Ihrem Gerät gespeichert wird</h3>
+    <ul>
+      <li>Körperwahl (weiblich / männlich) und Einstellungen,</li>
+      <li>Fortschritt in Tests und Probeklausur,</li>
+      <li>optionale Benutzerprofile: Name, ein Hash des Passworts (PBKDF2; das Passwort selbst wird nicht gespeichert; ein kurzes Passwort kann von jemandem mit Zugriff auf das Gerät aus dem Hash erraten werden, verwenden Sie daher kein Passwort, das Sie anderswo nutzen) und der Fortschritt jedes Profils. Profile gibt es nur auf dem Gerät, auf dem sie angelegt wurden; das Passwort trennt die Profile auf diesem Gerät, die Daten werden nicht verschlüsselt. Eine exportierte Profildatei enthält keine Passwortdaten und wird nur dort gespeichert, wo Sie sie ablegen,</li>
+      <li>für die Offline-Nutzung heruntergeladene App-Dateien und 3D-Modelle (in der Webversion im Service-Worker-Cache).</li>
+    </ul>
+    <p>Diese Daten bleiben im lokalen Speicher des Browsers bzw. der App, verlassen das Gerät nicht und sind für den Entwickler nicht zugänglich.</p>
+
+    <h3>Webversion: Hosting</h3>
+    <p>Beim Aufruf der Webversion verarbeitet der Hosting-Anbieter, wie bei jeder Website, technisch Ihre IP-Adresse, Browser- und Geräteangaben und die aufgerufene Adresse, um die Dateien auszuliefern, und kann dazu kurzzeitig Protokolle führen. Der Anbieter ergibt sich aus der Domain in der Adresszeile: bei github.io-Adressen GitHub, Inc. (USA), bei netlify.app-Adressen Netlify, Inc. (USA), jeweils nach dessen Datenschutzerklärung. Netlify kann im kostenlosen Tarif ein eigenes Abzeichen („Powered by Netlify“) einblenden.</p>
+
+    <h3>Store-App</h3>
+    <p>Die aus einem Store installierte App enthält ihre Dateien und Modelle selbst und baut beim Start keine Verbindung ins Internet auf. Der Store verarbeitet beim Herunterladen und Aktualisieren Daten nach seinen eigenen Bedingungen. Ist auf einem Android-Gerät die Sicherung aktiviert, kann Android die lokalen App-Daten (Einstellungen, Fortschritt) verschlüsselt in Ihrem Google-Konto sichern; der Entwickler hat darauf keinen Zugriff.</p>
+
+    <h3>Was es nicht gibt</h3>
+    <p>Kein Konto und keine Anmeldung bei einem Server (optionale Benutzerprofile bleiben auf dem Gerät), keine Werbung, keine Analyse, keine Cookies, kein Tracking, keine Berechtigungen für Kamera, Mikrofon, Standort oder Kontakte, keine Datenübertragung an andere Adressen.</p>
+
+    <h3>Daten löschen</h3>
+    <p>Webversion: Websitedaten im Browser löschen oder in der App ⓘ › Offline-Nutzung › „Önbelleği temizle“. Installierte App: Deinstallieren löscht alle lokalen Daten auf dem Gerät (Android auch: Einstellungen › Apps › Anatomi 3D › Speicher › Daten löschen). Ist die Android-Sicherung aktiv, kann der Fortschritt bei einer Neuinstallation aus der Sicherung in Ihrem Google-Konto zurückkehren; diese Kopie löschen Sie unter Google Drive › Sicherungen oder indem Sie die Sicherung auf dem Gerät ausschalten.</p>
+
+    <h3>Ihre Rechte</h3>
+    <p>Da der Entwickler keine Daten über Sie speichert, gibt es keine Datensätze für Auskunft, Berichtigung oder Löschung. Fragen stellen Sie über die oben genannte Issue-Seite; für Daten des Hosting-Anbieters oder Stores wenden Sie sich an diese. Sie haben das Recht, sich bei einer Datenschutz-Aufsichtsbehörde zu beschweren.</p>
+    <p class="dim">Nur zum Lernen, nicht für Diagnose oder Behandlung. Texte und Fragen wurden mit KI geschrieben und geprüft, nicht von einer Anatomin oder einem Anatomen. Stand: 21. November 2026.</p>
+  </section>
+
+  <section id="en" lang="en">
+    <h2>English</h2>
+    <p><b>In short:</b> Anatomi 3D needs no account and contains no ads, cookies, analytics or tracking. The app itself does not collect personal data, does not send any to a server and does not share any.</p>
+
+    <h3>Contact</h3>
+    <p>For questions, corrections and bug reports, please use the issue page of the project's GitHub repository: <a href="https://github.com/alikaankaraduman/anatomi3d-atlas/issues" target="_blank" rel="noopener">https://github.com/alikaankaraduman/anatomi3d-atlas/issues</a>. What you write there is public; do not include personal information.</p>
+
+    <h3>What is stored on your device</h3>
+    <ul>
+      <li>body choice (female / male) and settings,</li>
+      <li>quiz and mock exam progress,</li>
+      <li>optional user profiles: name, a hash of the password (PBKDF2; the password itself is not stored; a short password can be guessed from the hash by someone with access to the device, so do not use a password you use elsewhere) and each profile's progress. Profiles exist only on the device they were created on; the password separates profiles on this device, the data is not encrypted. An exported profile file contains no password data and is saved only where you put it,</li>
+      <li>app files and 3D models downloaded for offline use (in the web version, in the service worker cache).</li>
+    </ul>
+    <p>This data stays in the browser's or app's local storage, never leaves the device and cannot be accessed by the developer.</p>
+
+    <h3>Web version: hosting</h3>
+    <p>When you open the web version, the hosting provider processes your IP address, browser and device information and the requested address to deliver the files, as every web server does, and may keep short-lived logs. The provider follows from the domain in the address bar: GitHub, Inc. (USA) for github.io addresses, Netlify, Inc. (USA) for netlify.app addresses, each under its own privacy policy. On its free plan Netlify may show its own badge ("Powered by Netlify").</p>
+
+    <h3>Store app</h3>
+    <p>The app installed from a store carries its files and models inside and does not connect to the internet when it starts. The store processes data under its own terms when you download and update the app. If backup is turned on on an Android device, Android may back up the app's local data (settings, progress) encrypted to your Google account; the developer has no access to it.</p>
+
+    <h3>What there is not</h3>
+    <p>No account or sign-in on any server (optional user profiles stay on the device), no ads, no analytics, no cookies, no tracking, no camera, microphone, location or contacts permissions, no data sent to other addresses.</p>
+
+    <h3>Deleting your data</h3>
+    <p>Web version: clear this site's data in the browser settings, or in the app use ⓘ › Offline use › "Önbelleği temizle". Installed app: uninstalling removes all local data on the device (on Android also Settings › Apps › Anatomi 3D › Storage › Clear data). If Android backup is on, progress may come back from the backup in your Google account when you reinstall; delete that copy under Google Drive › Backups, or turn backup off on the device.</p>
+
+    <h3>Your rights</h3>
+    <p>As the developer stores no data about you, there are no records to access, correct or delete. Ask questions on the issue page above; for data processed by the hosting provider or the store, contact them.</p>
+    <p class="dim">For learning only, not for diagnosis or treatment. Texts and questions were written and checked with AI, not reviewed by an anatomist. Last updated: 21 November 2026.</p>
+  </section>
+</main>
+</body>
+</html>

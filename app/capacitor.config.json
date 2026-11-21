@@ -1,0 +1,12 @@
+{
+  "appId": "app.anatomi3d.atlas",
+  "appName": "Anatomi 3D",
+  "webDir": "dist",
+  "backgroundColor": "#26282d",
+  "android": { "backgroundColor": "#26282d", "allowMixedContent": false },
+  "ios": { "backgroundColor": "#26282d", "contentInset": "never" },
+  "server": { "androidScheme": "https" },
+  "plugins": {
+    "SystemBars": { "style": "DARK", "insetsHandling": "css", "initialViewportFitValueHint": "cover" }
+  }
+}

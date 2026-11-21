@@ -1,0 +1,207 @@
+{
+ "note": "Bartholin bezleri (sematik): elipsoid merkezi, eksenleri, yari eksenleri ve kanal Bezier egrisi (cm); tools/bartholin-fit.mjs, ag tools/bartholin.mjs",
+ "introitus": {
+  "centre": [
+   -0.376,
+   80.625,
+   -0.974
+  ],
+  "lowestY": 80.548
+ },
+ "l": {
+  "centre": [
+   1.9733,
+   80.5927,
+   -1.2516
+  ],
+  "axes": [
+   [
+    0.5524,
+    -0.5413,
+    -0.6339
+   ],
+   [
+    -0.7539,
+    0,
+    -0.6569
+   ],
+   [
+    0.3556,
+    0.8408,
+    -0.4081
+   ]
+  ],
+  "semi": [
+   0.45,
+   0.32,
+   0.26
+  ],
+  "duct": {
+   "from": [
+    1.739,
+    80.5933,
+    -1.2559
+   ],
+   "ctrl": [
+    0.7894,
+    80.5959,
+    -1.2735
+   ],
+   "to": [
+    -0.0604,
+    80.5981,
+    -1.2893
+   ],
+   "r": 0.06
+  },
+  "report": {
+   "bulbEndContactCm": 0.036,
+   "vaginaGapCm": 1.299,
+   "angleFromPosteriorDeg": 83.3,
+   "insideOf": [],
+   "nearestClosed": [
+    [
+     "Clitoris + bulbs",
+     0.036
+    ],
+    [
+     "Adductor magnus.l",
+     0.457
+    ],
+    [
+     "Pubo-analis muscle.l",
+     0.695
+    ],
+    [
+     "Gracilis muscle.l",
+     0.853
+    ],
+    [
+     "Pubococcygeus muscle.l",
+     1.076
+    ],
+    [
+     "Vagina + Vaginal fornix",
+     1.299
+    ]
+   ],
+   "openSheetsTouched": [
+    [
+     "Fascia lata.l",
+     0.007
+    ]
+   ],
+   "ductLengthCm": 1.8,
+   "ductCloseOrInside": [],
+   "openingCm": [
+    -0.0604,
+    80.5981,
+    -1.2893
+   ],
+   "clockDeg": 45,
+   "bulbPosteriorEnd": [
+    2.2375,
+    80.3975,
+    -0.3931
+   ]
+  }
+ },
+ "r": {
+  "centre": [
+   -1.9274,
+   80.5979,
+   -1.5043
+  ],
+  "axes": [
+   [
+    -0.393,
+    -0.5736,
+    -0.7187
+   ],
+   [
+    -0.8774,
+    0,
+    0.4798
+   ],
+   [
+    -0.2752,
+    0.8192,
+    -0.5032
+   ]
+  ],
+  "semi": [
+   0.45,
+   0.32,
+   0.26
+  ],
+  "duct": {
+   "from": [
+    -1.7,
+    80.598,
+    -1.4692
+   ],
+   "ctrl": [
+    -1.1604,
+    80.5981,
+    -1.386
+   ],
+   "to": [
+    -0.7197,
+    80.5981,
+    -1.3181
+   ],
+   "r": 0.06
+  },
+  "report": {
+   "bulbEndContactCm": 0.031,
+   "vaginaGapCm": 0.703,
+   "angleFromPosteriorDeg": 71.1,
+   "insideOf": [],
+   "nearestClosed": [
+    [
+     "Clitoris + bulbs",
+     0.031
+    ],
+    [
+     "Adductor magnus.r",
+     0.626
+    ],
+    [
+     "Pubo-analis muscle.r",
+     0.635
+    ],
+    [
+     "Vagina + Vaginal fornix",
+     0.703
+    ],
+    [
+     "Pubococcygeus muscle.r",
+     1.002
+    ],
+    [
+     "Gracilis muscle.r",
+     1.093
+    ]
+   ],
+   "openSheetsTouched": [
+    [
+     "Fascia lata.r",
+     0.013
+    ]
+   ],
+   "ductLengthCm": 0.99,
+   "ductCloseOrInside": [],
+   "openingCm": [
+    -0.7197,
+    80.5981,
+    -1.3181
+   ],
+   "clockDeg": 45,
+   "bulbPosteriorEnd": [
+    -1.6836,
+    80.2733,
+    -0.747
+   ]
+  }
+ }
+}

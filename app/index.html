@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover: çentikli telefonlarda tuval tüm ekranı kaplar, paneller env(safe-area-inset-*) ile içeride kalır -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Ücretsiz 3B anatomi atlası: kemik, kas, sinir, damar, organ ve eklemler; Latince ve Almanca adlar, çalışma modları ve testler." />
+    <meta name="theme-color" content="#26282d" />
+    <meta name="color-scheme" content="dark" />
+    <!-- PWA: ana ekrana eklenince tam ekran açılır (public/manifest.webmanifest, public/sw.js) -->
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Anatomi 3D" />
+    <title>Anatomi 3D</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="view" tabindex="0" aria-label="3B anatomi görünümü"></canvas>
+      <div id="labels" hidden></div>
+
+      <header id="topbar">
+        <button id="panel-btn" class="icon-btn" title="Katmanlar ve yapı ağacı" aria-label="Katmanlar ve yapı ağacı" aria-expanded="false">≡</button>
+        <div class="brand"><span class="brand-mark"></span>Anatomi 3D</div>
+
+        <!-- mod düğmeleri src/ui.js içinde SYSTEMS listesinden üretilir -->
+        <div id="modes" class="seg" role="tablist" aria-label="Seçim modu"></div>
+
+        <div id="search-wrap">
+          <input id="search" type="search" autocomplete="off" spellcheck="false"
+                 placeholder="Yapı ara: femur, biceps, aort, karaciğer…" />
+          <div id="results" hidden></div>
+        </div>
+
+        <!-- beden seçici: yalnızca veride kadına ve erkeğe özgü parçalar varsa görünür (src/ui.js) -->
+        <div id="sex" class="seg small" role="group" aria-label="Beden" hidden>
+          <button data-sex="m" title="Erkek anatomisi" aria-pressed="true"><span class="sym" aria-hidden="true">♂</span><span class="txt">Erkek</span></button>
+          <button data-sex="f" title="Kadın anatomisi" aria-pressed="false"><span class="sym" aria-hidden="true">♀</span><span class="txt">Kadın</span></button>
+        </div>
+
+        <div id="views" class="seg small" aria-label="Görünüm">
+          <button data-view="front" title="Önden (Numpad 1)">Ön</button>
+          <button data-view="back" title="Arkadan (Ctrl+Numpad 1)">Arka</button>
+          <button data-view="right" title="Sağ yan (Numpad 3)">Sağ</button>
+          <button data-view="left" title="Sol yan (Ctrl+Numpad 3)">Sol</button>
+          <button data-view="top" title="Üstten (Numpad 7)">Üst</button>
+          <button data-view="home" title="Tüm vücut (Home)">Tümü</button>
+        </div>
+        <button id="about-btn" class="icon-btn" title="Hakkında, kaynaklar, çevrimdışı kullanım" aria-label="Hakkında, kaynaklar ve çevrimdışı kullanım">i</button>
+      </header>
+
+      <aside id="left" class="panel">
+        <!-- açık kullanıcı (Misafir ya da ad); Kullanıcılar penceresini açar (src/users-ui.js). Profiller yalnız bu cihazda. -->
+        <section id="user-sec">
+          <button id="user-btn" type="button" class="guest" aria-haspopup="dialog" title="Kullanıcılar ve profiller (yalnız bu cihazda)"><span class="u-av" aria-hidden="true">?</span><span class="u-txt"><span class="u-lbl">Kullanıcı</span><span class="u-name">Misafir</span></span><span class="u-go" aria-hidden="true">›</span></button>
+        </section>
+        <section>
+          <h2>Katmanlar</h2>
+          <div id="layers"></div>
+        </section>
+        <section id="tools">
+          <h2>Araçlar</h2>
+          <div class="tool"><label for="explode">Parçalarına ayır</label><input id="explode" type="range" min="0" max="100" value="0"><span id="explode-val">%0</span></div>
+          <div class="tool"><span>Kesit</span><div id="cut-axis" class="seg small"><button data-axis="" class="active">Yok</button><button data-axis="x" title="Sagittal düzlem">Sagittal</button><button data-axis="z" title="Koronal (frontal) düzlem">Koronal</button><button data-axis="y" title="Aksiyal (transvers) düzlem">Aksiyal</button></div></div>
+          <div class="tool" id="cut-row" hidden><input id="cut-pos" type="range" min="0" max="1000" value="500" aria-label="Kesit düzleminin yeri"><button id="cut-flip" class="icon-btn" title="Kesilen tarafı değiştir" aria-label="Kesilen tarafı değiştir">⇄</button><label class="cap" title="Kesilen yapıların kesit yüzünü dolu ve sınırlarını çizgili göster (BT/MR atlası gibi)"><input id="cut-cap" type="checkbox" checked>Dolu</label></div>
+          <!-- standart görünümler: üst çubuktaki #views 1320 px altında gizlenir, o zaman buradan (src/ui.js) -->
+          <div class="tool" id="views-tool"><span>Görünüm</span><div class="seg small" aria-label="Görünüm"><button data-view="front" title="Önden (Numpad 1)">Ön</button><button data-view="back" title="Arkadan (Ctrl+Numpad 1)">Arka</button><button data-view="right" title="Sağ yan (Numpad 3)">Sağ</button><button data-view="left" title="Sol yan (Ctrl+Numpad 3)">Sol</button><button data-view="top" title="Üstten (Numpad 7)">Üst</button><button data-view="home" title="Tüm vücut (Home)">Tümü</button></div></div>
+          <div class="tool study-block"><span class="study-head">Çalışma modları</span><div id="study-modes" class="study-grid">
+            <button id="heart-mode" title="Kalp çalışma modu: kanın yolu, kapaklar ve oskültasyon noktaları, koroner arterler, ileti sistemi, test">♥ Kalp</button>
+            <button id="brain-mode" title="Beyin çalışma modu: BOS'un yolu, kranial sinirlerin çıkış yerleri ve kafatası delikleri, beyin arterleri, test">Beyin</button>
+            <button id="loco-mode" title="Hareket sistemi modu: sinir lezyonları, topografik geçitler, kas kartları (Ursprung, Ansatz, Innervation, Funktion), eklemler, test">Hareket</button>
+            <button id="sect-mode" title="Kesit atlası: BT / MR atlası gibi kanonik kesit seviyeleri (baş-boyun, göğüs, karın, pelvis, ekstremite), kesit yüzünde tanınacak yapılar, test">Kesit atlası</button>
+          </div></div>
+          <div class="tool"><button id="exam-btn" class="wide" title="Deneme sınavı: bütün çalışma modlarının bilgi sorularından karışık, süreli test (konu, soru sayısı, süre, Sınav ya da Çalışma modu)">Deneme sınavı</button></div>
+          <div class="tool"><button id="weak-review" class="wide" disabled title="Testlerde yanlış cevapladığın ve henüz iki kez arka arkaya doğru bilmediğin yapılar (izole görünümde birlikte test), kesit soruları (kesit testi) ve bilgi soruları (deneme sınavı)">Yanlışlarım (0)</button></div>
+          <p class="hint">Beyni ya da bir organı parçalarına ayırmak için önce onu izole edin (I).</p>
+          <div class="tool"><label class="cap" title="Açık: açılışta yalnız iskelet yüklenir; öteki sistemler ilk kez gerektiğinde (mod, katman, arama, konu ya da çalışma modu) gelir. Telefonda bellek ve veri tasarrufu sağlar."><input id="lazy-load" type="checkbox">Sistemleri gerektiğinde yükle</label></div>
+          <div class="tool progress-row"><span class="hint" id="progress-owner">Test ilerlemesi bu cihazda saklanır.</span><button id="progress-reset" title="Açık kullanıcının (ya da Misafir'in) bütün test sonuçlarını sil (iki tıklama)">İlerlemeyi sıfırla</button></div>
+        </section>
+        <section class="grow">
+          <div class="tree-head"><h2>Yapı ağacı</h2><div id="tree-view" class="seg tiny" role="tablist" hidden><button data-tv="sys" role="tab" class="active" title="Sistemlere göre yapı ağacı">Sistemler</button><button data-tv="aanki" role="tab" title="Aanki: ÄBP öğrenme günleri ve dönemlerin anatomi dersleri">Aanki</button></div></div>
+          <div id="tree"></div>
+          <div id="aanki-tree" hidden></div>
+        </section>
+      </aside>
+
+      <aside id="right" class="panel">
+        <!-- dar ekranda alttaki bilgi panelini küçültme ve büyütme tutamağı (3B görünüm açık kalsın) -->
+        <button id="sheet-btn" type="button" aria-expanded="true" aria-controls="info" title="Bilgi panelini küçült"><span></span></button>
+        <div id="info"></div>
+      </aside>
+
+      <div id="isolate-bar" hidden>
+        <span>İzole görünüm</span>
+        <button id="exit-isolate">Çık</button>
+      </div>
+
+      <div id="toast" role="status" hidden></div>
+      <div id="tooltip" hidden></div>
+
+      <footer id="hints">
+        <span><b>1-6</b> mod</span>
+        <span><b>Tık</b> seç</span>
+        <span><b>Sürükle</b> döndür</span>
+        <span><b>Sağ tık</b> / <b>Shift+sürükle</b> kaydır</span>
+        <span><b>Tekerlek</b> yakınlaş</span>
+        <span><b>F</b> odaklan</span>
+        <span><b>H</b> gizle</span>
+        <span><b>Alt+H</b> tümünü göster</span>
+        <span><b>I</b> izole et</span>
+        <span><b>Esc</b> seçimi bırak</span>
+      </footer>
+
+      <dialog id="about">
+        <h2>Anatomi 3D</h2>
+        <p>İskelet, kas, sinir ve dolaşım sistemlerini, iç organları ve eklemleri üç boyutlu inceleyebileceğiniz, tıklanan yapının adını gösteren ücretsiz bir anatomi atlası.</p>
+        <h3>Kaynaklar ve lisans</h3>
+        <ul>
+          <li><b>Z-Anatomy - The libre 3D atlas of anatomy - CC-BY-SA 4.0</b> (Gauthier Kervyn ve katkıda bulunanlar; <a href="https://www.z-anatomy.com" target="_blank" rel="noopener">z-anatomy.com</a>). Bu uygulamadaki 3B modeller, aşağıda ayrıca belirtilen HuBMAP, klitoris, kadın üretrası ve Bartholin bezi modelleri dışında, Z-Anatomy modellerinden dönüştürülmüş ve sadeleştirilmiştir. Kadın bedenindeki sigmoid kolon (rektum ve anal kanal dahil), üreterler ve pelvis eklemleri de Z-Anatomy modellerinin kadın pelvisine uyarlanmış kopyalarıdır.</li>
+          <li><b>BodyParts3D - The Database Center for Life Science - CC-BY-SA 2.1 Japan</b> (Z-Anatomy'nin dayandığı özgün model; <a href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html" target="_blank" rel="noopener">kaynak</a>).</li>
+          <li>Z-Anatomy'ye dahil edilen modeller: "Brain for Blender" (Brainder; Anderson Winkler, <a href="https://brainder.org/brain-for-blender" target="_blank" rel="noopener">brainder.org</a>, CC-BY-SA 3.0); "White matter" (University of Washington; ayrı bir lisans bildirilmemiş, Z-Anatomy kapsamında CC-BY-SA 4.0); "Cranial Nerves and Foramina" (University of Dundee, CAHID; hazırlayan Sophia Lappe; CC-BY 4.0); "Anatomy of the Inner Ear" (University of Dundee School of Medicine; W. Robert J. Funnell, Sam Daniel ve Daren Nicolson'ın McGill University'deki "3D Ear" modelinden türetilmiştir; CC-BY-NC-SA 4.0); "Kidney" (Lissie Cowley, CC-BY-NC 4.0).</li>
+          <li><b>HuBMAP CCF 3D Reference Object Library v1.2 - CC BY 4.0</b> (Kristen Browne, NIAID 3D Printing and Biovisualization; Visible Human Female, U.S. National Library of Medicine): kadın iç genital organları ve vajina, kadın mesanesi ve kadın pelvisi. Modeller sadeleştirildi ve bu modelin pelvisine hizalandı; tubalar, overler ve mesane modeldeki damar ve kaslarla çakışmasın diye biraz kaydırıldı, üreterlerin alt uçları kadın mesanesine bükülerek uyarlandı. <a href="https://humanatlas.io/3d-reference-library" target="_blank" rel="noopener">humanatlas.io</a></li>
+          <li><b>HuBMAP Human Reference Atlas, 3D Reference Organ: Breast (mammary gland), Female left / right v1.1 - CC BY 4.0</b> (Heidi Schlehlein; <a href="https://doi.org/10.48539/HBM533.BNJL.834" target="_blank" rel="noopener">doi:10.48539/HBM533.BNJL.834</a>, <a href="https://doi.org/10.48539/HBM235.CHRK.259" target="_blank" rel="noopener">doi:10.48539/HBM235.CHRK.259</a>): memeler. Modeller sadeleştirildi, 1,2 kat büyütüldü, döndürülüp kaydırılarak bu modelin göğüs duvarına oturtuldu ve tabanları göğüs duvarına uyacak biçimde büküldü.</li>
+          <li><b>Klitoris modeli V2 (2016) - Odile Fillod ve Philippe Cosentino, Cité des sciences et de l'industrie (Carrefour numérique² FabLab) - CC BY-NC-SA</b>: klitoris ve vestibül bulbusları. Model parçalara bölündü ve gerçek boyutuyla bu modelin kadın pelvisine yerleştirildi; bu uyarlama da CC BY-NC-SA koşullarındadır (ticari olmayan kullanım).</li>
+          <li><b>Kadın üretrası ve Bartholin bezleri</b>: kaynak modellerde yok; bu uygulama için ders kitabı tarifine göre şematik olarak çizildi. Üretra mesane boynundan vajinanın ön duvarı boyunca vestibüldeki dış ağza iner; Bartholin bezleri vestibül bulbuslarının arka uçlarında, vajina girişinin arka-yanındadır.</li>
+          <li>Latince adlar: Terminologia Anatomica 2 (Z-Anatomy terim tablosu); kısaltmalar ve yazım hataları bu uygulama için düzeltildi.</li>
+          <li>Almanca adlar bu uygulama için çevrildi; Wikidata etiketleri (CC0) ipucu olarak kullanıldı.</li>
+        </ul>
+        <p class="dim">Bu uygulamadaki modeller uyarlamadır ve kaynaklarının lisansıyla paylaşılır: Z-Anatomy'den dönüştürülenler <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.tr" target="_blank" rel="noopener">CC BY-SA 4.0</a> (özgün BodyParts3D: <a href="https://creativecommons.org/licenses/by-sa/2.1/jp/" target="_blank" rel="noopener">CC BY-SA 2.1 JP</a>; Brainder: <a href="https://creativecommons.org/licenses/by-sa/3.0/deed.tr" target="_blank" rel="noopener">CC BY-SA 3.0</a>), HuBMAP modelleri <a href="https://creativecommons.org/licenses/by/4.0/deed.tr" target="_blank" rel="noopener">CC BY 4.0</a>. Şu parçalar yalnız <b>ticari olmayan</b> amaçla kullanılabilir: iç kulak (koklea ve vestibül; <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.tr" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>), böbrek parçaları (<a href="https://creativecommons.org/licenses/by-nc/4.0/deed.tr" target="_blank" rel="noopener">CC BY-NC 4.0</a>), klitoris ve vestibül bulbusları (<a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.tr" target="_blank" rel="noopener">CC BY-NC-SA</a>; kaynağında sürüm belirtilmemiş). Hangi dosyanın hangi kaynaktan geldiği: <a href="lisanslar.txt" target="_blank" rel="noopener">lisanslar.txt</a>.</p>
+        <ul class="more-src">
+          <li>Aanki konuları: Aanki Wiki ve "Aanki Arbeitsübersicht" (Fachschaft Medizin Aachen). Konular ders ve öğrenme günü başlıklarına göre eşleştirildi; Anki destesinin kartları bu uygulamada yoktur. Anatomi 3D resmî bir uygulama değildir; Anatomi 3D'nin Aanki'yle, Fachschaft Medizin Aachen'la ya da RWTH Aachen'la bir bağlantısı yoktur ve onlar tarafından onaylanmamıştır.</li>
+          <li>Beyin kabuğu parçaları Destrieux atlasının (2009) parselleridir; adları konum ve komşuluklarına göre denetlendi.</li>
+          <li>Yazılım: uygulamanın içinde Three.js (© three.js authors), three-mesh-bvh (© Garrett Johnson) , meshoptimizer çözücüsü (© Arseny Kapoulkine) ve Vite'in küçük bir yükleme yardımcısı (© VoidZero Inc. ve Vite katkıcıları) bulunur; hepsi MIT lisanslıdır, lisans metinleri <a href="lisanslar.txt" target="_blank" rel="noopener">lisanslar.txt</a> dosyasındadır. Mağaza uygulamasında bunlara ek olarak Capacitor (© Drifty Co., MIT), Apache Cordova Android ve AndroidX kütüphaneleri (Apache 2.0) bulunur; onlar da aynı dosyada. Modeller glTF-Transform ve meshoptimizer ile hazırlandı, uygulama Vite ile derlendi (hepsi MIT).</li>
+        </ul>
+        <h3>Metinler ve yapay zekâ</h3>
+        <p>Türkçe ve Almanca adlar, Latince düzeltmeler, bütün çalışma modlarının metinleri ve klinik notları (kalp ve ileti sistemi, beyin, hareket sistemi, Situs, göğüs ve solunum, ürogenital, baş-boyun, ekstremite damarları, lenf sistemi, kesit atlası), kas kartları (origo, insersiyo, innervasyon, fonksiyon), bütün test ve deneme sınavı soruları ve Aanki konu eşleştirmeleri bu uygulama için <b>yapay zekâ ile yazılmış ve yapay zekâ denetçileriyle kontrol edilmiştir</b>. Bir anatomi uzmanı tarafından gözden geçirilmemiştir; hata olabilir. Şüphede ders kitabınız ve hocanız esastır.</p>
+        <h3>Tıbbi uyarı</h3>
+        <p>Anatomi 3D yalnızca <b>öğrenme ve tekrar</b> içindir. Tıbbi tanı, tedavi, girişim planlaması ya da hasta bakımı için kullanılamaz. Modeller tek bir erkek bedenine (kadın yapıları ayrı kaynaklardan uyarlanmıştır) dayanır; bireysel farklılıkları göstermez, bazı yapılar şematiktir ya da eksiktir.</p>
+        <h3>Gizlilik</h3>
+        <p class="dim">Uygulama hesap istemez; reklam, çerez ve izleme içermez, kendisi hiçbir kişisel veri toplamaz ve göndermez. Sayfayı sunan barındırma hizmeti, her web sitesinde olduğu gibi, ziyaret sırasında IP adresini ve tarayıcı bilgisini teknik olarak işler; ücretsiz barındırmada sayfanın köşesinde barındırıcının kendi rozeti görünebilir. Beden seçimi, ayarlar, test ilerlemesi ve indirilen modeller yalnız bu cihazda (tarayıcı depolaması) saklanır. İsteğe bağlı kullanıcı profilleri (ad, şifrenin özeti ve her profilin ilerlemesi) de yalnız bu cihazda saklanır; şifrenin kendisi saklanmaz, veriler şifrelenmez ve hiçbir yere gönderilmez. Kısa bir şifre cihaza erişen biri tarafından tahmin edilebilir: başka bir yerde kullandığın şifreyi kullanma. Ayrıntılar: <a href="gizlilik.html" target="_blank" rel="noopener">gizlilik bildirimi</a>.</p>
+        <h3>Çevrimdışı kullanım</h3>
+        <div id="offline">
+          <p id="off-status" class="dim">…</p>
+          <div id="off-bar" class="off-bar" hidden><i></i></div>
+          <div class="btns">
+            <button id="off-all" type="button" title="Bütün modelleri ve verileri bu cihaza indir: internet olmadan da her sistem açılır">Hepsini indir (≈32 MB)</button>
+            <button id="off-clear" type="button" title="Bu cihazdaki önbelleği sil (iki tıklama)">Önbelleği temizle</button>
+          </div>
+          <p class="dim">Telefonda ana ekrana ekleyin: Android'de Chrome menüsünden "Uygulamayı yükle" ya da "Ana ekrana ekle", iPhone'da Safari'de Paylaş › "Ana Ekrana Ekle". Bir kez açılan her şey sonra internetsiz de açılır. iPhone'da Safari, yaklaşık bir hafta açılmayan sitelerin verisini (test ilerlemesi, indirilen modeller) silebilir; ana ekrana eklenen uygulamada bu süre sınırı uygulanmaz.</p>
+        </div>
+        <form method="dialog"><button>Kapat</button></form>
+      </dialog>
+      <!-- Uygulama kabuğunda (Capacitor) aynı kökenli belgeler (lisanslar.txt, gizlilik.html) uygulamanın yerine açılmasın: burada gösterilir (src/pwa.js) -->
+      <!-- Kullanıcılar: bu cihazdaki profiller; içerik src/users-ui.js tarafından yazılır -->
+      <dialog id="users" aria-labelledby="users-title"></dialog>
+      <dialog id="doc" aria-label="Belge">
+        <div class="doc-frame"></div>
+        <form method="dialog"><button>Kapat</button></form>
+      </dialog>
+
+      <div id="loading">
+        <div class="box">
+          <div class="title">Anatomi 3D</div>
+          <div id="load-text">Model yükleniyor…</div>
+          <div class="bar"><i id="load-bar"></i></div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

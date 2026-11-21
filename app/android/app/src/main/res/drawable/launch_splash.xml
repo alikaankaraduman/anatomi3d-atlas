@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Eski açılış ekranı (Android 11 ve öncesi; 12+ sistemin kendi açılış ekranını styles.xml'deki
+     windowSplashScreen* değerleriyle çizer). splash.png pencereye doğrudan arka plan olarak verilseydi ekranın en-boy
+     oranına göre gerilirdi; burada zemin düz renk, görüntü ise ölçeklenmeden ortalanır. Görüntünün zemini aynı
+     renk olduğu için kenar görünmez. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/anatomi_bg"/>
+    <item>
+        <bitmap android:src="@drawable/splash" android:gravity="center"/>
+    </item>
+</layer-list>

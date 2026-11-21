@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Uygulamanın koyu zemini (#26282d) ve vurgu rengi (simgedeki mavi nokta). colorPrimary, colorPrimaryDark ve
+         colorAccent, Capacitor kütüphanesindeki aynı adlı mavi/pembe varsayılanların yerine geçer. -->
+    <color name="anatomi_bg">#26282D</color>
+    <color name="colorPrimary">#26282D</color>
+    <color name="colorPrimaryDark">#26282D</color>
+    <color name="colorAccent">#19C8F5</color>
+</resources>

@@ -1,0 +1,24 @@
+# kurulabilen ya da yeniden üretilebilen
+node_modules
+app/dist
+app/tools/_sectionwork/cache
+
+# Android derleme çıktıları (bulutta üretilir)
+app/android/.gradle
+app/android/build
+app/android/app/build
+*.apk
+*.aab
+
+# yerel ayarlar ve sırlar (hiçbir zaman gönderilmez)
+app/.netlify
+*.jks
+*.keystore
+keystore.properties
+*.local
+.env
+.env.*
+
+# sınama çıktıları
+app/tools/_qawork/swtest/*.png
+smoke-out/

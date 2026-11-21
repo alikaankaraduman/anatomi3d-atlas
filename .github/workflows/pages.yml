@@ -1,0 +1,79 @@
+# Anatomi 3D: web uygulamasını derleyip GitHub Pages'te yayınlar.
+#
+# Adres: https://<hesap>.github.io/<depo>/ (bir alt yol; uygulama göreli adresler ve './' kapsamlı service worker
+# kullandığı için alt yolda değişiklik gerekmez).
+#
+# Bir kez: depo › Settings › Pages › "Build and deployment" › Source: "GitHub Actions".
+# Sonra main dalına her gönderimde (ya da Actions › "Pages" › "Run workflow" ile elle) derlenir ve yayınlanır.
+#
+# GitHub Pages yanıt başlığı gönderemez (app/public/_headers orada etkisizdir). Bu yüzden derleme
+# ANATOMI_TARGET=pages ile yapılır: app/vite.config.js her .html dosyasına <meta name="robots" content="noindex">
+# ve sıkı Content-Security-Policy meta etiketini ekler (service worker listesi bu son hâle göre yazılır).
+
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Aynı anda tek yayın; sürmekte olan bir yayın yarıda kesilmez.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Derle
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Paketler (package-lock.json'a göre)
+        run: npm ci
+
+      - name: GitHub Pages derlemesi (app/dist)
+        env:
+          ANATOMI_TARGET: pages
+        run: npm run build
+
+      - name: Meta etiketlerini denetle
+        run: |
+          for f in dist/index.html dist/gizlilik.html; do
+            grep -q 'http-equiv="Content-Security-Policy"' "$f"
+            grep -q 'name="robots" content="noindex"' "$f"
+          done
+          test "$(ls dist/models/*.glb | wc -l)" -ge 17
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: app/dist
+
+  deploy:
+    name: Yayınla
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

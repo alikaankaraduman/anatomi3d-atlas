@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Uygulama teması. Uygulamanın arayüzü her zaman koyudur; bu yüzden temalar da koyu tabanlıdır ve açık sistem
+         temasında bile açılışta ya da WebView çizilmeden önce beyaz bir ekran görünmez. Renkler values/colors.xml'de. -->
+    <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+        <item name="android:windowBackground">@color/anatomi_bg</item>
+    </style>
+
+    <!-- Capacitor'ın BridgeActivity'si açılıştan sonra bu temaya geçer. Durum ve gezinme çubukları koyu zeminde açık
+         simgelerle çizilir. Android 15+ (hedef SDK 35+) uygulamayı kenardan kenara çizer ve çubuk renklerini yok sayar;
+         orada WebView çubukların altına uzanır ve sayfa env(safe-area-inset-*) ile boşluk bırakır
+         (index.html viewport-fit=cover; capacitor.config.json plugins.SystemBars). -->
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:background">@null</item>
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+        <item name="android:windowBackground">@color/anatomi_bg</item>
+        <item name="android:statusBarColor">@color/anatomi_bg</item>
+        <item name="android:navigationBarColor">@color/anatomi_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <!-- Açılış teması (AndroidManifest'te etkinliğin teması).
+         Android 12+: sistem açılış ekranı windowSplashScreenBackground zemini ve ortada uygulama simgesiyle çizilir.
+         Android 11 ve öncesi: pencere arka planı drawable/launch_splash.xml (düz zemin + ortalanmış splash.png). -->
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/anatomi_bg</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+        <item name="android:background">@drawable/launch_splash</item>
+        <item name="android:windowBackground">@drawable/launch_splash</item>
+        <item name="android:statusBarColor">@color/anatomi_bg</item>
+        <item name="android:navigationBarColor">@color/anatomi_bg</item>
+    </style>
+</resources>

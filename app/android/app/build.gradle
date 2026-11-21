@@ -1,0 +1,92 @@
+apply plugin: 'com.android.application'
+
+// Yayın imzası (release). Anahtar ve parolalar ASLA bu dosyaya ya da depoya yazılmaz. Değerler sırayla şuradan okunur:
+//   1. ortam değişkenleri: ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+//      (GitHub Actions bunları depo sırlarından verir: .github/workflows/android.yml)
+//   2. android/keystore.properties (depoya girmez, android/.gitignore'da): storeFile, storePassword, keyAlias, keyPassword
+//      storeFile göreli yazılırsa android/ klasörüne göre çözülür.
+// Hiçbiri yoksa release derlemesi imzasız çıkar (assembleDebug etkilenmez; hata ayıklama imzası Android'in kendi
+// otomatik anahtarıdır).
+def keystoreProps = new Properties()
+def keystorePropsFile = rootProject.file('keystore.properties')
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+def signingValue = { String env, String prop -> System.getenv(env) ?: keystoreProps.getProperty(prop) }
+def releaseStoreFile = signingValue('ANDROID_KEYSTORE_PATH', 'storeFile')
+def releaseStorePassword = signingValue('ANDROID_KEYSTORE_PASSWORD', 'storePassword')
+def releaseKeyAlias = signingValue('ANDROID_KEY_ALIAS', 'keyAlias')
+def releaseKeyPassword = signingValue('ANDROID_KEY_PASSWORD', 'keyPassword')
+def hasReleaseSigning = releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+
+android {
+    namespace = "app.anatomi3d.atlas"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "app.anatomi3d.atlas"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        // Sürüm: her mağaza yüklemesinde versionCode en az 1 artmalıdır (Google Play aynı ya da küçük kodu reddeder,
+        // en büyük değer 2100000000). versionName kullanıcının gördüğü addır: hata düzeltmesinde 1.0.1, yeni özellikte
+        // 1.1.0, büyük değişiklikte 2.0.0. İkisi birlikte değiştirilir, ör. versionCode 2 / versionName "1.0.1".
+        versionCode 1
+        versionName "1.0.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile rootProject.file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
+            // Küçültme (R8) kapalı: uygulamanın Java kodu yalnız Capacitor'dur ve eklentileri yansımayla (reflection)
+            // yükler; derleyip telefonda denemeden açmak çalışma anında çökme riski taşır, kazanç ise birkaç yüz KB'tır
+            // (paketin büyük kısmı 33 MB'lık web dosyaları ve modellerdir).
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
