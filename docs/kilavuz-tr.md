@@ -138,6 +138,13 @@ Sol paneldeki **Araçlar** bölümü:
   AICA ve PICA alanlarıyla. **Test**: yapının adı, yapıyı 3B görünümde bulma ve 90 bilgi sorusu (BOS, sinirler, arterler;
   konuya göre süzülebilir). Noktalar ve eğriler modelin kendi
   geometrisinden hesaplanır (her sekmenin ilk açılışında 0,2–0,8 saniye).
+- **Kol hareketi modu** (Araçlar › Çalışma modları › Kol hareketi; bağlantı `#m=move:<hareket>`): sol kolun kemikleri
+  eklem eksenlerinde hareket eder. Turuncu topu (dirsek) sürükle: omuz hareket eder, skapula ve klavikula eşlik eder. Mavi
+  topu (el) sürükle: dirsek bükülür. Her hareketin sürgüsü ve ▶ düğmesi vardır; "Nötr duruş" Neutral-Null sıfırına, "Model
+  duruşu" modelin kendi duruşuna döner. Panel açıları Neutral-Null olarak, omuzda glenohumeral ve skapula payıyla yazar;
+  en çok kısalan ve uzayan kasları ve ders kitabındaki ana kasları listeler. Geometrik bir modeldir: kas boyu origo ile
+  insersiyo arasındaki orta çizgiden hesaplanır, eklemi saran kaslarda yanılabilir. Bu sürümde kaslar çizilmez; bağlar ve
+  kapsüller kol hareket edince gizlenir.
 - **Hareket sistemi modu** (Araçlar › Hareket sistemi modu; BWA ve eklem derslerinin Aanki kartında ve her kasın bilgi
   kartında da düğmesi var): kol ve bacak için görsel tekrar; sol kol ya da sol bacak gösterilir. **Sinir**: 19 periferik
   sinir (N. radialis, medianus, ulnaris, femoralis, ischiadicus, fibularis …). Sinir sarı, innerve ettiği kaslar kırmızı,
