@@ -143,8 +143,9 @@ Sol paneldeki **Araçlar** bölümü:
   topu (el) sürükle: dirsek bükülür. Her hareketin sürgüsü ve ▶ düğmesi vardır; "Nötr duruş" Neutral-Null sıfırına, "Model
   duruşu" modelin kendi duruşuna döner. Panel açıları Neutral-Null olarak, omuzda glenohumeral ve skapula payıyla yazar;
   en çok kısalan ve uzayan kasları ve ders kitabındaki ana kasları listeler. Geometrik bir modeldir: kas boyu origo ile
-  insersiyo arasındaki orta çizgiden hesaplanır, eklemi saran kaslarda yanılabilir. Bu sürümde kaslar çizilmez; bağlar ve
-  kapsüller kol hareket edince gizlenir.
+  insersiyo arasındaki orta çizgiden hesaplanır, eklemi saran kaslarda yanılabilir. Az gerilen kaslar çizilir ve kolla
+  bükülür: kısalan turuncuya, uzayan maviye döner. Eklemi saran kaslar (deltoid, triceps, latissimus ve benzerleri) henüz
+  çizilmez; adları panelin sonunda listelenir. Bağlar ve kapsüller kol hareket edince gizlenir.
 - **Hareket sistemi modu** (Araçlar › Hareket sistemi modu; BWA ve eklem derslerinin Aanki kartında ve her kasın bilgi
   kartında da düğmesi var): kol ve bacak için görsel tekrar; sol kol ya da sol bacak gösterilir. **Sinir**: 19 periferik
   sinir (N. radialis, medianus, ulnaris, femoralis, ischiadicus, fibularis …). Sinir sarı, innerve ettiği kaslar kırmızı,
