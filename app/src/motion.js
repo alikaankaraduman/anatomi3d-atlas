@@ -35,8 +35,8 @@ const WIDE = Object.fromEntries([
 ].flatMap(([b, ns]) => ns.map(n => [n, b])));
 // Yol izleyen bükme uygulanan kaslar: köşe orta çizgiye bağlanır, uzama bütün boya yayılır (pathSkin). 2026-11-22 denemesinde
 // bozulan duruş sayısını azaltanlar. Triceps mediyal başı ve pectoralis major sternokostal parçası bu yöntemle DAHA kötü
-// oldu (geniş origo, tek orta çizgi yetmiyor): onlar .bin ağırlıklarıyla ve bozuldukları duruşta gizlenerek kalır.
-const PATH = new Set(['Teres major muscle', 'Long head of triceps brachii', 'Anconeus muscle', 'Coracobrachialis muscle', 'Teres minor muscle',
+// oldu, supinator da öyle (geniş origo ya da kemiği saran yassı kas, tek orta çizgi yetmiyor): onlar .bin ağırlıklarıyla ve bozuldukları duruşta gizlenerek kalır.
+const PATH = new Set(['Abductor pollicis longus', 'Extensor indicis', 'Scapular spinal part of deltoid muscle', 'Teres major muscle', 'Long head of triceps brachii', 'Anconeus muscle', 'Coracobrachialis muscle', 'Teres minor muscle',
   'Pectoralis minor muscle', 'Latissimus dorsi muscle', 'Abdominal part of pectoralis major muscle', 'Rhomboid major muscle', 'Rhomboid minor muscle', 'Levator scapulae']);
 const WIDE_ON = !(typeof location !== 'undefined' && /[?&]mvwide=0/.test(location.search));   // denetim: ?mvwide=0 eski ağırlıklar
 const HIDE = { longShare: 0.06, max: 7, shortShare: 0.10 };   // > 2 kat uzayan kenar payı, en uzun kenar oranı, < 0.4 kat kısalan pay
