@@ -361,7 +361,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     return h.length ? `Bu duruşta çizilemeyen kaslar (${h.length}): <span lang="la">${h.map(esc).join(', ')}</span>. Eklemi sardıkları için bugünkü yöntemle bozuluyorlar; boy değişimleri yine listelerde.` : 'Bu duruşta bütün kol kasları çiziliyor.';
   }
   // Tıklanan kas: bükülmüş ağlar ışınla sınanır (yalnız tıklamada; ağın sınır küresi o an yeniden hesaplanır)
-  function pickMuscle(x, y) {
+  function pickMuscle(x, y, id) {
     if (!skins) return;
     const rect = stage.canvas.getBoundingClientRect(), hits = [];
     v2.set((x - rect.left) / rect.width * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
@@ -373,6 +373,10 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
       THREE.Mesh.prototype.raycast.call(s.mesh, ray, hits);
       for (const h of hits) if (h.distance < bd) { bd = h.distance; best = s; }
     }
+    // tıklanan yerde atlasın bir parçası (kemik, bağ) kastan belirgin biçimde öndeyse kas seçilmez
+    const front = id && model.items.get(id)?.mesh;
+    if (best && front) { hits.length = 0; front.raycast(ray, hits); for (const h of hits) if (h.distance < bd - 0.3) { best = null; break; } }
+    if (!best && front) return;
     picked = best === picked ? null : best;      // aynı kasa ikinci tıklama seçimi kaldırır
     K.fk(KM, pose, out); updateSkins(); stage.requestRender(); live(true);
   }
@@ -518,7 +522,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     enter, sync, panelHTML, click,
     highlight: () => [],
     // modda tıklama atlas yapısı seçmez (mod açık kalır); tıklanan yerde bükülmüş bir kas varsa o kas seçilir
-    onPick: (id, x, y) => { if (!active) return false; if (x !== undefined) pickMuscle(x, y); return true; },
+    onPick: (id, x, y) => { if (!active) return false; if (x !== undefined) pickMuscle(x, y, id); return true; },
     pickAt: (x, y) => { if (!active) return false; pickMuscle(x, y); return true; },
     picked: () => picked?.name || null,
     isActive: () => active, hideTips: () => active && !!drag,
