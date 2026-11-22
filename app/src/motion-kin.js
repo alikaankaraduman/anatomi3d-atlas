@@ -83,7 +83,11 @@ export const RANGES = { girdleElev: [-10, 40], girdleProt: [-25, 25], elbow: [-1
 //   shrugTilt  kuşak yükselmesinin derecesi başına öne eğilme (kafes yukarıda daralır)
 //   retrTilt   retraksiyonun derecesi başına öne eğilme
 //   spineClear spina kökünün orta hatta en fazla yaklaşabileceği uzaklık (cm); 0 = retraksiyon sınırı kısılmaz
-export const TUNE = { carryProt: 1, shrugUR: 0.35, shrugTilt: 0.2, retrTilt: 0.12, spineClear: 2 };
+//   fitW       göğüs kafesi düzeltmesinde [retraksiyon, yükselme, dış dönme, eğilme] paylarının ölçeği (ağırlıklı en küçük norm).
+//              Yükselme 0.3: klavikula yükselmesi formüldeki ~12 derecede kalır (Ludewig 2009); düzeltme retraksiyon ve
+//              skapula açılarıyla yapılır. Böylece AC fazla yükselmez, trigonum spinae yukarı dönmede aşağı iner
+//              (trapezius pars ascendens kısalır).
+export const TUNE = { carryProt: 1, shrugUR: 0.35, shrugTilt: 0.2, retrTilt: 0.12, spineClear: 2, fitW: [1, 0.3, 1, 1] };
 
 // ---------- skapulohumeral ritim (mutlak öğretim formülleri, derece) ----------
 // w = frontal düzlem ağırlığı: 1 = Abduktion (plane 0), 0 = sagittal düzlem ve ötesi. max(0, cos)^2: sürekli türevli.
@@ -474,6 +478,7 @@ function solveRhythmFit(model, cr, ce, er, ur, pt, x) {
   const F = model.fit, sc = model.J.sc, v0 = F.v[0], v1 = F.v[1], m0 = model.m0;
   rot(_rn, model.n0, ur);
   let x0 = 0, x1 = 0, x2 = 0, x3 = 0;
+  const FW = (model.tune && model.tune.fitW) || TUNE.fitW, W0 = FW[0], W1 = FW[1], W2 = FW[2], W3 = FW[3];
   for (let it = 0; it < 12; it++) {
     // klavikulanın dış ucu: AC' = SC + Ry(cr) Re0(ce) (AC - SC); a1 = taşınmış yükselme ekseni
     rot(_re, model.e0, ce + x1); rot(_ry, Y_UP, cr + x0);
@@ -488,19 +493,21 @@ function solveRhythmFit(model, cr, ce, er, ur, pt, x) {
     const e1 = ellDist(F, ax + w1[0], ay + w1[1], az + w1[2], _n2) - F.d0[1];
     // Jakobiyen satırları (derece başına cm)
     const yu = cross(Y_UP, u), au = cross(a1, u);
-    const j00 = dot(_n1, yu) * D2R, j01 = dot(_n1, au) * D2R, j02 = dot(_n1, cross(Y_UP, w0)) * D2R, j03 = -dot(_n1, cross(ms, w0)) * D2R;
-    const j10 = dot(_n2, yu) * D2R, j11 = dot(_n2, au) * D2R, j12 = dot(_n2, cross(Y_UP, w1)) * D2R, j13 = -dot(_n2, cross(ms, w1)) * D2R;
+    // ağırlıklı en küçük norm: sütunlar W ile ölçeklenir, çözüm y = x / W üzerinde yapılır
+    const j00 = W0 * dot(_n1, yu) * D2R, j01 = W1 * dot(_n1, au) * D2R, j02 = W2 * dot(_n1, cross(Y_UP, w0)) * D2R, j03 = -W3 * dot(_n1, cross(ms, w0)) * D2R;
+    const j10 = W0 * dot(_n2, yu) * D2R, j11 = W1 * dot(_n2, au) * D2R, j12 = W2 * dot(_n2, cross(Y_UP, w1)) * D2R, j13 = -W3 * dot(_n2, cross(ms, w1)) * D2R;
+    x0 /= W0; x1 /= W1; x2 /= W2; x3 /= W3;
     // en küçük norm: x_yeni = J^T (J J^T)^-1 (J x - e)
     const b0 = j00 * x0 + j01 * x1 + j02 * x2 + j03 * x3 - e0, b1 = j10 * x0 + j11 * x1 + j12 * x2 + j13 * x3 - e1;
     const a11 = j00 * j00 + j01 * j01 + j02 * j02 + j03 * j03, a12 = j00 * j10 + j01 * j11 + j02 * j12 + j03 * j13, a22 = j10 * j10 + j11 * j11 + j12 * j12 + j13 * j13;
     const det = a11 * a22 - a12 * a12;
-    if (!(det > 1e-14)) break;
+    if (!(det > 1e-14)) { x0 *= W0; x1 *= W1; x2 *= W2; x3 *= W3; break; }
     const l0 = (a22 * b0 - a12 * b1) / det, l1 = (a11 * b1 - a12 * b0) / det;
     let d0 = j00 * l0 + j10 * l1 - x0, d1 = j01 * l0 + j11 * l1 - x1, d2 = j02 * l0 + j12 * l1 - x2, d3 = j03 * l0 + j13 * l1 - x3;
     const st = Math.hypot(d0, d1, d2, d3);
-    if (!(st < 1e9)) break;                                  // NaN ya da taşma: son iyi değerde kal
+    if (!(st < 1e9)) { x0 *= W0; x1 *= W1; x2 *= W2; x3 *= W3; break; }                                  // NaN ya da taşma: son iyi değerde kal
     if (st > 20) { const k = 20 / st; d0 *= k; d1 *= k; d2 *= k; d3 *= k; }
-    x0 += d0; x1 += d1; x2 += d2; x3 += d3;
+    x0 = (x0 + d0) * W0; x1 = (x1 + d1) * W1; x2 = (x2 + d2) * W2; x3 = (x3 + d3) * W3;
     if (st < 1e-9) break;
   }
   x[0] = x0; x[1] = x1; x[2] = x2; x[3] = x3;
