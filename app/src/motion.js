@@ -33,6 +33,11 @@ const WIDE = Object.fromEntries([
   // iki eklemi aşan kas: [origo kemiğinden çıkış başı, sonu, insersiyo kemiğine geçiş başı, sonu], arada humerus
   [[0.02, 0.35, 0.6, 1], ["Long head of triceps brachii"]],
 ].flatMap(([b, ns]) => ns.map(n => [n, b])));
+// Yol izleyen bükme uygulanan kaslar: köşe orta çizgiye bağlanır, uzama bütün boya yayılır (pathSkin). 2026-11-22 denemesinde
+// bozulan duruş sayısını azaltanlar. Triceps mediyal başı ve pectoralis major sternokostal parçası bu yöntemle DAHA kötü
+// oldu (geniş origo, tek orta çizgi yetmiyor): onlar .bin ağırlıklarıyla ve bozuldukları duruşta gizlenerek kalır.
+const PATH = new Set(['Teres major muscle', 'Long head of triceps brachii', 'Anconeus muscle', 'Coracobrachialis muscle', 'Teres minor muscle',
+  'Pectoralis minor muscle', 'Latissimus dorsi muscle', 'Abdominal part of pectoralis major muscle', 'Rhomboid major muscle', 'Rhomboid minor muscle', 'Levator scapulae']);
 const WIDE_ON = !(typeof location !== 'undefined' && /[?&]mvwide=0/.test(location.search));   // denetim: ?mvwide=0 eski ağırlıklar
 const HIDE = { longShare: 0.06, max: 7, shortShare: 0.10 };   // > 2 kat uzayan kenar payı, en uzun kenar oranı, < 0.4 kat kısalan pay
 const fnv = a => { const b = new Uint8Array(a.buffer, a.byteOffset, a.byteLength); let h = 0x811c9dc5; for (let i = 0; i < b.length; i++) { h ^= b[i]; h = Math.imul(h, 0x01000193); } return h >>> 0; };
@@ -97,6 +102,30 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
           } else { const w = sm(wd[0], wd[1]); I[4 * i] = A; I[4 * i + 1] = B; W[4 * i] = 1 - w; W[4 * i + 1] = w; }
         }
       }
+      let path = null;
+      const li0 = byName.get(p.n);
+      if (WIDE_ON && PATH.has(p.n) && li0 !== undefined) {
+        const cl = lines[li0].cl, C = cl.P, m = cl.n, cum = new Float64Array(m);
+        for (let k = 1; k < m; k++) cum[k] = cum[k - 1] + Math.hypot(C[3 * k] - C[3 * k - 3], C[3 * k + 1] - C[3 * k - 2], C[3 * k + 2] - C[3 * k - 1]);
+        const va = new Float64Array(64), vb = new Float64Array(64);
+        for (let j = 0; j < 4; j++) { va[cl.I[j]] += cl.W[j]; vb[cl.I[4 * (m - 1) + j]] += cl.W[4 * (m - 1) + j]; }
+        const A = va.indexOf(Math.max(...va)), B = vb.indexOf(Math.max(...vb)), S = cum[m - 1];
+        if (A !== B && S > 0) {
+          const U = new Float32Array(nv), O = new Float32Array(3 * nv);
+          for (let i = 0; i < nv; i++) {
+            const x = P[3 * i], y = P[3 * i + 1], z = P[3 * i + 2];
+            let bd = Infinity, bu = 0, cx = x, cy = y, cz = z;
+            for (let k = 1; k < m; k++) {
+              const ax = C[3 * k - 3], ay = C[3 * k - 2], az = C[3 * k - 1], ux = C[3 * k] - ax, uy = C[3 * k + 1] - ay, uz = C[3 * k + 2] - az, l2 = ux * ux + uy * uy + uz * uz;
+              const tt = l2 > 1e-9 ? Math.max(0, Math.min(1, ((x - ax) * ux + (y - ay) * uy + (z - az) * uz) / l2)) : 0;
+              const qx = ax + tt * ux, qy = ay + tt * uy, qz = az + tt * uz, d = (x - qx) ** 2 + (y - qy) ** 2 + (z - qz) ** 2;
+              if (d < bd) { bd = d; bu = (cum[k - 1] + tt * (cum[k] - cum[k - 1])) / S; cx = qx; cy = qy; cz = qz; }
+            }
+            U[i] = bu; O[3 * i] = x - cx; O[3 * i + 1] = y - cy; O[3 * i + 2] = z - cz;
+          }
+          path = { A, B, U, O, cum: new Float64Array(m) };
+        }
+      }
       // Şişme için: köşenin dinlenmedeki orta çizgiye en yakın noktasından uzaklık vektörü x karın profili sin(pi t)
       // (t: origo 0, insersiyo 1; uçlar yerinde kalır). Kas kısalınca köşe bu yönde dışarı itilir.
       const R = new Float32Array(3 * nv), ln = p.line || [];
@@ -124,7 +153,28 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
         const a = ix[3 * t + k], b = ix[3 * t + k + 1], l = Math.hypot(P[3 * a] - P[3 * b], P[3 * a + 1] - P[3 * b + 1], P[3 * a + 2] - P[3 * b + 2]);
         if (l > 1e-4) { E.push(a, b); EL.push(l); }
       }
-      skins.push({ wide: !!wd, mesh, pa, na, P0: pos.array, N0, R, L0: p.L0 || 0, name: p.n, la: r.la || p.n, E, EL, bad: false, a: { n: nv, P, I, W, out: null }, li: byName.get(p.n), rest: true });
+      skins.push({ wide: !!wd || !!path, path, mesh, pa, na, P0: pos.array, N0, R, L0: p.L0 || 0, name: p.n, la: r.la || p.n, E, EL, bad: false, a: { n: nv, P, I, W, out: null }, li: byName.get(p.n), rest: true });
+    }
+  }
+  // Yol izleyen bükme: lineLength az önce çağrıldığı için cl.out duruştaki orta çizgidir
+  function pathSkin(s, g) {
+    const cl = lines[s.li].cl, C = cl.out, m = cl.n, pt = s.path, cum = pt.cum, Q = out.dq, pa = s.pa.array, na = s.na.array, N = s.N0, U = pt.U, O = pt.O;
+    for (let k = 1; k < m; k++) cum[k] = cum[k - 1] + Math.hypot(C[3 * k] - C[3 * k - 3], C[3 * k + 1] - C[3 * k - 2], C[3 * k + 2] - C[3 * k - 1]);
+    const S = cum[m - 1], a = 8 * pt.A, b = 8 * pt.B, nv = s.a.n;
+    for (let v = 0; v < nv; v++) {
+      const i = 3 * v, u = U[v], t = u * S;
+      let k = 1; while (k < m - 1 && cum[k] < t) k++;
+      const d = cum[k] - cum[k - 1], fr = d > 1e-9 ? (t - cum[k - 1]) / d : 0, j = 3 * k;
+      const w = u * u * (3 - 2 * u), w0 = 1 - w;
+      let rx = w0 * Q[a] + w * Q[b], ry = w0 * Q[a + 1] + w * Q[b + 1], rz = w0 * Q[a + 2] + w * Q[b + 2], rw = w0 * Q[a + 3] + w * Q[b + 3];
+      const il = 1 / (Math.sqrt(rx * rx + ry * ry + rz * rz + rw * rw) || 1); rx *= il; ry *= il; rz *= il; rw *= il;
+      const e = 1 + g * Math.sin(Math.PI * u), ox = O[i] * e, oy = O[i + 1] * e, oz = O[i + 2] * e, nx = N[i], ny = N[i + 1], nz = N[i + 2];
+      let cx = ry * oz - rz * oy + rw * ox, cy = rz * ox - rx * oz + rw * oy, cz = rx * oy - ry * ox + rw * oz;
+      pa[i] = C[j - 3] + fr * (C[j] - C[j - 3]) + ox + 2 * (ry * cz - rz * cy);
+      pa[i + 1] = C[j - 2] + fr * (C[j + 1] - C[j - 2]) + oy + 2 * (rz * cx - rx * cz);
+      pa[i + 2] = C[j - 1] + fr * (C[j + 2] - C[j - 1]) + oz + 2 * (rx * cy - ry * cx);
+      cx = ry * nz - rz * ny + rw * nx; cy = rz * nx - rx * nz + rw * ny; cz = rx * ny - ry * nx + rw * nz;
+      na[i] = nx + 2 * (ry * cz - rz * cy); na[i + 1] = ny + 2 * (rz * cx - rx * cz); na[i + 2] = nz + 2 * (rx * cy - ry * cx);
     }
   }
   function updateSkins() {
@@ -138,6 +188,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
       else {
         // motion-kin'in karışım kuralı (skinLine ile aynı sonuç, ama köşe başına ayırma yapmadan): ağırlıklı ikili
         // kuaterniyonlar olduğu gibi toplanır, gerçek kısmın boyuna bölünür. Tek segmente bağlı köşe doğrudan matrisle taşınır.
+        if (s.path) pathSkin(s, g); else {
         const P = s.a.P, I = s.a.I, W = s.a.W, N = s.N0, Q = out.dq, Mx = out.mats, nv = s.a.n, R = s.R;
         for (let v = 0; v < nv; v++) {
           const i = 3 * v, j = 4 * v, px = P[i] + g * R[i], py = P[i + 1] + g * R[i + 1], pz = P[i + 2] + g * R[i + 2], nx = N[i], ny = N[i + 1], nz = N[i + 2];
@@ -162,6 +213,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
           pa[i + 2] = pz + 2 * (rx * cy - ry * cx + rw * dz - dw * rz + rx * dy - ry * dx);
           cx = ry * nz - rz * ny + rw * nx; cy = rz * nx - rx * nz + rw * ny; cz = rx * ny - ry * nx + rw * nz;
           na[i] = nx + 2 * (ry * cz - rz * cy); na[i + 1] = ny + 2 * (rz * cx - rx * cz); na[i + 2] = nz + 2 * (rx * cy - ry * cx);
+        }
         }
         s.rest = false; s.pa.needsUpdate = s.na.needsUpdate = true;
       }
@@ -419,7 +471,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     pose: () => ({ ...pose }),
     setPose(q) { if (!active) return; anim = null; Object.assign(pose, q); applyPose(); live(true); },
     // denetim: bir kasın hızlı karışımını motion-kin skinLine ile karşılaştır (en büyük fark, cm)
-    skinCheck() { let m = 0; for (const x of skins || []) { x.a.out = new Float64Array(3 * x.a.n); const A = K.skinLine(out, x.a), p = x.pa.array; for (let i = 0; i < A.length; i++) m = Math.max(m, Math.abs(A[i] - p[i])); x.a.out = null; } return { wide: (skins || []).filter(x => x.wide).length, hidden: (skins || []).filter(x => x.bad).map(x => x.name), parts: skins?.length || 0, verts: (skins || []).reduce((t, x) => t + x.a.n, 0), maxDiff: m }; },
+    skinCheck() { let m = 0; for (const x of skins || []) { x.a.out = new Float64Array(3 * x.a.n); const A = K.skinLine(out, x.a), p = x.pa.array; for (let i = 0; i < A.length; i++) m = Math.max(m, Math.abs(A[i] - p[i])); x.a.out = null; } return { paths: (skins || []).filter(x => x.path).map(x => x.name), wide: (skins || []).filter(x => x.wide).length, hidden: (skins || []).filter(x => x.bad).map(x => x.name), parts: skins?.length || 0, verts: (skins || []).reduce((t, x) => t + x.a.n, 0), maxDiff: m }; },
     handles: () => { const rect = stage.canvas.getBoundingClientRect(); return { elbow: screenOf(hElbow, rect), hand: screenOf(hHand, rect) }; },
   };
 }
