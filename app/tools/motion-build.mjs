@@ -1044,6 +1044,8 @@ for (const [kind, list] of [['muscle', muscleBuilt], ['joint', jointBuilt]]) for
   m.pct = pct; m.chain = chain;
   const rec = { n: p.n, id: p.id, kind, verts: nV, offset, sum: posSum(p), chain };
   if (kind === 'muscle') { rec.L0 = rd(m.L0, 3); rec.line = lineOut(m.line); rec.ends = lineOut([m.endO, m.endI]); if (m.axis) rec.axis = m.axis.map(q => R(q, 3)); if (m.contInfo) rec[m.contInfo.ext ? 'ext' : 'cont'] = m.contInfo.name; if (m.tScale < 1) rec.tMax = rd(m.tScale, 3); if (m.follow) rec.follow = m.follow; }
+  // zincire orta çizgi örneklerinin segmentleri de girer (köşe payı çok küçük olan uç segmentler, ör. FCU ulnar başında el)
+  if (rec.line) { const set = new Set(rec.chain); for (const smp of rec.line) for (const [k] of smp.w) set.add(k); rec.chain = SEGS.filter(k => set.has(k)); }
   skinParts.push(rec); chunks.push(buf); offset += buf.length;
 }
 const bin = new Uint8Array(offset); { let o = 0; for (const c of chunks) { bin.set(c, o); o += c.length; } }
