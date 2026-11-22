@@ -66,6 +66,8 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
   let mv = null, baseLen = [];           // etkin hareket ve boyların karşılaştırıldığı başlangıç
   let anim = null, drag = null, away = false, lastLive = 0;
   let skinBuf = null, skins = null, hiddenNames = [];
+  const T0 = new THREE.Matrix4(), T1 = new THREE.Matrix4();
+  let prevM = null; const segCh = new Uint8Array(64);   // önceki duruşun segment matrisleri ve "değişti" işaretleri
   let picked = null;                     // tıklanan kas (bükülen ağ kaydı)   // bükülen kas ağları (bir kez kurulur)
 
   const root = new THREE.Group(); root.visible = false; stage.scene.add(root);
@@ -164,14 +166,19 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
       pa.setUsage(THREE.DynamicDrawUsage); na.setUsage(THREE.DynamicDrawUsage);
       geo.setAttribute('position', pa); geo.setAttribute('normal', na); geo.setAttribute('color', g.attributes.color); geo.setIndex(g.index);
       const mesh = new THREE.Mesh(geo, (r.o ? model.mat.solidOpen : model.mat.solid).clone());
-      mesh.frustumCulled = false; mesh.raycast = () => {}; mroot.add(mesh);
+      mesh.frustumCulled = false; mesh.matrixAutoUpdate = false; mesh.raycast = () => {}; mroot.add(mesh);
+      // parçanın bağlı olduğu segmentler: köşe ağırlıkları, çizgileri ve yol izleme uçları
+      const sgs = new Set();
+      for (let i = 0; i < 4 * nv; i++) if (W[i] > 0) sgs.add(I[i]);
+      if (li0 !== undefined) for (const c of [lines[li0].cl, lines[li0].len]) for (let i = 0; i < 4 * c.n; i++) if (c.W[i] > 0) sgs.add(c.I[i]);
+      if (path) { sgs.add(path.A); sgs.add(path.B); }
       // bozulma ölçüsü için örnek kenarlar (en çok 400 üçgenin ikişer kenarı) ve dinlenme boyları
       const ix = g.index.array, tri = ix.length / 3, step = Math.max(1, Math.floor(tri / 400)), E = [], EL = [];
       for (let t = 0; t < tri; t += step) for (let k = 0; k < 2; k++) {
         const a = ix[3 * t + k], b = ix[3 * t + k + 1], l = Math.hypot(P[3 * a] - P[3 * b], P[3 * a + 1] - P[3 * b + 1], P[3 * a + 2] - P[3 * b + 2]);
         if (l > 1e-4) { E.push(a, b); EL.push(l); }
       }
-      skins.push({ joint: isJ, wide: !!wd || !!path, path, lin, mesh, pa, na, P0: pos.array, N0, R, L0: li0 === undefined ? 0 : restLen(lines[li0].len), name: p.n, la: r.la || p.n, E, EL, bad: false, a: { n: nv, P, I, W, out: null }, li: byName.get(p.n), rest: true });
+      skins.push({ segs: [...sgs], mode: 'rest', gDone: 0, joint: isJ, wide: !!wd || !!path, path, lin, mesh, pa, na, P0: pos.array, N0, R, L0: li0 === undefined ? 0 : restLen(lines[li0].len), name: p.n, la: r.la || p.n, E, EL, bad: false, a: { n: nv, P, I, W, out: null }, li: byName.get(p.n), rest: true });
     }
   }
   // Yol izleyen bükme: orta çizgi (cl) önce duruşa taşınır
@@ -197,15 +204,33 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
   }
   function updateSkins() {
     if (!skins) return;
+    // hangi segmentin matrisi bir önceki çağrıdan beri değişti?
+    const MM = out.mats, nseg = MM.length / 16;
+    if (!prevM || prevM.length !== MM.length) { prevM = new Float64Array(MM.length); prevM.fill(NaN); }
+    for (let k = 0; k < nseg; k++) { let c = 0; for (let e = 0; e < 16; e++) if (!(Math.abs(MM[16 * k + e] - prevM[16 * k + e]) < 1e-12)) { c = 1; break; } segCh[k] = c; }
+    prevM.set(MM);
     for (const s of skins) {
       const pa = s.pa.array, na = s.na.array;
+      let skip = false;
       const Lnow = s.li === undefined ? 0 : K.lineLength(out, lines[s.li].len);
       // hacim korunumu: kalınlık çarpanı sqrt(L0 / L), 0.85 ile 1.3 arasında (L0: model duruşundaki boy)
       const g = away && Lnow > 0 && s.L0 > 0 ? Math.max(0.85, Math.min(1.3, Math.sqrt(s.L0 / Lnow))) - 1 : 0;
-      if (!away) { if (!s.rest) { pa.set(s.P0); na.set(s.N0); s.rest = true; s.pa.needsUpdate = s.na.needsUpdate = true; } }
+      if (!away) { if (!s.rest) { pa.set(s.P0); na.set(s.N0); s.rest = true; s.mode = 'rest'; s.gDone = 0; s.mesh.matrix.identity(); if (s.Minv) for (const m of s.Minv) m.identity(); else s.Minv = s.segs.map(() => new THREE.Matrix4()); s.pa.needsUpdate = s.na.needsUpdate = true; } }
       else {
         // motion-kin'in karışım kuralı (skinLine ile aynı sonuç, ama köşe başına ayırma yapmadan): ağırlıklı ikili
         // kuaterniyonlar olduğu gibi toplanır, gerçek kısmın boyuna bölünür. Tek segmente bağlı köşe doğrudan matrisle taşınır.
+        // Parçanın bütün segmentleri, köşelerin son hesaplandığı andan beri AYNI katı dönüşümle hareket ettiyse (omuz oynarken
+        // ön kol ve el parçaları; bilek oynarken omuz parçaları: dönüşüm birim) köşeler yeniden hesaplanmaz, ağ o dönüşümle taşınır.
+        const sg = s.segs; let rigid = sg.length > 0 && !!s.Minv && Math.abs(g - s.gDone) < 1e-6;
+        for (let q = 0; rigid && q < sg.length; q++) {
+          T1.fromArray(MM, 16 * sg[q]).multiply(s.Minv[q]);
+          if (!q) T0.copy(T1); else { const A = T0.elements, B = T1.elements; for (let e = 0; e < 16; e++) if (Math.abs(A[e] - B[e]) > 1e-7) { rigid = false; break; } }
+        }
+        if (rigid) { s.mesh.matrix.copy(T0); s.rest = false; s.mode = 'rigid'; skip = true; }
+        else {
+        s.mesh.matrix.identity(); s.mode = 'skin'; s.gDone = g;
+        if (!s.Minv) s.Minv = sg.map(() => new THREE.Matrix4());
+        for (let q = 0; q < sg.length; q++) s.Minv[q].fromArray(MM, 16 * sg[q]).invert();
         if (s.path) pathSkin(s, g); else {
         const P = s.a.P, I = s.a.I, W = s.a.W, N = s.N0, Q = out.dq, Mx = out.mats, nv = s.a.n, R = s.R;
         for (let v = 0; v < nv; v++) {
@@ -246,10 +271,11 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
         }
         }
         s.rest = false; s.pa.needsUpdate = s.na.needsUpdate = true;
+        }
       }
       // bu duruşta ağ bozuluyor mu? (dinlenmede hiçbir kas gizlenmez)
       if (!away) s.bad = false;
-      else {
+      else if (!skip) {
         const E = s.E, EL = s.EL, ne = EL.length; let lo = 0, sh = 0, mx = 0;
         for (let e = 0; e < ne; e++) {
           const a = 3 * E[2 * e], b = 3 * E[2 * e + 1], q = Math.hypot(pa[a] - pa[b], pa[a + 1] - pa[b + 1], pa[a + 2] - pa[b + 2]) / EL[e];
@@ -543,7 +569,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     pose: () => ({ ...pose }),
     setPose(q) { if (!active) return; anim = null; Object.assign(pose, q); applyPose(); live(true); },
     // denetim: bir kasın hızlı karışımını motion-kin skinLine ile karşılaştır (en büyük fark, cm)
-    skinCheck() { let m = 0; for (const x of skins || []) { x.a.out = new Float64Array(3 * x.a.n); const A = K.skinLine(out, x.a), p = x.pa.array; for (let i = 0; i < A.length; i++) m = Math.max(m, Math.abs(A[i] - p[i])); x.a.out = null; } return { joints: (skins || []).filter(x => x.joint).length, jointsHidden: (skins || []).filter(x => x.joint && x.bad).map(x => x.name), lins: (skins || []).filter(x => x.lin).length, paths: (skins || []).filter(x => x.path).map(x => x.name), wide: (skins || []).filter(x => x.wide).length, hidden: (skins || []).filter(x => x.bad && !x.joint).map(x => x.name), parts: skins?.length || 0, verts: (skins || []).reduce((t, x) => t + x.a.n, 0), maxDiff: m }; },
+    skinCheck() { let m = 0; for (const x of skins || []) { if (x.mode !== 'skin' || x.wide || x.lin) continue; x.a.out = new Float64Array(3 * x.a.n); const A = K.skinLine(out, x.a), p = x.pa.array; for (let i = 0; i < A.length; i++) m = Math.max(m, Math.abs(A[i] - p[i])); x.a.out = null; } return { modes: (skins || []).reduce((t, x) => { t[x.mode] = (t[x.mode] || 0) + 1; return t; }, {}), joints: (skins || []).filter(x => x.joint).length, jointsHidden: (skins || []).filter(x => x.joint && x.bad).map(x => x.name), lins: (skins || []).filter(x => x.lin).length, paths: (skins || []).filter(x => x.path).map(x => x.name), wide: (skins || []).filter(x => x.wide).length, hidden: (skins || []).filter(x => x.bad && !x.joint).map(x => x.name), parts: skins?.length || 0, verts: (skins || []).reduce((t, x) => t + x.a.n, 0), maxDiff: m }; },
     handles: () => { const rect = stage.canvas.getBoundingClientRect(); return { elbow: screenOf(hElbow, rect), hand: screenOf(hHand, rect) }; },
   };
 }
