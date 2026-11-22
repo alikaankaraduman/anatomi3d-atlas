@@ -20,6 +20,20 @@ const GROUPS = [
 const SLIDERS = Object.fromEntries(GROUPS.flatMap(g => g[1]).map(s => [s[0], s]));
 // Bir kas parçası, o duruşta ağı bozuluyorsa gizlenir (eklemi saran kaslarda deri ağırlıkları perde gibi gerer). Ölçü: örnek
 // kenarların dinlenmeye oranı. Gizleme eşikleri HIDE, yeniden gösterme eşikleri bunların 0.8 katı (titreme olmasın diye).
+// Eklemi saran kaslarda dar geçiş kuşağı bütün dönmeyi birkaç üçgene yığar. Bu kaslarda .bin ağırlıkları yerine geniş
+// geçiş kullanılır: köşe, origo kemiği ile insersiyo kemiğinin ikili kuaterniyonları arasında t (0 origo, 1 insersiyo)
+// boyunca yumuşak adımla karışır; kasın ortası eklemin çevresinde dönmenin yarısıyla döner (sarma). [başlangıç, bitiş]
+// Yalnız denemede daha iyi sonuç veren kaslar: omzu örten deltoid ve humerus başına yakın kısa kaslar. Gövdeden ya da
+// skapuladan gelen geniş kaslarda (pectoralis major, latissimus, teres major, romboidler, pectoralis minor, levator) geniş
+// geçiş daha kötü sonuç verdi (2026-11-22 denemesi); onlar .bin ağırlıklarıyla kalır ve bozuldukları duruşta gizlenir.
+const WIDE = Object.fromEntries([
+  [[0.05, 0.95], ["Acromial part of deltoid muscle", "Scapular spinal part of deltoid muscle", "Clavicular part of deltoid muscle"]],
+  [[0.1, 0.95], ["Teres minor muscle", "Coracobrachialis muscle", "Supraspinatus muscle"]],
+  // dirseği saran mediyal baş ve anconeus için geniş geçiş denendi, sonuç vermedi (tam fleksiyonda yine bozuluyor)
+  // iki eklemi aşan kas: [origo kemiğinden çıkış başı, sonu, insersiyo kemiğine geçiş başı, sonu], arada humerus
+  [[0.02, 0.35, 0.6, 1], ["Long head of triceps brachii"]],
+].flatMap(([b, ns]) => ns.map(n => [n, b])));
+const WIDE_ON = !(typeof location !== 'undefined' && /[?&]mvwide=0/.test(location.search));   // denetim: ?mvwide=0 eski ağırlıklar
 const HIDE = { longShare: 0.06, max: 7, shortShare: 0.10 };   // > 2 kat uzayan kenar payı, en uzun kenar oranı, < 0.4 kat kısalan pay
 const fnv = a => { const b = new Uint8Array(a.buffer, a.byteOffset, a.byteLength); let h = 0x811c9dc5; for (let i = 0; i < b.length; i++) { h ^= b[i]; h = Math.imul(h, 0x01000193); } return h >>> 0; };
 const PLANE_MIN = -100, PLANE_MAX = 135;   // gövdenin içinden geçen duruşlar (düzlem 180 çevresi) kapalı
@@ -54,7 +68,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
   function buildSkins() {
     if (skins) return;
     skins = []; hiddenNames = [];
-    const u8 = skinBuf ? new Uint8Array(skinBuf) : null;
+    const u8 = skinBuf ? new Uint8Array(skinBuf) : null, HUM = D.segments.findIndex(x => x.key === 'humerus');
     for (const p of D.skin.parts) {
       if (p.kind !== 'muscle') continue;
       const r = model.items.get(p.id), g = r?.geo;
@@ -67,6 +81,21 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
         for (let j = 0; j < 4; j++) { I[4 * i + j] = u8[o + j]; W[4 * i + j] = u8[o + 4 + j] / 255; }
         const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), nx = nor.getX(i), ny = nor.getY(i), nz = nor.getZ(i);
         P[3 * i] = x; P[3 * i + 1] = y; P[3 * i + 2] = z; N0[3 * i] = nx; N0[3 * i + 1] = ny; N0[3 * i + 2] = nz;
+      }
+      const wd = WIDE_ON && WIDE[p.n];
+      if (wd) {
+        // origo ve insersiyo segmenti: uçlardaki köşelerin ağırlık oylaması
+        const va = new Float64Array(64), vb = new Float64Array(64);
+        for (let i = 0; i < nv; i++) { const t = u8[p.offset + 9 * i + 8] / 255; if (t > 0.1 && t < 0.9) continue; for (let j = 0; j < 4; j++) (t <= 0.1 ? va : vb)[I[4 * i + j]] += W[4 * i + j]; }
+        const A = va.indexOf(Math.max(...va)), B = vb.indexOf(Math.max(...vb));
+        if (A !== B) for (let i = 0; i < nv; i++) {
+          const t = u8[p.offset + 9 * i + 8] / 255, sm = (lo, hi) => { const x = Math.max(0, Math.min(1, (t - lo) / (hi - lo))); return x * x * (3 - 2 * x); };
+          I[4 * i + 2] = I[4 * i + 3] = 0; W[4 * i + 2] = W[4 * i + 3] = 0;
+          if (wd.length === 4 && HUM >= 0) {      // origo kemiği -> humerus -> insersiyo kemiği
+            const wa = 1 - sm(wd[0], wd[1]), wb = sm(wd[2], wd[3]);
+            I[4 * i] = HUM; I[4 * i + 1] = A; I[4 * i + 2] = B; W[4 * i] = Math.max(0, 1 - wa - wb); W[4 * i + 1] = wa; W[4 * i + 2] = wb;
+          } else { const w = sm(wd[0], wd[1]); I[4 * i] = A; I[4 * i + 1] = B; W[4 * i] = 1 - w; W[4 * i + 1] = w; }
+        }
       }
       // Şişme için: köşenin dinlenmedeki orta çizgiye en yakın noktasından uzaklık vektörü x karın profili sin(pi t)
       // (t: origo 0, insersiyo 1; uçlar yerinde kalır). Kas kısalınca köşe bu yönde dışarı itilir.
@@ -95,7 +124,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
         const a = ix[3 * t + k], b = ix[3 * t + k + 1], l = Math.hypot(P[3 * a] - P[3 * b], P[3 * a + 1] - P[3 * b + 1], P[3 * a + 2] - P[3 * b + 2]);
         if (l > 1e-4) { E.push(a, b); EL.push(l); }
       }
-      skins.push({ mesh, pa, na, P0: pos.array, N0, R, L0: p.L0 || 0, name: p.n, la: r.la || p.n, E, EL, bad: false, a: { n: nv, P, I, W, out: null }, li: byName.get(p.n), rest: true });
+      skins.push({ wide: !!wd, mesh, pa, na, P0: pos.array, N0, R, L0: p.L0 || 0, name: p.n, la: r.la || p.n, E, EL, bad: false, a: { n: nv, P, I, W, out: null }, li: byName.get(p.n), rest: true });
     }
   }
   function updateSkins() {
@@ -390,7 +419,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     pose: () => ({ ...pose }),
     setPose(q) { if (!active) return; anim = null; Object.assign(pose, q); applyPose(); live(true); },
     // denetim: bir kasın hızlı karışımını motion-kin skinLine ile karşılaştır (en büyük fark, cm)
-    skinCheck() { let m = 0; for (const x of skins || []) { x.a.out = new Float64Array(3 * x.a.n); const A = K.skinLine(out, x.a), p = x.pa.array; for (let i = 0; i < A.length; i++) m = Math.max(m, Math.abs(A[i] - p[i])); x.a.out = null; } return { hidden: (skins || []).filter(x => x.bad).map(x => x.name), parts: skins?.length || 0, verts: (skins || []).reduce((t, x) => t + x.a.n, 0), maxDiff: m }; },
+    skinCheck() { let m = 0; for (const x of skins || []) { x.a.out = new Float64Array(3 * x.a.n); const A = K.skinLine(out, x.a), p = x.pa.array; for (let i = 0; i < A.length; i++) m = Math.max(m, Math.abs(A[i] - p[i])); x.a.out = null; } return { wide: (skins || []).filter(x => x.wide).length, hidden: (skins || []).filter(x => x.bad).map(x => x.name), parts: skins?.length || 0, verts: (skins || []).reduce((t, x) => t + x.a.n, 0), maxDiff: m }; },
     handles: () => { const rect = stage.canvas.getBoundingClientRect(); return { elbow: screenOf(hElbow, rect), hand: screenOf(hHand, rect) }; },
   };
 }
