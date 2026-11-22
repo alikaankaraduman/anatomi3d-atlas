@@ -1,7 +1,8 @@
 // Kol hareketi modu (anahtar: move): sol kolun kemikleri ve tek kemiğe bağlı eklem parçaları, motion-kin.js'in segment
 // matrisleriyle katı cisim olarak hareket eder (klavikula ve skapula ritimle eşlik eder). Az gerilen kaslar deri
-// ağırlıklarıyla (models/motion-arm.bin) CPU'da bükülerek çizilir ve boy değişimine göre renklenir; eklemi saran, perde gibi
-// gerilen kaslar (STRETCHY) çizilmez. Panel bütün kasların boy değişimini motion.json'daki orta çizgilerden listeler.
+// ağırlıklarıyla (models/motion-arm.bin) CPU'da bükülerek çizilir, boy değişimine göre renklenir ve kısalınca kalınlaşır.
+// Bir kasın ağı bir duruşta bozuluyorsa (eklemi saran kaslar perde gibi gerilir) kas yalnız o duruşta gizlenir ve panelde
+// adıyla söylenir. Panel bütün kasların boy değişimini motion.json'daki orta çizgilerden listeler.
 // Birden çok segmente tutunan eklem parçaları (bağlar, kapsüller) kol dinlenme duruşundan ayrılınca gizlenir, çünkü
 // katı olarak taşınırlarsa eklemden kopmuş görünürler. Veri: public/data/motion.json (tools/motion-build.mjs üretir).
 import * as THREE from 'three';
@@ -17,13 +18,9 @@ const GROUPS = [
   ['Hand', [['wristFlex', 'Palmarflexion / Dorsalextension', -60, 60, 'Palmarflexion', 'Dorsalextension'], ['wristDev', 'Ulnar- / Radialabduktion', -25, 35, 'Ulnarabduktion', 'Radialabduktion']], ['palmar', 'dorsal', 'radial', 'ulnar']],
 ];
 const SLIDERS = Object.fromEntries(GROUPS.flatMap(g => g[1]).map(s => [s[0], s]));
-// Deri ağırlıklarıyla bükülünce eklem çevresinde perde gibi gerilen kaslar (validate-2.txt bölüm c: iki katını aşan kenar
-// payı % 5'ten çok ya da en uzun kenar 7 katından çok). Daha iyi bir bükme yöntemi gelene kadar ÇİZİLMEZLER.
-const STRETCHY = new Set(['Teres major muscle', 'Pectoralis minor muscle', 'Rhomboid minor muscle', 'Rhomboid major muscle', 'Latissimus dorsi muscle',
-  'Scapular spinal part of deltoid muscle', 'Acromial part of deltoid muscle', 'Clavicular part of deltoid muscle', 'Long head of triceps brachii', 'Supinator',
-  'Sternocostal head of pectoralis major muscle', 'Abdominal part of pectoralis major muscle', 'Coracobrachialis muscle', 'Anconeus muscle', 'Teres minor muscle',
-  'Extensor indicis', 'Humeral head of extensor carpi ulnaris', 'Levator scapulae', 'Medial head of triceps brachii', 'Abductor pollicis longus',
-  'Supraspinatus muscle', 'Serratus anterior muscle', 'Extensor carpi radialis brevis', 'Infraspinatus muscle', 'Extensor digiti minimi']);
+// Bir kas parçası, o duruşta ağı bozuluyorsa gizlenir (eklemi saran kaslarda deri ağırlıkları perde gibi gerer). Ölçü: örnek
+// kenarların dinlenmeye oranı. Gizleme eşikleri HIDE, yeniden gösterme eşikleri bunların 0.8 katı (titreme olmasın diye).
+const HIDE = { longShare: 0.06, max: 7, shortShare: 0.10 };   // > 2 kat uzayan kenar payı, en uzun kenar oranı, < 0.4 kat kısalan pay
 const fnv = a => { const b = new Uint8Array(a.buffer, a.byteOffset, a.byteLength); let h = 0x811c9dc5; for (let i = 0; i < b.length; i++) { h ^= b[i]; h = Math.imul(h, 0x01000193); } return h >>> 0; };
 const PLANE_MIN = -100, PLANE_MAX = 135;   // gövdenin içinden geçen duruşlar (düzlem 180 çevresi) kapalı
 
@@ -61,7 +58,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     for (const p of D.skin.parts) {
       if (p.kind !== 'muscle') continue;
       const r = model.items.get(p.id), g = r?.geo;
-      if (STRETCHY.has(p.n) || !u8 || !g) { hiddenNames.push(r?.la || p.n); continue; }
+      if (!u8 || !g) { hiddenNames.push(r?.la || p.n); continue; }
       const pos = g.attributes.position, nor = g.attributes.normal, nv = pos.count;
       if (nv !== p.verts || fnv(pos.array) !== p.sum || p.offset + 9 * nv > u8.length) { console.warn('Kol hareketi: kas ağı veriyle uyuşmuyor, çizilmedi:', p.n); hiddenNames.push(r.la || p.n); continue; }
       const P = new Float64Array(3 * nv), I = new Uint8Array(4 * nv), W = new Float64Array(4 * nv), N0 = new Float32Array(3 * nv);
@@ -71,26 +68,50 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
         const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), nx = nor.getX(i), ny = nor.getY(i), nz = nor.getZ(i);
         P[3 * i] = x; P[3 * i + 1] = y; P[3 * i + 2] = z; N0[3 * i] = nx; N0[3 * i + 1] = ny; N0[3 * i + 2] = nz;
       }
+      // Şişme için: köşenin dinlenmedeki orta çizgiye en yakın noktasından uzaklık vektörü x karın profili sin(pi t)
+      // (t: origo 0, insersiyo 1; uçlar yerinde kalır). Kas kısalınca köşe bu yönde dışarı itilir.
+      const R = new Float32Array(3 * nv), ln = p.line || [];
+      for (let i = 0; i < nv && ln.length > 1; i++) {
+        const x = P[3 * i], y = P[3 * i + 1], z = P[3 * i + 2];
+        let bd = Infinity, cx = x, cy = y, cz = z;
+        for (let k = 1; k < ln.length; k++) {
+          const a = ln[k - 1].p, b = ln[k].p, ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], l2 = ux * ux + uy * uy + uz * uz;
+          const tt = l2 > 1e-9 ? Math.max(0, Math.min(1, ((x - a[0]) * ux + (y - a[1]) * uy + (z - a[2]) * uz) / l2)) : 0;
+          const qx = a[0] + tt * ux, qy = a[1] + tt * uy, qz = a[2] + tt * uz, d = (x - qx) ** 2 + (y - qy) ** 2 + (z - qz) ** 2;
+          if (d < bd) { bd = d; cx = qx; cy = qy; cz = qz; }
+        }
+        const w = Math.sin(Math.PI * u8[p.offset + 9 * i + 8] / 255);
+        R[3 * i] = (x - cx) * w; R[3 * i + 1] = (y - cy) * w; R[3 * i + 2] = (z - cz) * w;
+      }
       const geo = new THREE.BufferGeometry();
       const pa = new THREE.BufferAttribute(new Float32Array(pos.array), 3), na = new THREE.BufferAttribute(N0.slice(), 3);
       pa.setUsage(THREE.DynamicDrawUsage); na.setUsage(THREE.DynamicDrawUsage);
       geo.setAttribute('position', pa); geo.setAttribute('normal', na); geo.setAttribute('color', g.attributes.color); geo.setIndex(g.index);
       const mesh = new THREE.Mesh(geo, (r.o ? model.mat.solidOpen : model.mat.solid).clone());
       mesh.frustumCulled = false; mesh.raycast = () => {}; mroot.add(mesh);
-      skins.push({ mesh, pa, na, P0: pos.array, N0, a: { n: nv, P, I, W, out: null }, li: byName.get(p.n), rest: true });
+      // bozulma ölçüsü için örnek kenarlar (en çok 400 üçgenin ikişer kenarı) ve dinlenme boyları
+      const ix = g.index.array, tri = ix.length / 3, step = Math.max(1, Math.floor(tri / 400)), E = [], EL = [];
+      for (let t = 0; t < tri; t += step) for (let k = 0; k < 2; k++) {
+        const a = ix[3 * t + k], b = ix[3 * t + k + 1], l = Math.hypot(P[3 * a] - P[3 * b], P[3 * a + 1] - P[3 * b + 1], P[3 * a + 2] - P[3 * b + 2]);
+        if (l > 1e-4) { E.push(a, b); EL.push(l); }
+      }
+      skins.push({ mesh, pa, na, P0: pos.array, N0, R, L0: p.L0 || 0, name: p.n, la: r.la || p.n, E, EL, bad: false, a: { n: nv, P, I, W, out: null }, li: byName.get(p.n), rest: true });
     }
   }
   function updateSkins() {
     if (!skins) return;
     for (const s of skins) {
       const pa = s.pa.array, na = s.na.array;
+      const Lnow = s.li === undefined ? 0 : K.lineLength(out, lines[s.li].cl);
+      // hacim korunumu: kalınlık çarpanı sqrt(L0 / L), 0.85 ile 1.3 arasında (L0: model duruşundaki boy)
+      const g = away && Lnow > 0 && s.L0 > 0 ? Math.max(0.85, Math.min(1.3, Math.sqrt(s.L0 / Lnow))) - 1 : 0;
       if (!away) { if (!s.rest) { pa.set(s.P0); na.set(s.N0); s.rest = true; s.pa.needsUpdate = s.na.needsUpdate = true; } }
       else {
         // motion-kin'in karışım kuralı (skinLine ile aynı sonuç, ama köşe başına ayırma yapmadan): ağırlıklı ikili
         // kuaterniyonlar olduğu gibi toplanır, gerçek kısmın boyuna bölünür. Tek segmente bağlı köşe doğrudan matrisle taşınır.
-        const P = s.a.P, I = s.a.I, W = s.a.W, N = s.N0, Q = out.dq, Mx = out.mats, nv = s.a.n;
+        const P = s.a.P, I = s.a.I, W = s.a.W, N = s.N0, Q = out.dq, Mx = out.mats, nv = s.a.n, R = s.R;
         for (let v = 0; v < nv; v++) {
-          const i = 3 * v, j = 4 * v, px = P[i], py = P[i + 1], pz = P[i + 2], nx = N[i], ny = N[i + 1], nz = N[i + 2];
+          const i = 3 * v, j = 4 * v, px = P[i] + g * R[i], py = P[i + 1] + g * R[i + 1], pz = P[i + 2] + g * R[i + 2], nx = N[i], ny = N[i + 1], nz = N[i + 2];
           if (W[j] === 1) {
             const m = 16 * I[j];
             pa[i] = Mx[m] * px + Mx[m + 4] * py + Mx[m + 8] * pz + Mx[m + 12]; pa[i + 1] = Mx[m + 1] * px + Mx[m + 5] * py + Mx[m + 9] * pz + Mx[m + 13]; pa[i + 2] = Mx[m + 2] * px + Mx[m + 6] * py + Mx[m + 10] * pz + Mx[m + 14];
@@ -115,8 +136,21 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
         }
         s.rest = false; s.pa.needsUpdate = s.na.needsUpdate = true;
       }
+      // bu duruşta ağ bozuluyor mu? (dinlenmede hiçbir kas gizlenmez)
+      if (!away) s.bad = false;
+      else {
+        const E = s.E, EL = s.EL, ne = EL.length; let lo = 0, sh = 0, mx = 0;
+        for (let e = 0; e < ne; e++) {
+          const a = 3 * E[2 * e], b = 3 * E[2 * e + 1], q = Math.hypot(pa[a] - pa[b], pa[a + 1] - pa[b + 1], pa[a + 2] - pa[b + 2]) / EL[e];
+          if (q > 2) lo++; else if (q < 0.4) sh++;
+          if (q > mx) mx = q;
+        }
+        const k = s.bad ? 0.8 : 1;
+        s.bad = ne > 0 && (lo / ne > HIDE.longShare * k || mx > HIDE.max * k || sh / ne > HIDE.shortShare * k);
+      }
+      s.mesh.visible = !s.bad;
       // renk: kısalan sıcak, uzayan soğuk; % 2 içinde nötr, % 25'te tam
-      const L0 = s.li === undefined ? 0 : baseLen[s.li], d = L0 > 0 ? (K.lineLength(out, lines[s.li].cl) - L0) / L0 : 0;
+      const L0 = s.li === undefined ? 0 : baseLen[s.li], d = L0 > 0 ? (Lnow - L0) / L0 : 0;
       const k = Math.abs(d) < 0.02 ? 0 : Math.min(1, Math.abs(d) / 0.25), c = s.mesh.material.color;
       const e = s.mesh.material.emissive;      // kas zaten kırmızı: çarpan tek başına görünmez, hafif ışıma eklenir
       if (d < 0) { c.setRGB(1, 1 - 0.2 * k, 1 - 0.5 * k); e.setRGB(0.5 * k, 0.24 * k, 0); } else { c.setRGB(1 - 0.6 * k, 1 - 0.3 * k, 1); e.setRGB(0, 0.16 * k, 0.5 * k); }
@@ -163,7 +197,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
   }
   const lengthsAt = q => { K.fk(KM, K.clampPose(KM, q, {}), out2); return lines.map(l => K.lineLength(out2, l.cl)); };
   const neutral = () => K.clampPose(KM, K.neutralPose(), {});
-  function setBase(q) { baseLen = lengthsAt(q || neutral()); if (active) { K.fk(KM, pose, out); updateSkins(); stage.requestRender(); } }
+  function setBase(q) { baseLen = lengthsAt(q || KM.rest); if (active) { K.fk(KM, pose, out); updateSkins(); stage.requestRender(); } }
 
   // Hareketin başı ve sonu: öbür koordinatlar şimdiki duruştan kalır; rotasyon dirsek bükülüyken görünür
   function movePoses(m) {
@@ -196,7 +230,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
   function listsHTML() {
     const ch = lines.map((l, i) => ({ l, d: baseLen[i] > 0 ? (K.lineLength(out, l.cl) - baseLen[i]) / baseLen[i] : 0 }));
     const sh = ch.filter(x => x.d <= -0.02).sort((a, b) => a.d - b.d).slice(0, 6), lo = ch.filter(x => x.d >= 0.02).sort((a, b) => b.d - a.d).slice(0, 4);
-    let h = `<p class="mv-base">Boylar şuna göre: ${mv ? '<b lang="de">' + esc(mv.de) + '</b> hareketinin başlangıcı' : 'nötr duruş (Neutral-Null)'}</p>`;
+    let h = `<p class="mv-base">Boylar şuna göre: ${mv ? '<b lang="de">' + esc(mv.de) + '</b> hareketinin başlangıcı' : 'model duruşu (modun açıldığı duruş)'}</p>`;
     h += `<h4>En çok kısalan kaslar</h4>${sh.length ? `<ul class="mv-list">${sh.map(x => mrow(x.l, x.d)).join('')}</ul>` : '<p class="mv-dim">Belirgin kısalan kas yok (eşik % 2).</p>'}`;
     h += `<h4>Uzayan kaslar</h4>${lo.length ? `<ul class="mv-list">${lo.map(x => mrow(x.l, x.d)).join('')}</ul>` : '<p class="mv-dim">Belirgin uzayan kas yok.</p>'}`;
     if (mv?.textbook?.length) {
@@ -208,6 +242,11 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
       }).join('')}</ul>`;
     } else if (mv) h += '<p class="mv-dim">Bu hareket için ders kitabı kas listesi yok.</p>';
     return h;
+  }
+  // Bu duruşta gizlenen kaslar: eklemi sardıkları için bugünkü bükme yöntemiyle perde gibi geriliyorlar
+  function hiddenHTML() {
+    const h = (skins || []).filter(x => x.bad).map(x => x.la).concat(hiddenNames);
+    return h.length ? `Bu duruşta çizilemeyen kaslar (${h.length}): <span lang="la">${h.map(esc).join(', ')}</span>. Eklemi sardıkları için bugünkü yöntemle bozuluyorlar; boy değişimleri yine listelerde.` : 'Bu duruşta bütün kol kasları çiziliyor.';
   }
   function panelHTML() {
     if (!D) return '<p class="htext">Kol hareketi modu yükleniyor…</p>';
@@ -222,8 +261,8 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
       <div class="btns"><button data-mva="neutral" title="Neutral-Null sıfır duruşu">Nötr duruş</button><button data-mva="rest" title="Modelin kendi duruşu">Model duruşu</button></div>
       ${groups}
       <div id="mv-lists">${listsHTML()}</div>
-      <p class="htext mv-note">Geometrik bir modeldir, fizik değildir: kas boyu, origo ile insersiyo arasındaki orta çizgiden hesaplanır ve eklemi saran kaslarda yanılabilir. Çizilen kaslar kısalınca turuncuya, uzayınca maviye döner (başlangıca göre); kalınlaşma henüz yok. Bağlar ve eklem kapsülleri, kol model duruşundan ayrılınca gizlenir.</p>
-      ${skins?.length ? `<details class="mv-note"><summary>Henüz çizilmeyen kaslar (${hiddenNames.length})</summary><p lang="la">${hiddenNames.map(esc).join(', ')}</p><p>Bu kaslar eklemi sardıkları için bugünkü yöntemle bükülünce perde gibi geriliyor; boy değişimleri yine listelerde.</p></details>` : '<p class="htext mv-note">Kas ağları yüklenemedi: kaslar çizilmiyor, boy değişimleri listelerde.</p>'}
+      <p class="htext mv-note">Geometrik bir modeldir, fizik değildir: kas boyu, origo ile insersiyo arasındaki orta çizgiden hesaplanır ve eklemi saran kaslarda yanılabilir. Çizilen kaslar kısalınca turuncuya, uzayınca maviye döner (başlangıca göre) ve kısaldıkça kalınlaşır (hacim korunumu, yaklaşık). Bağlar ve eklem kapsülleri, kol model duruşundan ayrılınca gizlenir.</p>
+      ${skins?.length ? `<p class="htext mv-note" id="mv-hidden">${hiddenHTML()}</p>` : '<p class="htext mv-note">Kas ağları yüklenemedi: kaslar çizilmiyor, boy değişimleri listelerde.</p>'}
       <div class="btns"><button data-mva="exit" title="Kol hareketi modundan çık (Esc)">Moddan çık</button></div>`;
   }
   // Sürükleme ve oynatma sırasında panel yeniden kurulmaz: yalnız değişen düğümler yazılır
@@ -232,6 +271,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     const rd = document.getElementById('mv-read'); if (!rd) return;
     rd.innerHTML = readHTML();
     const ls = document.getElementById('mv-lists'); if (ls) ls.innerHTML = listsHTML();
+    const hd = document.getElementById('mv-hidden'); if (hd) hd.innerHTML = hiddenHTML();
     for (const c of K.COORDS) {
       const o = document.getElementById('mv-o-' + c); if (o) o.textContent = valText(c);
       const i = document.querySelector(`input[data-mvc="${c}"]`); if (i) i.value = String(Math.round(pose[c]));
@@ -350,7 +390,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     pose: () => ({ ...pose }),
     setPose(q) { if (!active) return; anim = null; Object.assign(pose, q); applyPose(); live(true); },
     // denetim: bir kasın hızlı karışımını motion-kin skinLine ile karşılaştır (en büyük fark, cm)
-    skinCheck() { let m = 0; for (const x of skins || []) { x.a.out = new Float64Array(3 * x.a.n); const A = K.skinLine(out, x.a), p = x.pa.array; for (let i = 0; i < A.length; i++) m = Math.max(m, Math.abs(A[i] - p[i])); x.a.out = null; } return { parts: skins?.length || 0, verts: (skins || []).reduce((t, x) => t + x.a.n, 0), maxDiff: m }; },
+    skinCheck() { let m = 0; for (const x of skins || []) { x.a.out = new Float64Array(3 * x.a.n); const A = K.skinLine(out, x.a), p = x.pa.array; for (let i = 0; i < A.length; i++) m = Math.max(m, Math.abs(A[i] - p[i])); x.a.out = null; } return { hidden: (skins || []).filter(x => x.bad).map(x => x.name), parts: skins?.length || 0, verts: (skins || []).reduce((t, x) => t + x.a.n, 0), maxDiff: m }; },
     handles: () => { const rect = stage.canvas.getBoundingClientRect(); return { elbow: screenOf(hElbow, rect), hand: screenOf(hHand, rect) }; },
   };
 }
