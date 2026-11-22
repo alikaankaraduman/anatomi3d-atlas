@@ -50,6 +50,7 @@ const WIDE_ON = !(typeof location !== 'undefined' && /[?&]mvwide=0/.test(locatio
 const KEEP = new Set(['Latissimus dorsi muscle', 'Sternocostal head of pectoralis major muscle', 'Medial head of triceps brachii', 'Anconeus muscle']);
 const SHOW_BAD = typeof location !== 'undefined' && /[?&]mvshow=1/.test(location.search);   // denetim: bozulan kasları da çiz
 const STRAIGHT = new Set(['Coracobrachialis muscle', 'Flexor carpi radialis', 'Ulnar head of extensor carpi ulnaris', 'Brachioradialis muscle']);
+const JOINT_LBS = !(typeof location !== 'undefined' && /[?&]mvlbs=0/.test(location.search));   // denetim: ?mvlbs=0 ikili kuaterniyon
 const HIDE = { longShare: 0.06, max: 7, shortShare: 0.10 };   // > 2 kat uzayan kenar payı, en uzun kenar oranı, < 0.4 kat kısalan pay
 // derlenmiş bir çizginin dinlenme boyu (şişme çarpanı boy okumasıyla aynı çizgiden hesaplansın diye)
 const restLen = cl => { let L = 0; for (let k = 1; k < cl.n; k++) L += Math.hypot(cl.P[3 * k] - cl.P[3 * k - 3], cl.P[3 * k + 1] - cl.P[3 * k - 2], cl.P[3 * k + 2] - cl.P[3 * k - 1]); return L; };
@@ -178,7 +179,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
         const a = ix[3 * t + k], b = ix[3 * t + k + 1], l = Math.hypot(P[3 * a] - P[3 * b], P[3 * a + 1] - P[3 * b + 1], P[3 * a + 2] - P[3 * b + 2]);
         if (l > 1e-4) { E.push(a, b); EL.push(l); }
       }
-      skins.push({ segs: [...sgs], mode: 'rest', gDone: 0, joint: isJ, wide: !!wd || !!path, path, lin, mesh, pa, na, P0: pos.array, N0, R, L0: li0 === undefined ? 0 : restLen(lines[li0].len), name: p.n, la: r.la || p.n, E, EL, bad: false, a: { n: nv, P, I, W, out: null }, li: byName.get(p.n), rest: true });
+      skins.push({ lbs: isJ && JOINT_LBS, segs: [...sgs], mode: 'rest', gDone: 0, joint: isJ, wide: !!wd || !!path, path, lin, mesh, pa, na, P0: pos.array, N0, R, L0: li0 === undefined ? 0 : restLen(lines[li0].len), name: p.n, la: r.la || p.n, E, EL, bad: false, a: { n: nv, P, I, W, out: null }, li: byName.get(p.n), rest: true });
     }
   }
   // Yol izleyen bükme: orta çizgi (cl) önce duruşa taşınır
@@ -239,6 +240,17 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
             const m = 16 * I[j];
             pa[i] = Mx[m] * px + Mx[m + 4] * py + Mx[m + 8] * pz + Mx[m + 12]; pa[i + 1] = Mx[m + 1] * px + Mx[m + 5] * py + Mx[m + 9] * pz + Mx[m + 13]; pa[i + 2] = Mx[m + 2] * px + Mx[m + 6] * py + Mx[m + 10] * pz + Mx[m + 14];
             na[i] = Mx[m] * nx + Mx[m + 4] * ny + Mx[m + 8] * nz; na[i + 1] = Mx[m + 1] * nx + Mx[m + 5] * ny + Mx[m + 9] * nz; na[i + 2] = Mx[m + 2] * nx + Mx[m + 6] * ny + Mx[m + 10] * nz;
+            continue;
+          }
+          if (s.lbs) {      // eklem parçaları: konumların doğrusal karışımı (dört ağırlığa kadar)
+            let x = 0, y = 0, z = 0, ux = 0, uy = 0, uz = 0;
+            for (let k = 0; k < 4; k++) {
+              const w = W[j + k]; if (!w) continue; const m = 16 * I[j + k];
+              x += w * (Mx[m] * px + Mx[m + 4] * py + Mx[m + 8] * pz + Mx[m + 12]); y += w * (Mx[m + 1] * px + Mx[m + 5] * py + Mx[m + 9] * pz + Mx[m + 13]); z += w * (Mx[m + 2] * px + Mx[m + 6] * py + Mx[m + 10] * pz + Mx[m + 14]);
+              ux += w * (Mx[m] * nx + Mx[m + 4] * ny + Mx[m + 8] * nz); uy += w * (Mx[m + 1] * nx + Mx[m + 5] * ny + Mx[m + 9] * nz); uz += w * (Mx[m + 2] * nx + Mx[m + 6] * ny + Mx[m + 10] * nz);
+            }
+            const ul = Math.hypot(ux, uy, uz) || 1;
+            pa[i] = x; pa[i + 1] = y; pa[i + 2] = z; na[i] = ux / ul; na[i + 1] = uy / ul; na[i + 2] = uz / ul;
             continue;
           }
           if (s.lin) {      // düz lif: iki kemiğin taşıdığı konumların doğrusal karışımı
