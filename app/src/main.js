@@ -501,7 +501,7 @@ ui.registerPanel('brain', { html: brain.panelHTML, click: brain.click });
 const musclesReady = loadMuscles().then(mu => { ui.setMuscles(mu); return mu; }).catch(e => { console.warn('muscles.json yüklenemedi:', e); return null; });
 loco = createLoco({ stage, model, state, refresh, defer, ui, glow, viewLayers, endStudy, musclesReady });
 ui.registerPanel('loco', { html: loco.panelHTML, click: loco.click });
-move = createMotion({ stage, model, state, refresh, defer, viewLayers, endStudy, tools, glow });
+move = createMotion({ stage, model, state, refresh, defer, viewLayers, endStudy, tools, glow, musclesReady });
 ui.registerPanel('move', { html: move.panelHTML, click: move.click });
 // çalışma turları: örnek, panel ve "Çalışma modları" ızgarasındaki kısa düğme listeden kurulur (kalp, beyin ve hareket
 // düğmelerinin arkasına; düğme kimliği <anahtar>-mode, title tam ad ve içerik)

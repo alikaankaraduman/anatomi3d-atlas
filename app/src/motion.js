@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import * as K from './motion-kin.js';
 import { esc } from './text.js';
+import { cardHTML } from './muscles.js';
 
 // Sürgüler: [koordinat, etiket, alt, üst, pozitif terim, negatif terim]
 const GROUPS = [
@@ -47,7 +48,9 @@ const HIDE = { longShare: 0.06, max: 7, shortShare: 0.10 };   // > 2 kat uzayan 
 const fnv = a => { const b = new Uint8Array(a.buffer, a.byteOffset, a.byteLength); let h = 0x811c9dc5; for (let i = 0; i < b.length; i++) { h ^= b[i]; h = Math.imul(h, 0x01000193); } return h >>> 0; };
 const PLANE_MIN = -100, PLANE_MAX = 135;   // gövdenin içinden geçen duruşlar (düzlem 180 çevresi) kapalı
 
-export function createMotion({ stage, model, state, refresh, defer, viewLayers, endStudy, tools, glow }) {
+export function createMotion({ stage, model, state, refresh, defer, viewLayers, endStudy, tools, glow, musclesReady }) {
+  let MU = null;                         // kas kartları (muscles.json): seçilen kasın Ursprung, Ansatz, Innervation, Funktion satırları
+  musclesReady?.then(m => { MU = m; }, () => {});
   let D = null, KM = null, out = null, out2 = null, failed = false;
   let active = false, enterSeq = 0;
   const pose = {};
@@ -334,7 +337,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
       + `<b>Ellenbogen:</b> ${t(r.elbow)} · <b>Unterarm:</b> ${t(r.forearm)}<br>`
       + `<b>Hand:</b> ${t(r.wrist.flex)}, ${t(r.wrist.dev)}`;
   }
-  const pct = d => (d > 0 ? '+' : '−') + Math.abs(d * 100).toFixed(0) + ' %';
+  const pct = d => (Math.abs(d) < 0.005 ? '0 %' : (d > 0 ? '+' : '−') + Math.abs(d * 100).toFixed(0) + ' %');
   const mrow = (l, d) => `<li><span lang="la">${esc(l.la)}</span>${l.de ? `<small lang="de">${esc(l.de)}</small>` : ''}<b class="${d < 0 ? 'mv-sh' : 'mv-lo'}">${pct(d)}</b></li>`;
   function listsHTML() {
     const ch = lines.map((l, i) => ({ l, d: baseLen[i] > 0 ? (K.lineLength(out, l.cl) - baseLen[i]) / baseLen[i] : 0 }));
@@ -376,7 +379,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
   function pickHTML() {
     if (!picked) return '<p class="mv-dim">Bir kasa tıkla: adı ve boy değişimi burada görünür.</p>';
     const l = picked.li === undefined ? null : lines[picked.li], L0 = l ? baseLen[picked.li] : 0, d = L0 > 0 ? (K.lineLength(out, l.cl) - L0) / L0 : 0;
-    return `<p class="mv-picked"><b lang="la">${esc(picked.la)}</b>${l?.de ? ` <small lang="de">${esc(l.de)}</small>` : ''}<br>Boy değişimi: <b class="${d < 0 ? 'mv-sh' : 'mv-lo'}">${pct(d)}</b>${picked.bad ? ' · bu duruşta çizilemiyor' : ''}</p>`;
+    return `<p class="mv-picked"><b lang="la">${esc(picked.la)}</b>${l?.de ? ` <small lang="de">${esc(l.de)}</small>` : ''}<br>Boy değişimi: <b class="${d < 0 ? 'mv-sh' : 'mv-lo'}">${pct(d)}</b>${picked.bad ? ' · bu duruşta çizilemiyor' : ''}</p>${MU?.muscles?.[picked.name] ? cardHTML([MU.muscles[picked.name]]) : ''}`;
   }
   function panelHTML() {
     if (!D) return '<p class="htext">Kol hareketi modu yükleniyor…</p>';
