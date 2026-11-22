@@ -44,6 +44,11 @@ const LIN = {
   'Sternocostal head of pectoralis major muscle': [0.35, 1], 'Supinator': [0.1, 0.9],
 };      // denendi, daha kötü ya da kazançsız: latissimus [0.6, 1], triceps mediyal başı [0.7, 1], anconeus [0.2, 0.9]
 const WIDE_ON = !(typeof location !== 'undefined' && /[?&]mvwide=0/.test(location.search));   // denetim: ?mvwide=0 eski ağırlıklar
+// Ölçü bu dört kası uç duruşlarda (abduksiyon / anteversiyon 170, dirsek 150) "bozuk" sayıyordu; ?mvshow=1 ile çizdirilip
+// bakıldı (2026-11-23): gergin ama tutarlı görünüyorlar, bu yüzden gizlenmezler. Düzgün uzama da "iki katını aşan kenar"
+// ölçüsünü tetikler; ölçü perde gibi yerel bozulmayı yakalamak içindir.
+const KEEP = new Set(['Latissimus dorsi muscle', 'Sternocostal head of pectoralis major muscle', 'Medial head of triceps brachii', 'Anconeus muscle']);
+const SHOW_BAD = typeof location !== 'undefined' && /[?&]mvshow=1/.test(location.search);   // denetim: bozulan kasları da çiz
 const HIDE = { longShare: 0.06, max: 7, shortShare: 0.10 };   // > 2 kat uzayan kenar payı, en uzun kenar oranı, < 0.4 kat kısalan pay
 const fnv = a => { const b = new Uint8Array(a.buffer, a.byteOffset, a.byteLength); let h = 0x811c9dc5; for (let i = 0; i < b.length; i++) { h ^= b[i]; h = Math.imul(h, 0x01000193); } return h >>> 0; };
 const PLANE_MIN = -100, PLANE_MAX = 135;   // gövdenin içinden geçen duruşlar (düzlem 180 çevresi) kapalı
@@ -249,9 +254,9 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
           if (q > mx) mx = q;
         }
         const k = s.bad ? 0.8 : 1;
-        s.bad = ne > 0 && (lo / ne > HIDE.longShare * k || mx > HIDE.max * k || sh / ne > HIDE.shortShare * k);
+        s.bad = ne > 0 && !KEEP.has(s.name) && (lo / ne > HIDE.longShare * k || mx > HIDE.max * k || sh / ne > HIDE.shortShare * k);
       }
-      s.mesh.visible = s.joint ? away && !s.bad : !s.bad;
+      s.mesh.visible = s.joint ? away && !s.bad : !s.bad || SHOW_BAD;
       // renk: kısalan sıcak, uzayan soğuk; % 2 içinde nötr, % 25'te tam
       const L0 = s.li === undefined ? 0 : baseLen[s.li], d = L0 > 0 ? (Lnow - L0) / L0 : 0;
       const k = Math.abs(d) < 0.02 || s.joint ? 0 : Math.min(1, Math.abs(d) / 0.3), c = s.mesh.material.color;
