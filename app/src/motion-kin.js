@@ -859,3 +859,6 @@ export function lineLength(o, cl, dq = true) {
 // 10. İkili kuaterniyonların işareti (bütünleştirme düzeltmesi): matristen rw >= 0 seçmek yerine zincir boyunca yarım açılı
 //     kuaterniyonlar çarpılır; karışımda köşe başına işaret çevrilmez. Eski kuralda skapula + humerus çifti izinli aralıkta
 //     180 derece bağıl dönmeye varıp sıçrıyordu (tools/_qawork/motion-validate.mjs bölüm 0).
+
+// bacak kinematiği (motion-kin-leg.js) aynı yardımcıları kullanır
+export { rot as rot3, mul as mul3, apply as apply3, toDualQuat, qAx, qMul, clamp, num };

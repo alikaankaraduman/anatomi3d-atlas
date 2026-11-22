@@ -1,4 +1,4 @@
-// Kol hareketi modu (anahtar: move): sol kolun kemikleri ve tek kemiğe bağlı eklem parçaları, motion-kin.js'in segment
+// Hareket modu (anahtar: move), iki uzuv: kol (motion-kin.js) ve bacak (motion-kin-leg.js, ilk adım: kemikler). Kol: sol kolun kemikleri ve tek kemiğe bağlı eklem parçaları, motion-kin.js'in segment
 // matrisleriyle katı cisim olarak hareket eder (klavikula ve skapula ritimle eşlik eder). Az gerilen kaslar deri
 // ağırlıklarıyla (models/motion-arm.bin) CPU'da bükülerek çizilir, boy değişimine göre renklenir ve kısalınca kalınlaşır.
 // Bir kasın ağı bir duruşta bozuluyorsa (eklemi saran kaslar perde gibi gerilir) kas yalnız o duruşta gizlenir ve panelde
@@ -6,7 +6,8 @@
 // Birden çok segmente tutunan eklem parçaları (bağlar, kapsüller) kol dinlenme duruşundan ayrılınca gizlenir, çünkü
 // katı olarak taşınırlarsa eklemden kopmuş görünürler. Veri: public/data/motion.json (tools/motion-build.mjs üretir).
 import * as THREE from 'three';
-import * as K from './motion-kin.js';
+import * as KA from './motion-kin.js';
+import * as KL from './motion-kin-leg.js';
 import { esc } from './text.js';
 import { cardHTML } from './muscles.js';
 
@@ -18,7 +19,6 @@ const GROUPS = [
   ['Unterarm', [['forearm', 'Pronation / Supination', -85, 85, 'Pronation', 'Supination']], ['pro', 'sup']],
   ['Hand', [['wristFlex', 'Palmarflexion / Dorsalextension', -60, 60, 'Palmarflexion', 'Dorsalextension'], ['wristDev', 'Ulnar- / Radialabduktion', -25, 35, 'Ulnarabduktion', 'Radialabduktion']], ['palmar', 'dorsal', 'radial', 'ulnar']],
 ];
-const SLIDERS = Object.fromEntries(GROUPS.flatMap(g => g[1]).map(s => [s[0], s]));
 // Bir kas parçası, o duruşta ağı bozuluyorsa gizlenir (eklemi saran kaslarda deri ağırlıkları perde gibi gerer). Ölçü: örnek
 // kenarların dinlenmeye oranı. Gizleme eşikleri HIDE, yeniden gösterme eşikleri bunların 0.8 katı (titreme olmasın diye).
 // Eklemi saran kaslarda dar geçiş kuşağı bütün dönmeyi birkaç üçgene yığar. Bu kaslarda .bin ağırlıkları yerine geniş
@@ -55,13 +55,56 @@ const HIDE = { longShare: 0.06, max: 7, shortShare: 0.10 };   // > 2 kat uzayan 
 // derlenmiş bir çizginin dinlenme boyu (şişme çarpanı boy okumasıyla aynı çizgiden hesaplansın diye)
 const FAN = [117, 122.5, 128];   // trapezius pars ascendens: lif başlangıçlarının yüksekliği (cm), Procc. spinosi T5-T12
 // yelpaze çizgisi (cl.fan: lif listesi) için boy = liflerin ortalaması
-const lenOf = (o, cl) => (cl.fan ? cl.fan.reduce((t, c) => t + K.lineLength(o, c), 0) / cl.fan.length : K.lineLength(o, cl));
+const lenOf = (o, cl) => (cl.fan ? cl.fan.reduce((t, c) => t + KA.lineLength(o, c), 0) / cl.fan.length : KA.lineLength(o, cl));
 const restLen = cl => (cl.fan ? cl.fan.reduce((t, c) => t + restLen1(c), 0) / cl.fan.length : restLen1(cl));
 const restLen1 = cl => { let L = 0; for (let k = 1; k < cl.n; k++) L += Math.hypot(cl.P[3 * k] - cl.P[3 * k - 3], cl.P[3 * k + 1] - cl.P[3 * k - 2], cl.P[3 * k + 2] - cl.P[3 * k - 1]); return L; };
 const fnv = a => { const b = new Uint8Array(a.buffer, a.byteOffset, a.byteLength); let h = 0x811c9dc5; for (let i = 0; i < b.length; i++) { h ^= b[i]; h = Math.imul(h, 0x01000193); } return h >>> 0; };
 const PLANE_MIN = -100, PLANE_MAX = 135;   // gövdenin içinden geçen duruşlar (düzlem 180 çevresi) kapalı
+const LEG_GROUPS = [
+  ['Hüfte', [['hipFlex', 'Flexion / Extension', -15, 130, 'Flexion', 'Extension'], ['hipAbd', 'Abduktion / Adduktion', -25, 40, 'Abduktion', 'Adduktion'], ['hipRot', 'Innen- / Außenrotation', -45, 35, 'Innenrotation', 'Außenrotation']], ['hFlex', 'hExt', 'hAbd', 'hAdd', 'hAR', 'hIR']],
+  ['Knie', [['knee', 'Flexion / Extension', -5, 140, 'Flexion', 'Extension']], ['kFlex', 'kExt']],
+  ['Sprunggelenke', [['ankle', 'OSG: Dorsalextension / Plantarflexion', -45, 20, 'Dorsalextension', 'Plantarflexion'], ['subtalar', 'USG: Pronation / Supination', -30, 15, 'Pronation', 'Supination']], ['dors', 'plan', 'sup', 'pron']],
+];
+// Uzuv tanımları: veri, kinematik, sürgüler, tutamaçlar, okuma, metinler. Mod kodu ikisinde aynıdır.
+const LIMBS = {
+  arm: {
+    key: 'arm', K: KA, url: 'data/motion.json', GROUPS, chip: 'Kol hareketi', side: 'sol kol', what: 'kol',
+    help: 'Turuncu topu (dirsek) sürükle: omuz hareket eder. Mavi topu (el) sürükle: dirsek bükülür. Ya da sürgüleri ve ▶ düğmelerini kullan.',
+    handles: [{ k: 'hand', pt: 'wrist', color: 0x35c8f5, solve: (K, KM, pose, ray) => K.solveHand(KM, pose, ray).pose },
+      { k: 'elbow', pt: 'elbow', color: 0xffa23a, solve: (K, KM, pose, ray, drag) => { const r = K.solveElbow(KM, pose, ray, { side: drag.side, edge: 0.9 }); drag.side = r.side; return r.pose; } }],
+    guard: q => { if (q.elev > 2) { const p = KA.wrap180(q.plane); q.plane = p > PLANE_MAX ? PLANE_MAX : p < PLANE_MIN ? PLANE_MIN : p; } },
+    from: (m, pose) => {
+      const from = { ...(m.from || (m.set.elev !== undefined ? { plane: m.set.plane, elev: 0 } : {})) };
+      if ((m.key === 'ar' || m.key === 'ir') && pose.elbow < 45) from.elbow = 90;
+      if (m.key === 'retro') { from.plane = 90; from.elev = 60; }      // retroversiyon öne kaldırılmış koldan başlar (latissimus, teres major)
+      return from;
+    },
+    read: (K, KM, pose, deg) => {
+      const r = K.readout(KM, pose), s = r.shoulder, t = x => esc(x.de) + ' ' + deg(x.abs);
+      return `<b>Schulter:</b> ${esc(s.de)} ${deg(s.elev)} <span class="mv-dim">(glenohumeral ${deg(s.gh)}, Skapula ${deg(s.scap)})</span>, ${t(s.rot)}<br>`
+        + `<b>Schultergürtel:</b> ${t(r.girdle.elev)}, ${t(r.girdle.prot)}<br>`
+        + `<b>Ellenbogen:</b> ${t(r.elbow)} · <b>Unterarm:</b> ${t(r.forearm)}<br>`
+        + `<b>Hand:</b> ${t(r.wrist.flex)}, ${t(r.wrist.dev)}`;
+    },
+    box: [[-6, 80, -20], [64, 186, 26], [0.28, 0.06, 1]],
+  },
+  leg: {
+    key: 'leg', K: KL, url: 'data/motion-leg.json', GROUPS: LEG_GROUPS, chip: 'Bacak hareketi', side: 'sol bacak', what: 'bacak',
+    help: 'Turuncu topu (diz) sürükle: kalça hareket eder. Mavi topu (ayak) sürükle: diz bükülür. Ya da sürgüleri ve ▶ düğmelerini kullan. İlk adım: kemikler ve eklem parçaları oynar; bacak kasları henüz çizilmiyor.',
+    handles: [{ k: 'foot', pt: 'toe', color: 0x35c8f5, solve: (K, KM, pose, ray) => K.solveFoot(KM, pose, ray).pose },
+      { k: 'knee', pt: 'knee', color: 0xffa23a, solve: (K, KM, pose, ray) => K.solveKnee(KM, pose, ray).pose }],
+    guard: () => {},
+    from: m => ({ ...(m.from || {}) }),
+    read: (K, KM, pose, deg) => {
+      const r = K.readout(KM, pose), t = x => esc(x.de) + ' ' + deg(x.abs);
+      return `<b>Hüfte:</b> ${t(r.hip.flex)}, ${t(r.hip.abd)}, ${t(r.hip.rot)}<br><b>Knie:</b> ${t(r.knee)}<br><b>OSG:</b> ${t(r.ankle)} · <b>USG:</b> ${t(r.subtalar)}`;
+    },
+    box: [[-14, 0, -40], [40, 100, 40], [0.5, 0.1, 1]],
+  },
+};
 
-export function createMotion({ stage, model, state, refresh, defer, viewLayers, endStudy, tools, glow, musclesReady }) {
+function createLimb(L, { stage, model, state, refresh, defer, viewLayers, endStudy, tools, glow, musclesReady }) {
+  const K = L.K, GROUPS = L.GROUPS, SLIDERS = Object.fromEntries(GROUPS.flatMap(g => g[1]).map(x => [x[0], x]));
   let MU = null;                         // kas kartları (muscles.json): seçilen kasın Ursprung, Ansatz, Innervation, Funktion satırları
   musclesReady?.then(m => { MU = m; }, () => {});
   let D = null, KM = null, out = null, out2 = null, failed = false;
@@ -82,12 +125,13 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     h.renderOrder = 60; h.raycast = () => {}; root.add(h); return h;
   };
   const mroot = new THREE.Group(); root.add(mroot);
-  const hElbow = handle(0xffa23a), hHand = handle(0x35c8f5);
+  const hs = L.handles.map(h => handle(h.color));
   const ray = new THREE.Raycaster(), v2 = new THREE.Vector2(), v3 = new THREE.Vector3();
 
-  const load = () => fetch('data/motion.json').then(r => { if (!r.ok) throw new Error('motion.json ' + r.status); return r.json(); }).then(d => {
+  const load = () => fetch(L.url).then(r => { if (!r.ok) throw new Error(L.url + ' ' + r.status); return r.json(); }).then(d => {
     D = d; KM = K.createModel(d); out = K.createFk(KM); out2 = K.createFk(KM);
     // deri ağırlıkları: gelmezse mod kemiklerle çalışır, kaslar çizilmez
+    if (!d.skin.file) { skinBuf = null; return; }
     return fetch(d.skin.file).then(r => (r.ok ? r.arrayBuffer() : null)).then(b => { skinBuf = b; }, () => { skinBuf = null; });
   });
 
@@ -347,7 +391,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
 
   // Bilinen kötü duruşları kapat: kol gövdenin önünden / arkasından içeri girmesin
   function guard(q) {
-    if (q.elev > 2) { const p = K.wrap180(q.plane); q.plane = p > PLANE_MAX ? PLANE_MAX : p < PLANE_MIN ? PLANE_MIN : p; }
+    L.guard(q);
     return K.clampPose(KM, q, q);
   }
   function applyPose() {
@@ -356,7 +400,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     for (const [i, recs] of segRecs) { M.fromArray(out.mats, 16 * i); for (const r of recs) setRec(r, M); }
     const aw = K.poseDistance(KM, pose, KM.rest) > 0.5;
     if (aw !== away) { away = aw; for (const r of multi) setRec(r, aw ? FAR : IDENT); }
-    hElbow.position.fromArray(out.pts.elbow); hHand.position.fromArray(out.pts.wrist);
+    L.handles.forEach((h, i) => hs[i].position.fromArray(out.pts[h.pt]));
     updateSkins();
     glow.syncMatrices();
     stage.requestRender();
@@ -367,9 +411,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
 
   // Hareketin başı ve sonu: öbür koordinatlar şimdiki duruştan kalır; rotasyon dirsek bükülüyken görünür
   function movePoses(m) {
-    const from = { ...(m.from || (m.set.elev !== undefined ? { plane: m.set.plane, elev: 0 } : {})) };
-    if ((m.key === 'ar' || m.key === 'ir') && pose.elbow < 45) from.elbow = 90;
-    if (m.key === 'retro') { from.plane = 90; from.elev = 60; }      // retroversiyon öne kaldırılmış koldan başlar (latissimus, teres major)
+    const from = L.from(m, pose);
     const a = guard({ ...pose, ...from }), b = guard({ ...a, ...m.set });
     return [a, b];
   }
@@ -386,11 +428,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     return s[4] ? (v >= 0 ? s[4] : s[5]) + ' ' + Math.abs(v) + '°' : v + '°';
   };
   function readHTML() {
-    const r = K.readout(KM, pose), s = r.shoulder, t = x => esc(x.de) + ' ' + deg(x.abs);
-    return `<b>Schulter:</b> ${esc(s.de)} ${deg(s.elev)} <span class="mv-dim">(glenohumeral ${deg(s.gh)}, Skapula ${deg(s.scap)})</span>, ${t(s.rot)}<br>`
-      + `<b>Schultergürtel:</b> ${t(r.girdle.elev)}, ${t(r.girdle.prot)}<br>`
-      + `<b>Ellenbogen:</b> ${t(r.elbow)} · <b>Unterarm:</b> ${t(r.forearm)}<br>`
-      + `<b>Hand:</b> ${t(r.wrist.flex)}, ${t(r.wrist.dev)}`;
+    return L.read(K, KM, pose, deg);
   }
   const pct = d => (Math.abs(d) < 0.005 ? '0 %' : (d > 0 ? '+' : '−') + Math.abs(d * 100).toFixed(0) + ' %');
   const mrow = (l, d) => `<li><span lang="la">${esc(l.la)}</span>${l.de ? `<small lang="de">${esc(l.de)}</small>` : ''}<b class="${d < 0 ? 'mv-sh' : 'mv-lo'}">${pct(d)}</b></li>`;
@@ -413,7 +451,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
   // Bu duruşta gizlenen kaslar: eklemi sardıkları için bugünkü bükme yöntemiyle perde gibi geriliyorlar
   function hiddenHTML() {
     const h = (skins || []).filter(x => x.bad && !x.joint).map(x => x.la).concat(hiddenNames);
-    return h.length ? `Bu duruşta çizilemeyen kaslar (${h.length}): <span lang="la">${h.map(esc).join(', ')}</span>. Eklemi sardıkları için bugünkü yöntemle bozuluyorlar; boy değişimleri yine listelerde.` : 'Bu duruşta bütün kol kasları çiziliyor.';
+    return h.length ? `Bu duruşta çizilemeyen kaslar (${h.length}): <span lang="la">${h.map(esc).join(', ')}</span>. Eklemi sardıkları için bugünkü yöntemle bozuluyorlar; boy değişimleri yine listelerde.` : 'Bu duruşta bütün ' + L.what + ' kasları çiziliyor.';
   }
   // Tıklanan kas: bükülmüş ağlar ışınla sınanır (yalnız tıklamada; ağın sınır küresi o an yeniden hesaplanır)
   function pickMuscle(x, y, id) {
@@ -441,22 +479,22 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     return `<p class="mv-picked"><b lang="la">${esc(picked.la)}</b>${l?.de ? ` <small lang="de">${esc(l.de)}</small>` : ''}<br>Boy değişimi: <b class="${d < 0 ? 'mv-sh' : 'mv-lo'}">${pct(d)}</b>${picked.bad ? ' · bu duruşta çizilemiyor' : ''}</p>${MU?.muscles?.[picked.name] ? cardHTML([MU.muscles[picked.name]]) : ''}`;
   }
   function panelHTML() {
-    if (!D) return '<p class="htext">Kol hareketi modu yükleniyor…</p>';
+    if (!D) return '<p class="htext">' + L.chip + ' modu yükleniyor…</p>';
     const mvBy = new Map(D.movements.map(m => [m.key, m]));
     const groups = GROUPS.map(([title, sl, keys]) => `<div class="mv-g"><h4 lang="de">${title}</h4>${sl.map(s =>
       `<label class="mv-s"><span lang="de">${esc(s[1])}</span><output id="mv-o-${s[0]}">${valText(s[0])}</output><input type="range" data-mvc="${s[0]}" min="${s[2]}" max="${s[3]}" step="1" value="${Math.round(pose[s[0]])}"></label>`).join('')}
       <div class="mv-plays">${keys.map(k => mvBy.get(k)).filter(Boolean).map(m => `<button data-mvp="${m.key}" class="${mv === m ? 'active' : ''}" title="${esc(m.tr || '')}" lang="de">▶ ${esc(m.de)}</button>`).join('')}</div></div>`).join('');
     return `
-      <div class="chips"><span class="chip loco">Kol hareketi</span><span class="chip dim">sol kol · geometrik model</span></div>
-      <p class="htext">Turuncu topu (dirsek) sürükle: omuz hareket eder. Mavi topu (el) sürükle: dirsek bükülür. Ya da sürgüleri ve ▶ düğmelerini kullan.</p>
+      <div class="chips"><span class="chip loco">${L.chip}</span><span class="chip dim">${L.side} · geometrik model</span></div>
+      <p class="htext">${esc(L.help)}</p>
       <p class="htext mv-read" id="mv-read" lang="de">${readHTML()}</p>
       <div class="btns"><button data-mva="neutral" title="Neutral-Null sıfır duruşu">Nötr duruş</button><button data-mva="rest" title="Modelin kendi duruşu">Model duruşu</button></div>
       ${groups}
       <div id="mv-pick">${pickHTML()}</div>
       <div id="mv-lists">${listsHTML()}</div>
-      <p class="htext mv-note">Geometrik bir modeldir, fizik değildir: kas boyu, origo ile insersiyo arasındaki orta çizgiden hesaplanır ve eklemi saran kaslarda yanılabilir. Çizilen kaslar kısalınca turuncuya, uzayınca maviye döner (başlangıca göre) ve kısaldıkça kalınlaşır (hacim korunumu, yaklaşık). Bağlar ve eklem kapsülleri de kolla birlikte bükülür; ağı bozulan bağ ya da kapsül o duruşta gizlenir.</p>
-      ${skins?.length ? `<p class="htext mv-note" id="mv-hidden">${hiddenHTML()}</p>` : '<p class="htext mv-note">Kas ağları yüklenemedi: kaslar çizilmiyor, boy değişimleri listelerde.</p>'}
-      <div class="btns"><button data-mva="exit" title="Kol hareketi modundan çık (Esc)">Moddan çık</button></div>`;
+      <p class="htext mv-note">Geometrik bir modeldir, fizik değildir: kas boyu, origo ile insersiyo arasındaki orta çizgiden hesaplanır ve eklemi saran kaslarda yanılabilir. Çizilen kaslar kısalınca turuncuya, uzayınca maviye döner (başlangıca göre) ve kısaldıkça kalınlaşır (hacim korunumu, yaklaşık). ${L.key === 'arm' ? 'Bağlar ve eklem kapsülleri de kolla birlikte bükülür; ağı bozulan bağ ya da kapsül o duruşta gizlenir.' : 'Birden çok kemiğe tutunan bağlar ve kapsüller bacak dinlenme duruşundan ayrılınca gizlenir (henüz bükülmüyorlar).'}</p>
+      ${skins?.length ? `<p class="htext mv-note" id="mv-hidden">${hiddenHTML()}</p>` : L.key === 'arm' ? '<p class="htext mv-note">Kas ağları yüklenemedi: kaslar çizilmiyor, boy değişimleri listelerde.</p>' : ''}
+      <div class="btns"><button data-mva="exit" title="${L.chip} modundan çık (Esc)">Moddan çık</button></div>`;
   }
   // Sürükleme ve oynatma sırasında panel yeniden kurulmaz: yalnız değişen düğümler yazılır
   function live(force) {
@@ -491,7 +529,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
   function screenOf(h, rect) { v3.copy(h.position).project(stage.camera); return [rect.left + (v3.x + 1) / 2 * rect.width, rect.top + (1 - v3.y) / 2 * rect.height]; }
   function hitHandle(x, y, tol) {
     const rect = stage.canvas.getBoundingClientRect(); let best = null, bd = tol;
-    for (const [k, h] of [['hand', hHand], ['elbow', hElbow]]) { const [sx, sy] = screenOf(h, rect), d = Math.hypot(sx - x, sy - y); if (d < bd) { bd = d; best = k; } }
+    for (const [k, h] of L.handles.map((x, i) => [x.k, hs[i]])) { const [sx, sy] = screenOf(h, rect), d = Math.hypot(sx - x, sy - y); if (d < bd) { bd = d; best = k; } }
     return best;
   }
   host.addEventListener('pointerdown', e => {
@@ -513,8 +551,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     v2.set((drag.x - rect.left) / rect.width * 2 - 1, -((drag.y - rect.top) / rect.height) * 2 + 1);
     ray.setFromCamera(v2, stage.camera);
     try {
-      if (drag.h === 'elbow') { const r = K.solveElbow(KM, pose, ray.ray, { side: drag.side, edge: 0.9 }); drag.side = r.side; Object.assign(pose, r.pose); }
-      else Object.assign(pose, K.solveHand(KM, pose, ray.ray).pose);
+      Object.assign(pose, L.handles.find(x => x.k === drag.h).solve(K, KM, pose, ray.ray, drag));
     } catch { /* çözülemeyen ışın: duruş değişmez */ }
     applyPose(); live();
   }
@@ -533,18 +570,18 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
       ch = true;
     }
     // tutamaçlar ekranda hep aynı boyda görünsün
-    for (const h of [hElbow, hHand]) { const s = stage.camera.position.distanceTo(h.position) * 0.007; if (Math.abs(h.scale.x - s) > 1e-4) h.scale.setScalar(s); }
+    for (const h of hs) { const s = stage.camera.position.distanceTo(h.position) * 0.007; if (Math.abs(h.scale.x - s) > 1e-4) h.scale.setScalar(s); }
     return ch;
   });
 
-  function frame() { stage.frameBox(new THREE.Box3(new THREE.Vector3(-6, 80, -20), new THREE.Vector3(64, 186, 26)), new THREE.Vector3(0.28, 0.06, 1)); }
+  function frame() { const b = L.box; stage.frameBox(new THREE.Box3(new THREE.Vector3(...b[0]), new THREE.Vector3(...b[1])), new THREE.Vector3(...b[2])); }
 
   function enter(spec = '') {
     for (const s of ['bone', 'joint', 'muscle']) if (!model.loaded[s]) { defer(s, () => enter(spec)); return; }
     if (!D) {
       if (failed) return;
       const seq = ++enterSeq;
-      load().then(() => { if (seq === enterSeq) enter(spec); }, err => { failed = true; console.warn('Kol hareketi verisi yüklenemedi:', err); });
+      load().then(() => { if (seq === enterSeq) enter(spec); }, err => { failed = true; console.warn(L.chip + ' verisi yüklenemedi:', err); });
       return;
     }
     endStudy?.('move');
@@ -588,6 +625,25 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     setPose(q) { if (!active) return; anim = null; Object.assign(pose, q); applyPose(); live(true); },
     // denetim: bir kasın hızlı karışımını motion-kin skinLine ile karşılaştır (en büyük fark, cm)
     skinCheck() { let m = 0; for (const x of skins || []) { if (x.mode !== 'skin' || x.wide || x.lin) continue; x.a.out = new Float64Array(3 * x.a.n); const A = K.skinLine(out, x.a), p = x.pa.array; for (let i = 0; i < A.length; i++) m = Math.max(m, Math.abs(A[i] - p[i])); x.a.out = null; } return { modes: (skins || []).reduce((t, x) => { t[x.mode] = (t[x.mode] || 0) + 1; return t; }, {}), joints: (skins || []).filter(x => x.joint).length, jointsHidden: (skins || []).filter(x => x.joint && x.bad).map(x => x.name), lins: (skins || []).filter(x => x.lin).length, paths: (skins || []).filter(x => x.path).map(x => x.name), wide: (skins || []).filter(x => x.wide).length, hidden: (skins || []).filter(x => x.bad && !x.joint).map(x => x.name), parts: skins?.length || 0, verts: (skins || []).reduce((t, x) => t + x.a.n, 0), maxDiff: m }; },
-    handles: () => { const rect = stage.canvas.getBoundingClientRect(); return { elbow: screenOf(hElbow, rect), hand: screenOf(hHand, rect) }; },
+    handles: () => { const rect = stage.canvas.getBoundingClientRect(); return Object.fromEntries(L.handles.map((h, i) => [h.k, screenOf(hs[i], rect)])); },
+    cleanup: () => { if (active) cleanup(); }, limb: L.key,
   };
+}
+
+// Hareket modu (anahtar move): iki uzuv, aynı kod. spec "leg" ya da "leg.<hareket>" bacağı açar; öbürü kolu.
+export function createMotion(opts) {
+  const arm = createLimb(LIMBS.arm, opts), leg = createLimb(LIMBS.leg, opts);
+  let cur = arm;
+  const pick = spec => (spec === 'leg' || spec.startsWith('leg.') ? [leg, spec.slice(4)] : [arm, spec]);
+  const facade = {
+    enter(spec = '') { const [l, s] = pick(spec || ''); const other = l === arm ? leg : arm; other.cleanup(); cur = l; l.enter(s); },
+    sync() { arm.sync(); leg.sync(); },
+    panelHTML: () => cur.panelHTML(), click: e => cur.click(e), highlight: () => [],
+    onPick: (id, x, y) => cur.onPick(id, x, y), pickAt: (x, y) => cur.pickAt(x, y), picked: () => cur.picked(),
+    isActive: () => arm.isActive() || leg.isActive(), hideTips: () => cur.hideTips(),
+    cancelPending: () => { arm.cancelPending(); leg.cancelPending(); },
+    spec: () => (cur === leg ? 'leg' + (leg.spec() ? '.' + leg.spec() : '') : arm.spec()),
+    pose: () => cur.pose(), setPose: q => cur.setPose(q), skinCheck: () => cur.skinCheck(), handles: () => cur.handles(), limb: () => cur.limb,
+  };
+  return facade;
 }
