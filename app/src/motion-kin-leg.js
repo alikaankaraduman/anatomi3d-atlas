@@ -3,7 +3,8 @@
 // clampPose, limits, poseDistance, lerpPose, readout, solveKnee / solveFoot; kas çizgileri için compileLine / skinLine /
 // lineLength ve ikili kuaterniyon kuralı motion-kin.js'den gelir.
 // Koordinatlar (derece, Neutral-Null): hipFlex (Flexion + / Extension -), hipAbd (Abduktion + / Adduktion -), hipRot
-// (Innenrotation + / Außenrotation -), knee (Flexion +), ankle (Dorsalextension + / Plantarflexion -), subtalar
+// (Innenrotation + / Außenrotation -), knee (Flexion +), kneeRot (Innenrotation + / Außenrotation - der Tibia, nur bei
+// gebeugtem Knie: Grenzen wachsen von 0 bei gestrecktem Knie bis IR 10 / AR 40 ab 90 Grad Flexion), ankle (Dorsalextension + / Plantarflexion -), subtalar
 // (Pronation + / Supination -). Dinlenme = birim matris; her açı dinlenmeye göre fark olarak uygulanır.
 // Eksenler (x sola = bacağın dışı, y yukarı, z öne): kalça mutlak yönelimi A = Rx(-flex) Rz(abd) Ry(-rot) (sıra: fleksiyon,
 // abduksiyon, femur ekseni çevresinde rotasyon); diz ve OSG ölçülen menteşe eksenlerinde, USG ders kitabı eğik ekseninde.
@@ -11,11 +12,13 @@ import { rot3, mul3, apply3, toDualQuat, qAx, qMul, clamp, num, compileLine, ski
 export { compileLine, skinLine, lineLength, skinPoint, ease };
 
 const D2R = Math.PI / 180;
-export const COORDS = ['hipFlex', 'hipAbd', 'hipRot', 'knee', 'ankle', 'subtalar'];
+export const COORDS = ['hipFlex', 'hipAbd', 'hipRot', 'knee', 'kneeRot', 'ankle', 'subtalar'];
 export const SEGMENTS = ['pelvis', 'femur', 'patella', 'tibia', 'talus', 'foot'];
-export const RANGES = { hipFlex: [-15, 130], hipAbd: [-25, 40], hipRot: [-45, 35], knee: [-5, 140], ankle: [-45, 20], subtalar: [-30, 15] };
+export const RANGES = { hipFlex: [-15, 130], hipAbd: [-25, 40], hipRot: [-45, 35], knee: [-5, 140], kneeRot: [-40, 10], ankle: [-45, 20], subtalar: [-30, 15] };
 // Diz gergin iken kalça fleksiyonu hamstringlerle sınırlı: 90 (diz 0) .. 130 (diz 90 ve üstü), arada doğrusal
 export const hipFlexMax = knee => 90 + 40 * clamp(knee / 90, 0, 1);
+// Diz rotasyonu yalnız bükük dizde: sınırlar diz 0 -> 90 arasında doğrusal büyür
+const kneeRotLim = knee => { const k = clamp(knee / 90, 0, 1); return [RANGES.kneeRot[0] * k, RANGES.kneeRot[1] * k]; };
 const X = [1, 0, 0], Y = [0, 1, 0], Z = [0, 0, 1];
 // Patella dizle birlikte: tibia açısının bu oranı kadar diz ekseni çevresinde döner (yaklaşık; lig. patellae boyu korunur)
 const PATELLA = 0.7;
@@ -26,19 +29,21 @@ export function createModel(data) {
   if (segs.join() !== SEGMENTS.join()) throw new Error('motion-kin-leg: segment sırası beklenmiyor: ' + segs.join());
   const rest = {}; for (const k of COORDS) rest[k] = num(data.rest?.[k], 0);
   const index = Object.fromEntries(segs.map((k, i) => [k, i]));
+  const td = [J.ankle[0] - J.knee[0], J.ankle[1] - J.knee[1], J.ankle[2] - J.knee[2]], tl = Math.hypot(...td); J.tibAxis = td.map(x => x / tl);   // nach distal
   return { J, segs, index, rest, ranges: RANGES, lenFemur: Math.hypot(...J.knee.map((v, i) => v - J.hip[i])), lenTibia: Math.hypot(...J.ankle.map((v, i) => v - J.knee[i])) };
 }
 export const restPose = model => ({ ...model.rest });
 export const neutralPose = () => Object.fromEntries(COORDS.map(k => [k, 0]));
 export function limits(model, pose) {
   const L = {}; for (const k of COORDS) L[k] = RANGES[k].slice();
-  L.hipFlex[1] = hipFlexMax(num(pose?.knee, model.rest.knee));
+  L.hipFlex[1] = hipFlexMax(num(pose?.knee, model.rest.knee)); L.kneeRot = kneeRotLim(num(pose?.knee, model.rest.knee));
   return L;
 }
 export function clampPose(model, pose, out = {}) {
   const r = model.rest, q = pose || r;
   const knee = clamp(num(q.knee, r.knee), RANGES.knee[0], RANGES.knee[1]);
-  for (const k of COORDS) out[k] = clamp(num(q[k], r[k]), RANGES[k][0], k === 'hipFlex' ? hipFlexMax(knee) : RANGES[k][1]);
+  const kr = kneeRotLim(knee);
+  for (const k of COORDS) out[k] = k === 'kneeRot' ? clamp(num(q[k], r[k]), kr[0], kr[1]) : clamp(num(q[k], r[k]), RANGES[k][0], k === 'hipFlex' ? hipFlexMax(knee) : RANGES[k][1]);
   return out;
 }
 export const applySet = (model, base, set, out = {}) => clampPose(model, { ...(base || model.rest), ...(set || {}) }, out);
@@ -82,7 +87,9 @@ export function fk(model, pose, out) {
   place(S[0], null, IDR, IDQ, J.hip);                                                          // pelvis durağan
   hipRel(_a, Rq, q, r); place(S[1], S[0], _a, Rq, J.hip);                                     // femur
   const dk = q.knee - r.knee;
-  rot3(_a, J.kneeAxis, dk); place(S[3], S[1], _a, qAx(_q1, J.kneeAxis, dk), J.knee);           // tibia (fleksiyonda ayak bileği arkaya)
+  const dr = q.kneeRot - r.kneeRot;      // tibia: önce kendi ekseni çevresinde rotasyon (iç rotasyonda ayak ucu içe), sonra fleksiyon
+  rot3(_a, J.kneeAxis, dk); rot3(_b, J.tibAxis, dr); mul3(_a, _a, _b);
+  place(S[3], S[1], _a, qMul(_q1, qAx(_q1, J.kneeAxis, dk), qAx(_q2, J.tibAxis, dr)), J.knee);   // fleksiyonda ayak bileği arkaya
   rot3(_a, J.kneeAxis, PATELLA * dk); place(S[2], S[1], _a, qAx(_q1, J.kneeAxis, PATELLA * dk), J.knee);   // patella
   const da = -(q.ankle - r.ankle);
   rot3(_a, J.ankleAxis, da); place(S[4], S[3], _a, qAx(_q1, J.ankleAxis, da), J.ankle);        // talus (dorsalekstansiyonda ayak ucu yukarı)
@@ -107,7 +114,7 @@ export function readout(model, pose) {
   const q = clampPose(model, pose, {});
   return {
     hip: { flex: nn(q.hipFlex, 'flex', 'ext'), abd: nn(q.hipAbd, 'abd', 'add'), rot: nn(q.hipRot, 'ir', 'ar') },
-    knee: nn(q.knee, 'flex', 'ext'), ankle: nn(q.ankle, 'dorsal', 'plantar'), subtalar: nn(q.subtalar, 'pron', 'sup')
+    knee: nn(q.knee, 'flex', 'ext'), kneeRot: nn(q.kneeRot, 'ir', 'ar'), ankle: nn(q.ankle, 'dorsal', 'plantar'), subtalar: nn(q.subtalar, 'pron', 'sup')
   };
 }
 

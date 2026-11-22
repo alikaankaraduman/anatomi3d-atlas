@@ -219,6 +219,8 @@ const MOVES = [
   ['hIR', 'huefte', 'Innenrotation', 'Kalçada iç rotasyon (kalça ve diz 90° bükük)', { hipRot: 35 }, { hipRot: 0, hipFlex: 90, knee: 90 }],
   ['kFlex', 'knie', 'Flexion', 'Dizi bükme', { knee: 140 }, { knee: 0 }],
   ['kExt', 'knie', 'Extension', 'Dizi germe', { knee: 0 }, { knee: 90 }],
+  ['kIR', 'knie', 'Innenrotation', 'Diz 90° bükükken bacağı içe döndürme', { kneeRot: 10 }, { knee: 90, kneeRot: 0 }],
+  ['kAR', 'knie', 'Außenrotation', 'Diz 90° bükükken bacağı dışa döndürme', { kneeRot: -40 }, { knee: 90, kneeRot: 0 }],
   ['dors', 'sprunggelenke', 'Dorsalextension', 'Ayak ucunu yukarı kaldırma (OSG)', { ankle: 20 }, { ankle: 0 }],
   ['plan', 'sprunggelenke', 'Plantarflexion', 'Ayak ucunu aşağı indirme (OSG)', { ankle: -45 }, { ankle: 0 }],
   ['sup', 'sprunggelenke', 'Supination', 'Tabanı içe çevirme (USG)', { subtalar: -30 }, { subtalar: 0 }],
@@ -233,7 +235,7 @@ const outJ = {
     hip: R4(LM.hip), hipR: r2(LM.hipR), knee: R4(LM.knee), kneeAxis: R4(LM.kneeAxis), ankle: R4(LM.ankle), ankleAxis: R4(LM.ankleAxis),
     subtalar: R4(LM.subtalar), subtalarAxis: R4(LM.subtalarAxis), calPost: R4(LM.calPost)
   },
-  rest: { hipFlex: r2(LM.rest.hipFlex), hipAbd: r2(LM.rest.hipAbd), hipRot: 0, knee: r2(LM.rest.knee), ankle: r2(90 - LM.rest.footToTibia), subtalar: 0 },
+  rest: { hipFlex: r2(LM.rest.hipFlex), hipAbd: r2(LM.rest.hipAbd), hipRot: 0, knee: r2(LM.rest.knee), kneeRot: 0, ankle: r2(90 - LM.rest.footToTibia), subtalar: 0 },
   skin: { file: 'models/motion-leg.bin', bytesPerVertex: 9, bytes: BIN.length, parts: [...skinParts, ...jparts] },
   movements: MOVES,
 };

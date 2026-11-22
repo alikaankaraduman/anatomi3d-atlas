@@ -23,8 +23,11 @@ const su = P({ subtalar: -25 }); ok(tp(su.mats, 5, med)[1] - med[1] > tp(su.mats
 const ir = P({ hipFlex: 90, knee: 90, hipRot: 30 }), ir0 = P({ hipFlex: 90, knee: 90, hipRot: 0 });
 ok(d(ir.ankle, ir0.ankle, 0) > 3, 'kalça iç rotasyonunda (kalça ve diz 90) ayak dışa (+x) gitmiyor');
 ok(Math.hypot(...f.knee.map((v, i) => v - M.J.knee[i])) > 0 && Math.abs(Math.hypot(...f.knee.map((v, i) => v - M.J.hip[i])) - M.lenFemur) < 1e-6, 'femur boyu korunmuyor');
+const kr = P({ knee: 90, kneeRot: 10 }), kr0 = P({ knee: 90, kneeRot: 0 });
+ok(d(kr.toe, kr0.toe, 0) < -0.5, 'diz iç rotasyonunda ayak ucu içe (-x) dönmüyor');
+ok(K.clampPose(M, { knee: 0, kneeRot: -30 }).kneeRot === 0 && K.clampPose(M, { knee: 90, kneeRot: -60 }).kneeRot === -40, 'diz rotasyonu sınırı diz açısına bağlı değil');
 // ikili kuaterniyon ile matris aynı noktayı versin (her segment, uç duruşlar)
-for (const q of [{ hipFlex: 125, knee: 140, ankle: -45, subtalar: -30 }, { hipFlex: -15, hipAbd: 40, hipRot: -45, ankle: 20, subtalar: 15 }, { hipAbd: -25, hipRot: 35 }]) {
+for (const q of [{ hipFlex: 125, knee: 140, kneeRot: -40, ankle: -45, subtalar: -30 }, { knee: 100, kneeRot: 10, hipRot: 30 }, { hipFlex: -15, hipAbd: 40, hipRot: -45, ankle: 20, subtalar: 15 }, { hipAbd: -25, hipRot: 35 }]) {
   const s = P(q);
   for (let i = 1; i < 6; i++) { const p = [M.J.ankle[0], M.J.ankle[1] + 10 * i, M.J.ankle[2] + 3]; const a = tp(s.mats, i, p), b = K.skinPoint(o, p, [[i, 1]]); ok(Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) < 1e-6, 'ikili kuaterniyon matristen farklı: segment ' + i); }
 }

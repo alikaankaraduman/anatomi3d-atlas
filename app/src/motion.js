@@ -62,7 +62,7 @@ const fnv = a => { const b = new Uint8Array(a.buffer, a.byteOffset, a.byteLength
 const PLANE_MIN = -100, PLANE_MAX = 135;   // gövdenin içinden geçen duruşlar (düzlem 180 çevresi) kapalı
 const LEG_GROUPS = [
   ['Hüfte', [['hipFlex', 'Flexion / Extension', -15, 130, 'Flexion', 'Extension'], ['hipAbd', 'Abduktion / Adduktion', -25, 40, 'Abduktion', 'Adduktion'], ['hipRot', 'Innen- / Außenrotation', -45, 35, 'Innenrotation', 'Außenrotation']], ['hFlex', 'hExt', 'hAbd', 'hAdd', 'hAR', 'hIR']],
-  ['Knie', [['knee', 'Flexion / Extension', -5, 140, 'Flexion', 'Extension']], ['kFlex', 'kExt']],
+  ['Knie', [['knee', 'Flexion / Extension', -5, 140, 'Flexion', 'Extension'], ['kneeRot', 'Innen- / Außenrotation (gebeugt)', -40, 10, 'Innenrotation', 'Außenrotation']], ['kFlex', 'kExt', 'kIR', 'kAR']],
   ['Sprunggelenke', [['ankle', 'OSG: Dorsalextension / Plantarflexion', -45, 20, 'Dorsalextension', 'Plantarflexion'], ['subtalar', 'USG: Pronation / Supination', -30, 15, 'Pronation', 'Supination']], ['dors', 'plan', 'sup', 'pron']],
 ];
 // Uzuv tanımları: veri, kinematik, sürgüler, tutamaçlar, okuma, metinler. Mod kodu ikisinde aynıdır.
@@ -97,7 +97,7 @@ const LIMBS = {
     from: m => ({ ...(m.from || {}) }),
     read: (K, KM, pose, deg) => {
       const r = K.readout(KM, pose), t = x => esc(x.de) + ' ' + deg(x.abs);
-      return `<b>Hüfte:</b> ${t(r.hip.flex)}, ${t(r.hip.abd)}, ${t(r.hip.rot)}<br><b>Knie:</b> ${t(r.knee)}<br><b>OSG:</b> ${t(r.ankle)} · <b>USG:</b> ${t(r.subtalar)}`;
+      return `<b>Hüfte:</b> ${t(r.hip.flex)}, ${t(r.hip.abd)}, ${t(r.hip.rot)}<br><b>Knie:</b> ${t(r.knee)}, ${t(r.kneeRot)}<br><b>OSG:</b> ${t(r.ankle)} · <b>USG:</b> ${t(r.subtalar)}`;
     },
     box: [[-14, 0, -40], [40, 100, 40], [0.5, 0.1, 1]],
   },
