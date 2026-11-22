@@ -145,7 +145,8 @@ Sol paneldeki **Araçlar** bölümü:
   en çok kısalan ve uzayan kasları ve ders kitabındaki ana kasları listeler. Geometrik bir modeldir: kas boyu origo ile
   insersiyo arasındaki orta çizgiden hesaplanır, eklemi saran kaslarda yanılabilir. Kaslar kolla birlikte bükülür: kısalan turuncuya döner ve
   kalınlaşır, uzayan maviye döner. Eklemi saran bir kas, ağının bozulduğu duruşta (ör. tam abduksiyonda latissimus, tam
-  dirsek fleksiyonunda anconeus) gizlenir; o an gizlenenler panelin sonunda adlarıyla yazılır. Bağlar ve kapsüller kol hareket edince gizlenir.
+  dirsek fleksiyonunda anconeus) gizlenir; o an gizlenenler panelin sonunda adlarıyla yazılır. Bir kasa tıklayınca kas parlar, panelde adı ve o anki boy
+  değişimi görünür; aynı kasa yeniden tıklamak seçimi kaldırır. Bağlar ve kapsüller kol hareket edince gizlenir.
 - **Hareket sistemi modu** (Araçlar › Hareket sistemi modu; BWA ve eklem derslerinin Aanki kartında ve her kasın bilgi
   kartında da düğmesi var): kol ve bacak için görsel tekrar; sol kol ya da sol bacak gösterilir. **Sinir**: 19 periferik
   sinir (N. radialis, medianus, ulnaris, femoralis, ischiadicus, fibularis …). Sinir sarı, innerve ettiği kaslar kırmızı,

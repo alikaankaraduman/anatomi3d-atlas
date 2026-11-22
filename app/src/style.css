@@ -414,6 +414,9 @@ button.tw:hover { background: rgba(255, 255, 255, 0.1); color: var(--text); }
 .mv-sh { color: #ffb37a; }
 .mv-lo { color: #8fc8ff; }
 .mv-note { font-size: 12px; color: var(--dim); }
+.mv-picked { font-size: 13px; line-height: 1.5; margin: 12px 0 0; padding: 7px 10px; border: 1px solid var(--accent); border-radius: 8px; background: rgba(25, 200, 245, 0.08); }
+.mv-picked small { color: var(--dim); }
+#mv-pick .mv-dim { font-size: 12px; margin: 12px 0 0; }
 @media (pointer: coarse) { .mv-s input[type="range"] { height: 32px; } .mv-plays button { min-height: 38px; } }
 .nvlist button { min-width: 0; font-weight: 500; }
 .sites { display: flex; flex-wrap: wrap; gap: 4px; }

@@ -54,7 +54,8 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
   let segRecs = [], multi = [], moved = [], lines = [], byName = new Map();
   let mv = null, baseLen = [];           // etkin hareket ve boyların karşılaştırıldığı başlangıç
   let anim = null, drag = null, away = false, lastLive = 0;
-  let skinBuf = null, skins = null, hiddenNames = [];   // bükülen kas ağları (bir kez kurulur)
+  let skinBuf = null, skins = null, hiddenNames = [];
+  let picked = null;                     // tıklanan kas (bükülen ağ kaydı)   // bükülen kas ağları (bir kez kurulur)
 
   const root = new THREE.Group(); root.visible = false; stage.scene.add(root);
   const M = new THREE.Matrix4(), IDENT = new THREE.Matrix4(), FAR = new THREE.Matrix4().makeTranslation(0, -1e5, 0);
@@ -250,9 +251,10 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
       s.mesh.visible = s.joint ? away && !s.bad : !s.bad;
       // renk: kısalan sıcak, uzayan soğuk; % 2 içinde nötr, % 25'te tam
       const L0 = s.li === undefined ? 0 : baseLen[s.li], d = L0 > 0 ? (Lnow - L0) / L0 : 0;
-      const k = Math.abs(d) < 0.02 ? 0 : Math.min(1, Math.abs(d) / 0.3), c = s.mesh.material.color;
+      const k = Math.abs(d) < 0.02 || s.joint ? 0 : Math.min(1, Math.abs(d) / 0.3), c = s.mesh.material.color;
       const e = s.mesh.material.emissive;      // kas zaten kırmızı: çarpan tek başına görünmez, hafif ışıma eklenir
       if (d < 0) { c.setRGB(1, 1 - 0.2 * k, 1 - 0.5 * k); e.setRGB(0.36 * k, 0.17 * k, 0); } else { c.setRGB(1 - 0.5 * k, 1 - 0.25 * k, 1); e.setRGB(0, 0.11 * k, 0.36 * k); }
+      if (s === picked) e.setRGB(e.r + 0.26, e.g + 0.26, e.b + 0.26);      // seçili kas parlar
     }
   }
 
@@ -355,6 +357,27 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     const h = (skins || []).filter(x => x.bad && !x.joint).map(x => x.la).concat(hiddenNames);
     return h.length ? `Bu duruşta çizilemeyen kaslar (${h.length}): <span lang="la">${h.map(esc).join(', ')}</span>. Eklemi sardıkları için bugünkü yöntemle bozuluyorlar; boy değişimleri yine listelerde.` : 'Bu duruşta bütün kol kasları çiziliyor.';
   }
+  // Tıklanan kas: bükülmüş ağlar ışınla sınanır (yalnız tıklamada; ağın sınır küresi o an yeniden hesaplanır)
+  function pickMuscle(x, y) {
+    if (!skins) return;
+    const rect = stage.canvas.getBoundingClientRect(), hits = [];
+    v2.set((x - rect.left) / rect.width * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
+    ray.setFromCamera(v2, stage.camera);
+    let best = null, bd = Infinity;
+    for (const s of skins) {
+      if (s.joint || !s.mesh.visible) continue;
+      s.mesh.geometry.computeBoundingSphere(); s.mesh.updateMatrixWorld(); hits.length = 0;
+      THREE.Mesh.prototype.raycast.call(s.mesh, ray, hits);
+      for (const h of hits) if (h.distance < bd) { bd = h.distance; best = s; }
+    }
+    picked = best === picked ? null : best;      // aynı kasa ikinci tıklama seçimi kaldırır
+    K.fk(KM, pose, out); updateSkins(); stage.requestRender(); live(true);
+  }
+  function pickHTML() {
+    if (!picked) return '<p class="mv-dim">Bir kasa tıkla: adı ve boy değişimi burada görünür.</p>';
+    const l = picked.li === undefined ? null : lines[picked.li], L0 = l ? baseLen[picked.li] : 0, d = L0 > 0 ? (K.lineLength(out, l.cl) - L0) / L0 : 0;
+    return `<p class="mv-picked"><b lang="la">${esc(picked.la)}</b>${l?.de ? ` <small lang="de">${esc(l.de)}</small>` : ''}<br>Boy değişimi: <b class="${d < 0 ? 'mv-sh' : 'mv-lo'}">${pct(d)}</b>${picked.bad ? ' · bu duruşta çizilemiyor' : ''}</p>`;
+  }
   function panelHTML() {
     if (!D) return '<p class="htext">Kol hareketi modu yükleniyor…</p>';
     const mvBy = new Map(D.movements.map(m => [m.key, m]));
@@ -367,6 +390,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
       <p class="htext mv-read" id="mv-read" lang="de">${readHTML()}</p>
       <div class="btns"><button data-mva="neutral" title="Neutral-Null sıfır duruşu">Nötr duruş</button><button data-mva="rest" title="Modelin kendi duruşu">Model duruşu</button></div>
       ${groups}
+      <div id="mv-pick">${pickHTML()}</div>
       <div id="mv-lists">${listsHTML()}</div>
       <p class="htext mv-note">Geometrik bir modeldir, fizik değildir: kas boyu, origo ile insersiyo arasındaki orta çizgiden hesaplanır ve eklemi saran kaslarda yanılabilir. Çizilen kaslar kısalınca turuncuya, uzayınca maviye döner (başlangıca göre) ve kısaldıkça kalınlaşır (hacim korunumu, yaklaşık). Bağlar ve eklem kapsülleri de kolla birlikte bükülür; ağı bozulan bağ ya da kapsül o duruşta gizlenir.</p>
       ${skins?.length ? `<p class="htext mv-note" id="mv-hidden">${hiddenHTML()}</p>` : '<p class="htext mv-note">Kas ağları yüklenemedi: kaslar çizilmiyor, boy değişimleri listelerde.</p>'}
@@ -379,6 +403,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     rd.innerHTML = readHTML();
     const ls = document.getElementById('mv-lists'); if (ls) ls.innerHTML = listsHTML();
     const hd = document.getElementById('mv-hidden'); if (hd) hd.innerHTML = hiddenHTML();
+    const pk = document.getElementById('mv-pick'); if (pk) pk.innerHTML = pickHTML();
     for (const c of K.COORDS) {
       const o = document.getElementById('mv-o-' + c); if (o) o.textContent = valText(c);
       const i = document.querySelector(`input[data-mvc="${c}"]`); if (i) i.value = String(Math.round(pose[c]));
@@ -463,7 +488,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     endStudy?.('move');
     build(); buildSkins();
     tools.cut.save(); tools.cut.set({ axis: '' }); tools.setExplode(0);
-    active = true; root.visible = true; anim = null; away = false; mv = null;
+    active = true; root.visible = true; anim = null; away = false; mv = null; picked = null;
     state.selected = new Set(); state.primary = { type: 'move' };
     viewLayers({ bone: 'show', joint: 'show' });
     const ids = new Set(moved.map(r => r.id));
@@ -477,7 +502,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     frame();
   }
   function cleanup() {
-    active = false; enterSeq++; anim = null; drag = null; stage.controls.enabled = true;
+    active = false; enterSeq++; anim = null; drag = null; picked = null; stage.controls.enabled = true;
     for (const r of moved) setRec(r, IDENT);
     away = false; root.visible = false;
     glow.syncMatrices();
@@ -489,7 +514,10 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
   return {
     enter, sync, panelHTML, click,
     highlight: () => [],
-    onPick: () => active,                 // modda tıklama yapı seçmez (mod açık kalır)
+    // modda tıklama atlas yapısı seçmez (mod açık kalır); tıklanan yerde bükülmüş bir kas varsa o kas seçilir
+    onPick: (id, x, y) => { if (!active) return false; if (x !== undefined) pickMuscle(x, y); return true; },
+    pickAt: (x, y) => { if (!active) return false; pickMuscle(x, y); return true; },
+    picked: () => picked?.name || null,
     isActive: () => active, hideTips: () => active && !!drag,
     cancelPending: () => { if (!active) enterSeq++; },
     spec: () => (mv ? mv.key : ''),
