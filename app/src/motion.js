@@ -78,12 +78,14 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     if (skins) return;
     skins = []; hiddenNames = [];
     const u8 = skinBuf ? new Uint8Array(skinBuf) : null, HUM = D.segments.findIndex(x => x.key === 'humerus');
+    const multiIds = new Set(multi.map(x => x.id));
     for (const p of D.skin.parts) {
-      if (p.kind !== 'muscle') continue;
+      const isJ = p.kind === 'joint';
+      if (isJ ? !multiIds.has(p.id) : p.kind !== 'muscle') continue;      // eklem parçalarından yalnız çok kemikli olanlar
       const r = model.items.get(p.id), g = r?.geo;
-      if (!u8 || !g) { hiddenNames.push(r?.la || p.n); continue; }
+      if (!u8 || !g) { if (!isJ) hiddenNames.push(r?.la || p.n); continue; }
       const pos = g.attributes.position, nor = g.attributes.normal, nv = pos.count;
-      if (nv !== p.verts || fnv(pos.array) !== p.sum || p.offset + 9 * nv > u8.length) { console.warn('Kol hareketi: kas ağı veriyle uyuşmuyor, çizilmedi:', p.n); hiddenNames.push(r.la || p.n); continue; }
+      if (nv !== p.verts || fnv(pos.array) !== p.sum || p.offset + 9 * nv > u8.length) { console.warn('Kol hareketi: ağ veriyle uyuşmuyor, çizilmedi:', p.n); if (!isJ) hiddenNames.push(r.la || p.n); continue; }
       const P = new Float64Array(3 * nv), I = new Uint8Array(4 * nv), W = new Float64Array(4 * nv), N0 = new Float32Array(3 * nv);
       for (let i = 0; i < nv; i++) {
         const o = p.offset + 9 * i;
@@ -157,7 +159,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
         const a = ix[3 * t + k], b = ix[3 * t + k + 1], l = Math.hypot(P[3 * a] - P[3 * b], P[3 * a + 1] - P[3 * b + 1], P[3 * a + 2] - P[3 * b + 2]);
         if (l > 1e-4) { E.push(a, b); EL.push(l); }
       }
-      skins.push({ wide: !!wd || !!path, path, lin, mesh, pa, na, P0: pos.array, N0, R, L0: p.L0 || 0, name: p.n, la: r.la || p.n, E, EL, bad: false, a: { n: nv, P, I, W, out: null }, li: byName.get(p.n), rest: true });
+      skins.push({ joint: isJ, wide: !!wd || !!path, path, lin, mesh, pa, na, P0: pos.array, N0, R, L0: p.L0 || 0, name: p.n, la: r.la || p.n, E, EL, bad: false, a: { n: nv, P, I, W, out: null }, li: byName.get(p.n), rest: true });
     }
   }
   // Yol izleyen bükme: lineLength az önce çağrıldığı için cl.out duruştaki orta çizgidir
@@ -245,7 +247,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
         const k = s.bad ? 0.8 : 1;
         s.bad = ne > 0 && (lo / ne > HIDE.longShare * k || mx > HIDE.max * k || sh / ne > HIDE.shortShare * k);
       }
-      s.mesh.visible = !s.bad;
+      s.mesh.visible = s.joint ? away && !s.bad : !s.bad;
       // renk: kısalan sıcak, uzayan soğuk; % 2 içinde nötr, % 25'te tam
       const L0 = s.li === undefined ? 0 : baseLen[s.li], d = L0 > 0 ? (Lnow - L0) / L0 : 0;
       const k = Math.abs(d) < 0.02 ? 0 : Math.min(1, Math.abs(d) / 0.3), c = s.mesh.material.color;
@@ -350,7 +352,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
   }
   // Bu duruşta gizlenen kaslar: eklemi sardıkları için bugünkü bükme yöntemiyle perde gibi geriliyorlar
   function hiddenHTML() {
-    const h = (skins || []).filter(x => x.bad).map(x => x.la).concat(hiddenNames);
+    const h = (skins || []).filter(x => x.bad && !x.joint).map(x => x.la).concat(hiddenNames);
     return h.length ? `Bu duruşta çizilemeyen kaslar (${h.length}): <span lang="la">${h.map(esc).join(', ')}</span>. Eklemi sardıkları için bugünkü yöntemle bozuluyorlar; boy değişimleri yine listelerde.` : 'Bu duruşta bütün kol kasları çiziliyor.';
   }
   function panelHTML() {
@@ -366,7 +368,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
       <div class="btns"><button data-mva="neutral" title="Neutral-Null sıfır duruşu">Nötr duruş</button><button data-mva="rest" title="Modelin kendi duruşu">Model duruşu</button></div>
       ${groups}
       <div id="mv-lists">${listsHTML()}</div>
-      <p class="htext mv-note">Geometrik bir modeldir, fizik değildir: kas boyu, origo ile insersiyo arasındaki orta çizgiden hesaplanır ve eklemi saran kaslarda yanılabilir. Çizilen kaslar kısalınca turuncuya, uzayınca maviye döner (başlangıca göre) ve kısaldıkça kalınlaşır (hacim korunumu, yaklaşık). Bağlar ve eklem kapsülleri, kol model duruşundan ayrılınca gizlenir.</p>
+      <p class="htext mv-note">Geometrik bir modeldir, fizik değildir: kas boyu, origo ile insersiyo arasındaki orta çizgiden hesaplanır ve eklemi saran kaslarda yanılabilir. Çizilen kaslar kısalınca turuncuya, uzayınca maviye döner (başlangıca göre) ve kısaldıkça kalınlaşır (hacim korunumu, yaklaşık). Bağlar ve eklem kapsülleri de kolla birlikte bükülür; ağı bozulan bağ ya da kapsül o duruşta gizlenir.</p>
       ${skins?.length ? `<p class="htext mv-note" id="mv-hidden">${hiddenHTML()}</p>` : '<p class="htext mv-note">Kas ağları yüklenemedi: kaslar çizilmiyor, boy değişimleri listelerde.</p>'}
       <div class="btns"><button data-mva="exit" title="Kol hareketi modundan çık (Esc)">Moddan çık</button></div>`;
   }
@@ -495,7 +497,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     pose: () => ({ ...pose }),
     setPose(q) { if (!active) return; anim = null; Object.assign(pose, q); applyPose(); live(true); },
     // denetim: bir kasın hızlı karışımını motion-kin skinLine ile karşılaştır (en büyük fark, cm)
-    skinCheck() { let m = 0; for (const x of skins || []) { x.a.out = new Float64Array(3 * x.a.n); const A = K.skinLine(out, x.a), p = x.pa.array; for (let i = 0; i < A.length; i++) m = Math.max(m, Math.abs(A[i] - p[i])); x.a.out = null; } return { lins: (skins || []).filter(x => x.lin).length, paths: (skins || []).filter(x => x.path).map(x => x.name), wide: (skins || []).filter(x => x.wide).length, hidden: (skins || []).filter(x => x.bad).map(x => x.name), parts: skins?.length || 0, verts: (skins || []).reduce((t, x) => t + x.a.n, 0), maxDiff: m }; },
+    skinCheck() { let m = 0; for (const x of skins || []) { x.a.out = new Float64Array(3 * x.a.n); const A = K.skinLine(out, x.a), p = x.pa.array; for (let i = 0; i < A.length; i++) m = Math.max(m, Math.abs(A[i] - p[i])); x.a.out = null; } return { joints: (skins || []).filter(x => x.joint).length, jointsHidden: (skins || []).filter(x => x.joint && x.bad).map(x => x.name), lins: (skins || []).filter(x => x.lin).length, paths: (skins || []).filter(x => x.path).map(x => x.name), wide: (skins || []).filter(x => x.wide).length, hidden: (skins || []).filter(x => x.bad && !x.joint).map(x => x.name), parts: skins?.length || 0, verts: (skins || []).reduce((t, x) => t + x.a.n, 0), maxDiff: m }; },
     handles: () => { const rect = stage.canvas.getBoundingClientRect(); return { elbow: screenOf(hElbow, rect), hand: screenOf(hHand, rect) }; },
   };
 }
