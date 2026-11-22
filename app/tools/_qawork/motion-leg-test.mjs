@@ -17,9 +17,9 @@ const ab = P({ hipAbd: 30 }); ok(d(ab.knee, r.knee, 0) > 10, 'abduksiyonda diz d
 const kf = P({ knee: 90 }); ok(d(kf.ankle, r.ankle, 2) < -20, 'diz fleksiyonunda ayak bileği arkaya gitmiyor');
 const df = P({ ankle: 20 }); ok(d(df.toe, r.toe, 1) > 1, 'dorsalekstansiyonda ayak ucu yukarı gitmiyor');
 const pf = P({ ankle: -40 }); ok(d(pf.toe, r.toe, 1) < -2, 'plantarfleksiyonda ayak ucu aşağı gitmiyor');
-// supinasyon: 5. metatarsal (dış kenar) yukarı, 1. metatarsal (iç kenar) aşağı
+// supinasyon (inversiyon): taban içe bakar, iç kenar (1. metatarsal) dış kenardan (5.) yukarı kalkar
 const lat = [M.J.ankle[0] + 3, M.J.ankle[1] - 5, M.J.ankle[2] + 10], med = [M.J.ankle[0] - 3, M.J.ankle[1] - 5, M.J.ankle[2] + 10];
-const su = P({ subtalar: -25 }); ok(tp(su.mats, 5, lat)[1] - lat[1] > tp(su.mats, 5, med)[1] - med[1] + 0.5, 'supinasyonda dış kenar iç kenardan yukarı kalkmıyor');
+const su = P({ subtalar: -25 }); ok(tp(su.mats, 5, med)[1] - med[1] > tp(su.mats, 5, lat)[1] - lat[1] + 0.5, 'supinasyonda iç kenar dış kenardan yukarı kalkmıyor');
 const ir = P({ hipFlex: 90, knee: 90, hipRot: 30 }), ir0 = P({ hipFlex: 90, knee: 90, hipRot: 0 });
 ok(d(ir.ankle, ir0.ankle, 0) > 3, 'kalça iç rotasyonunda (kalça ve diz 90) ayak dışa (+x) gitmiyor');
 ok(Math.hypot(...f.knee.map((v, i) => v - M.J.knee[i])) > 0 && Math.abs(Math.hypot(...f.knee.map((v, i) => v - M.J.hip[i])) - M.lenFemur) < 1e-6, 'femur boyu korunmuyor');

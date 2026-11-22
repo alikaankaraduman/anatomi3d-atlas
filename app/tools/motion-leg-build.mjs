@@ -111,11 +111,107 @@ for (const j of legJoints) {
   jparts.push({ n: j.n, id: j.id, kind: 'joint', chain: chain.length ? chain : ['pelvis'] });
 }
 say(`  eklem parçaları: tek segmentli ${jparts.filter(x => x.chain.length === 1).length}, çok segmentli ${jparts.filter(x => x.chain.length > 1).length}`);
+// ---------- deri ağırlıkları (adım 3) ----------
+// Kaslar: köşenin uzuv zinciri (pelvis üstü -> kalça -> diz -> ayak bileği -> 2. metatarsal başı) üzerindeki yeri s ile
+// segment düzeyi bulunur; eklem çevresinde smoothstep kuşağı (kalça 4, diz 4, ayak bileği 2,5 cm yarı genişlik). Kas yalnız
+// iki ucunun segmentleri arasında karışır (uç segmenti: uç köşelerinin en yakın kemiği). Konuma bağlı olduğu için dikişteki
+// çift köşeler aynı ağırlığı alır. t = uzuvdaki yerin kasın iki ucu arasındaki oranı (kalınlaşma eğrisi). Eklem parçaları:
+// değdikleri segmentlerin kemiklerine uzaklıkla (0,15 cm içi katı), kolun eklem parçalarıyla aynı kural.
+const SI = Object.fromEntries(SEGS.map((k, i) => [k, i]));
+const toeP = (() => { const v = verts(mt2); const zx = Math.max(...v.map(x => x[2])); return mean(v.filter(x => x[2] > zx - 1)); })();
+const CH = [add(LM.hip, [0, 14, 0]), LM.hip, LM.knee, LM.ankle, toeP], CUM = [0];
+for (let i = 1; i < CH.length; i++) CUM.push(CUM[i - 1] + len(sub(CH[i], CH[i - 1])));
+const sOf = x => { let bd = Infinity, bs = 0; for (let i = 1; i < CH.length; i++) { const a = CH[i - 1], u = sub(CH[i], a), l2 = dot(u, u), t = Math.max(0, Math.min(1, dot(sub(x, a), u) / l2)), q = add(a, mul(u, t)), d = len(sub(x, q)); if (d < bd) { bd = d; bs = CUM[i - 1] + t * (CUM[i] - CUM[i - 1]); } } return bs; };
+const JS = [{ s: CUM[1], h: 4 }, { s: CUM[2], h: 4 }, { s: CUM[3], h: 2.5 }];   // kalça, diz, ayak bileği
+const smooth = x => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+const LEVEL = { pelvis: 0, femur: 1, patella: 2, tibia: 2, talus: 3, foot: 3 };
+const pelvisAll = parts.filter(x => x.s === 'bone' && x.sub !== 'attach' && !legBones.includes(x) && x.sd !== 'r' && x.n !== 'Femur');
+function endSeg(x) {
+  let best = null, bd = 3;
+  for (const b of legBones) { const d = dist(b, x); if (d < bd) { bd = d; best = b.seg; } }
+  if (best) return best;
+  for (const b of pelvisAll) { if (Math.abs(b.P[1] - x[1]) > 60) continue; const d = dist(b, x); if (d < bd) { bd = d; best = 'pelvis'; } }
+  if (best) return best;
+  if (x[1] > LM.hip[1] - 5) return 'pelvis';
+  bd = 8; for (const b of legBones) { const d = dist(b, x); if (d < bd) { bd = d; best = b.seg; } }   // kiriş kemiğe değmiyor (ör. Achilles'e katılan baş)
+  return best;
+}
+// s ve uç segmentlerinden ağırlıklar: [[segIndex, w], ...]
+// Kalça: pelvisten çıkan kaslarda pelvis -> femur geçişi kasın KENDİ boyunda (t), çünkü origo çoğu kez kalça merkezinin
+// altındadır (Tuber ischiadicum, Ramus ossis pubis): uzuv eksenindeki kuşak bu kasları uylukla döndürürdü. İki segmentli
+// kaslarda t 0,1 -> 0,9 (kolun geniş geçişi gibi), dizi de geçenlerde t 0,02 -> 0,5.
+function weightsAt(s, a, b, segA, segB, t = 0) {
+  let L = a; for (let j = a; j < b; j++) L += j === 0 ? smooth(b === 1 ? (t - 0.1) / 0.8 : (t - 0.02) / 0.48) : smooth((s - JS[j].s + JS[j].h) / (2 * JS[j].h));
+  const lo = Math.floor(L), f = L - lo, name = k => (k === b ? segB : k === a ? segA : ['pelvis', 'femur', 'tibia', 'foot'][k]);
+  return f < 1e-6 || lo >= b ? [[SI[name(Math.min(lo, b))], 1]] : [[SI[name(lo)], 1 - f], [SI[name(lo + 1)], f]];
+}
+const fnv1a = bytes => { let h = 0x811c9dc5; for (let i = 0; i < bytes.length; i++) { h ^= bytes[i]; h = Math.imul(h, 0x01000193) >>> 0; } return h >>> 0; };
+const posSum = p => fnv1a(new Uint8Array(p.P.buffer, p.P.byteOffset, p.P.byteLength));
+function q4(ws, out, o) {   // en büyük 4 ağırlık -> toplamı 255 olan 4 bayt
+  const e = ws.filter(x => x[1] > 0).sort((p, q) => q[1] - p[1]).slice(0, 4), s = e.reduce((t, x) => t + x[1], 0);
+  const q = e.map(([k, w]) => [k, Math.floor(w / s * 255), w / s * 255 % 1]); let rem = 255 - q.reduce((t, x) => t + x[1], 0);
+  for (const x of [...q].sort((p, r) => r[2] - p[2])) { if (rem <= 0) break; x[1]++; rem--; }
+  for (let j = 0; j < 4; j++) { out[o + j] = q[j] ? q[j][0] : 0; out[o + 4 + j] = q[j] ? q[j][1] : 0; }
+}
+// Düzeltme tablosu: kirişi ayrı parça olan kaslar (insersiyo ucu eklenir: boy okuması eklemi geçsin), kalça çevresinde
+// iki ucu da aynı s'de kalan kaslar (near: ağırlık kemiğe uzaklıkla, eklem parçaları gibi)
+const LEG_FIX = {
+  'Medial head of gastrocnemius': { b: 'foot', ext: 'cal', why: 'kiriş Tendo calcaneus ayrı parça; insersiyo Tuber calcanei' },
+  'Lateral head of gastrocnemius': { b: 'foot', ext: 'cal', why: 'kiriş Tendo calcaneus ayrı parça; insersiyo Tuber calcanei' },
+  'Soleus muscle': { b: 'foot', ext: 'cal', why: 'kiriş Tendo calcaneus ayrı parça; insersiyo Tuber calcanei' },
+  'Extensor digitorum longus': { b: 'foot', ext: 'toe', why: 'kirişler ayrı parça; insersiyo 2.-5. parmakların dorsal aponevrozu' },
+  'Pectineus muscle': { a: 'pelvis', b: 'femur', near: true, why: 'Pecten ossis pubis -> Linea pectinea; iki uç kalça eklemi hizasında' },
+  'Quadratus femoris muscle': { a: 'pelvis', b: 'femur', near: true, why: 'Tuber ischiadicum -> Crista intertrochanterica; yatay' },
+  ...Object.fromEntries(['Superior gemellus muscle', 'Inferior gemellus muscle', 'Obturator internus', 'Obturator externus', 'Piriformis muscle'].map(n => [n, { a: 'pelvis', b: 'femur', near: true, why: 'kısa, yatay dış rotator: uzuv ekseni boyunca yeri anlamsız' }])),
+};
+const nearW = (x, segs) => segs.map(k => { const bs = k === 'pelvis' ? pelvisB : legBones.filter(b => b.seg === k), d = Math.min(...bs.map(b => dist(b, x))); return [SI[k], d < 0.15 ? 1e6 : 1 / (d * d + 0.01)]; });
+const legMus = parts.filter(p => p.sd === 'l' && p.s === 'muscle' && p.path.startsWith('Muscular system of lower limb > Muscles of lower limb'));
+const skinParts = [], chunks = []; let offset = 0;
+for (const p of legMus) {
+  const v = verts(p), S = v.map(sOf), order = S.map((s, i) => i).sort((i, j) => S[i] - S[j]), k = Math.max(3, Math.round(0.03 * v.length));
+  const eA = mean(order.slice(0, k).map(i => v[i])), eB = mean(order.slice(-k).map(i => v[i]));
+  const fx = LEG_FIX[p.n] || {};
+  let segA = fx.a || endSeg(eA), segB = fx.b || endSeg(eB);
+  if (!segA || !segB) { fail(`${p.n}: uç segmenti bulunamadı (${segA}, ${segB})`); continue; }
+  let a = LEVEL[segA], b = LEVEL[segB];
+  if (a > b) { [a, b] = [b, a]; [segA, segB] = [segB, segA]; }
+  if (segA === 'talus') segA = 'foot'; if (segB === 'talus') segB = 'foot';
+  const s0 = S[order[0]], s1 = S[order[order.length - 1]], span = Math.max(1e-6, s1 - s0);
+  const buf = new Uint8Array(9 * v.length);
+  const WA = x => (fx.near ? nearW(x, [segA, segB]) : weightsAt(sOf(x), a, b, segA, segB, (sOf(x) - s0) / span));
+  for (let i = 0; i < v.length; i++) { q4(fx.near ? nearW(v[i], [segA, segB]) : weightsAt(S[i], a, b, segA, segB, (S[i] - s0) / span), buf, 9 * i); buf[9 * i + 8] = Math.round(255 * Math.max(0, Math.min(1, (S[i] - s0) / span))); }
+  // orta çizgi: s'ye göre 12 dilimin ağırlık merkezi; uçlar uç köşelerinin merkezi
+  const line = [];
+  for (let j = 0; j < 12; j++) {
+    let pt;
+    if (j === 0) pt = eA; else if (j === 11) pt = eB;
+    else { const lo = s0 + span * (j - 0.5) / 11, hi = s0 + span * (j + 0.5) / 11, sl = v.filter((x, i) => S[i] >= lo && S[i] < hi); pt = sl.length ? mean(sl) : add(eA, mul(sub(eB, eA), j / 11)); }
+    const w = (() => { const ws = WA(pt), t = ws.reduce((q, y) => q + y[1], 0); return ws.map(([si, x]) => [SEGS[si], Math.round(x / t * 1000) / 1000]).filter(y => y[1] > 0); })();
+    line.push({ p: pt.map(x => Math.round(x * 1000) / 1000), w });
+  }
+  if (fx.ext) line.push({ p: (fx.ext === 'cal' ? LM.calPost : toeP).map(x => Math.round(x * 1000) / 1000), w: [['foot', 1]] });
+  let L0 = 0; for (let j = 1; j < line.length; j++) L0 += len(sub(line[j].p, line[j - 1].p));
+  skinParts.push({ n: p.n, id: p.id, kind: 'muscle', verts: v.length, offset, sum: posSum(p), chain: SEGS.filter(x => LEVEL[x] >= a && LEVEL[x] <= b && (x !== 'patella' || segB === 'patella') && (x !== 'tibia' || segB !== 'patella') && x !== 'talus'), L0: Math.round(L0 * 1000) / 1000, line });
+  chunks.push(buf); offset += buf.length;
+}
+say(`  kaslar: ${skinParts.length} / ${legMus.length}; ` + ['pelvis', 'femur', 'patella', 'tibia', 'foot'].map(x => x + '→' + skinParts.filter(m => m.chain[m.chain.length - 1] === x).length).join(', '));
+for (const j of jparts) {
+  const p = legJoints.find(x => x.id === j.id);
+  j.verts = p.P.length / 3; j.offset = offset; j.sum = posSum(p);
+  const buf = new Uint8Array(9 * j.verts), v = verts(p), cs = j.chain.map(k => [SI[k], k === 'pelvis' ? pelvisB : legBones.filter(b => b.seg === k)]);
+  for (let i = 0; i < v.length; i++) {
+    const ws = cs.map(([si, bs]) => { const d = Math.min(...bs.map(b => dist(b, v[i]))); return [si, d < 0.15 ? 1e6 : 1 / (d * d + 0.01)]; });
+    q4(ws, buf, 9 * i);
+  }
+  chunks.push(buf); offset += buf.length;
+}
+const BIN = Buffer.concat(chunks.map(c => Buffer.from(c.buffer, c.byteOffset, c.byteLength)));
+
 // ---------- hareketler (ders kitabı kasları locomotor.json'dan) ----------
 const loco = JSON.parse(fs.readFileSync('public/data/locomotor.json', 'utf8'));
 const locoMove = (jk, de) => loco.joints.list.find(x => x.key === jk)?.movements.find(x => x.de.startsWith(de));
 const MOVES = [
-  ['hFlex', 'huefte', 'Flexion', 'Uyluğu öne kaldırma (kalça fleksiyonu)', { hipFlex: 120, knee: 90 }, { hipFlex: 0, knee: 0 }],
+  ['hFlex', 'huefte', 'Flexion', 'Uyluğu öne kaldırma (kalça fleksiyonu, diz 90° bükük)', { hipFlex: 120 }, { hipFlex: 0, knee: 90 }],
   ['hExt', 'huefte', 'Extension', 'Uyluğu geriye götürme', { hipFlex: -15 }, { hipFlex: 0 }],
   ['hAbd', 'huefte', 'Abduktion', 'Uyluğu yana açma', { hipAbd: 40 }, { hipAbd: 0 }],
   ['hAdd', 'huefte', 'Adduktion', 'Uyluğu içe yaklaştırma', { hipAbd: -25 }, { hipAbd: 0 }],
@@ -138,9 +234,9 @@ const outJ = {
     subtalar: R4(LM.subtalar), subtalarAxis: R4(LM.subtalarAxis), calPost: R4(LM.calPost)
   },
   rest: { hipFlex: r2(LM.rest.hipFlex), hipAbd: r2(LM.rest.hipAbd), hipRot: 0, knee: r2(LM.rest.knee), ankle: r2(90 - LM.rest.footToTibia), subtalar: 0 },
-  skin: { file: null, parts: jparts },
+  skin: { file: 'models/motion-leg.bin', bytesPerVertex: 9, bytes: BIN.length, parts: [...skinParts, ...jparts] },
   movements: MOVES,
 };
-if (!process.argv.includes('--dry') && !fails.length) { const s = JSON.stringify(outJ); fs.writeFileSync('public/data/motion-leg.json', s); say(`  yazıldı: public/data/motion-leg.json (${(s.length / 1024).toFixed(1)} KB)`); }
+if (!process.argv.includes('--dry') && !fails.length) { const s = JSON.stringify(outJ); fs.writeFileSync('public/data/motion-leg.json', s); fs.writeFileSync('public/models/motion-leg.bin', BIN); say('  yazıldı: public/models/motion-leg.bin (' + (BIN.length / 1024).toFixed(1) + ' KB)'); say(`  yazıldı: public/data/motion-leg.json (${(s.length / 1024).toFixed(1)} KB)`); }
 say(fails.length ? `\n${fails.length} hata` : '\nhata yok');
 process.exitCode = fails.length ? 1 : 0;

@@ -90,7 +90,7 @@ const LIMBS = {
   },
   leg: {
     key: 'leg', K: KL, url: 'data/motion-leg.json', GROUPS: LEG_GROUPS, chip: 'Bacak hareketi', side: 'sol bacak', what: 'bacak',
-    help: 'Turuncu topu (diz) sürükle: kalça hareket eder. Mavi topu (ayak) sürükle: diz bükülür. Ya da sürgüleri ve ▶ düğmelerini kullan. İlk adım: kemikler ve eklem parçaları oynar; bacak kasları henüz çizilmiyor.',
+    help: 'Turuncu topu (diz) sürükle: kalça hareket eder. Mavi topu (ayak) sürükle: diz bükülür. Ya da sürgüleri ve ▶ düğmelerini kullan. Kalçanın uç fleksiyon ve rotasyonunda arka ve iç kalça kasları gizlenir (adları panelde).',
     handles: [{ k: 'foot', pt: 'toe', color: 0x35c8f5, solve: (K, KM, pose, ray) => K.solveFoot(KM, pose, ray).pose },
       { k: 'knee', pt: 'knee', color: 0xffa23a, solve: (K, KM, pose, ray) => K.solveKnee(KM, pose, ray).pose }],
     guard: () => {},
@@ -492,7 +492,7 @@ function createLimb(L, { stage, model, state, refresh, defer, viewLayers, endStu
       ${groups}
       <div id="mv-pick">${pickHTML()}</div>
       <div id="mv-lists">${listsHTML()}</div>
-      <p class="htext mv-note">Geometrik bir modeldir, fizik değildir: kas boyu, origo ile insersiyo arasındaki orta çizgiden hesaplanır ve eklemi saran kaslarda yanılabilir. Çizilen kaslar kısalınca turuncuya, uzayınca maviye döner (başlangıca göre) ve kısaldıkça kalınlaşır (hacim korunumu, yaklaşık). ${L.key === 'arm' ? 'Bağlar ve eklem kapsülleri de kolla birlikte bükülür; ağı bozulan bağ ya da kapsül o duruşta gizlenir.' : 'Birden çok kemiğe tutunan bağlar ve kapsüller bacak dinlenme duruşundan ayrılınca gizlenir (henüz bükülmüyorlar).'}</p>
+      <p class="htext mv-note">Geometrik bir modeldir, fizik değildir: kas boyu, origo ile insersiyo arasındaki orta çizgiden hesaplanır ve eklemi saran kaslarda yanılabilir. Çizilen kaslar kısalınca turuncuya, uzayınca maviye döner (başlangıca göre) ve kısaldıkça kalınlaşır (hacim korunumu, yaklaşık). Bağlar ve eklem kapsülleri de ${L.key === 'arm' ? 'kolla' : 'bacakla'} birlikte bükülür; ağı bozulan bağ ya da kapsül o duruşta gizlenir.</p>
       ${skins?.length ? `<p class="htext mv-note" id="mv-hidden">${hiddenHTML()}</p>` : L.key === 'arm' ? '<p class="htext mv-note">Kas ağları yüklenemedi: kaslar çizilmiyor, boy değişimleri listelerde.</p>' : ''}
       <div class="btns"><button data-mva="exit" title="${L.chip} modundan çık (Esc)">Moddan çık</button></div>`;
   }

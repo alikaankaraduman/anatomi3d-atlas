@@ -86,8 +86,8 @@ export function fk(model, pose, out) {
   rot3(_a, J.kneeAxis, PATELLA * dk); place(S[2], S[1], _a, qAx(_q1, J.kneeAxis, PATELLA * dk), J.knee);   // patella
   const da = -(q.ankle - r.ankle);
   rot3(_a, J.ankleAxis, da); place(S[4], S[3], _a, qAx(_q1, J.ankleAxis, da), J.ankle);        // talus (dorsalekstansiyonda ayak ucu yukarı)
-  const ds = -(q.subtalar - r.subtalar);
-  rot3(_a, J.subtalarAxis, ds); place(S[5], S[4], _a, qAx(_q1, J.subtalarAxis, ds), J.subtalar);   // ayak (supinasyonda dış kenar yukarı)
+  const ds = q.subtalar - r.subtalar;
+  rot3(_a, J.subtalarAxis, ds); place(S[5], S[4], _a, qAx(_q1, J.subtalarAxis, ds), J.subtalar);   // ayak (supinasyonda iç kenar yukarı, taban içe bakar)
   for (let i = 0; i < S.length; i++) {
     const s = S[i], M = o.mats, k = 16 * i, R = s.R;
     M[k] = R[0]; M[k + 1] = R[3]; M[k + 2] = R[6]; M[k + 3] = 0; M[k + 4] = R[1]; M[k + 5] = R[4]; M[k + 6] = R[7]; M[k + 7] = 0;
