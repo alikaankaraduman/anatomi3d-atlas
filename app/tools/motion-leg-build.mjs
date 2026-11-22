@@ -141,7 +141,7 @@ function endSeg(x) {
 // altındadır (Tuber ischiadicum, Ramus ossis pubis): uzuv eksenindeki kuşak bu kasları uylukla döndürürdü. İki segmentli
 // kaslarda t 0,1 -> 0,9 (kolun geniş geçişi gibi), dizi de geçenlerde t 0,02 -> 0,5.
 function weightsAt(s, a, b, segA, segB, t = 0) {
-  let L = a; for (let j = a; j < b; j++) L += j === 0 ? smooth(b === 1 ? (t - 0.1) / 0.8 : (t - 0.02) / 0.48) : smooth((s - JS[j].s + JS[j].h) / (2 * JS[j].h));
+  let L = a; for (let j = a; j < b; j++) L += j === 0 ? smooth(b === 1 ? (t - 0.1) / 0.8 : (t - 0.02) / 0.13) : smooth((s - JS[j].s + JS[j].h) / (2 * JS[j].h));
   const lo = Math.floor(L), f = L - lo, name = k => (k === b ? segB : k === a ? segA : ['pelvis', 'femur', 'tibia', 'foot'][k]);
   return f < 1e-6 || lo >= b ? [[SI[name(Math.min(lo, b))], 1]] : [[SI[name(lo)], 1 - f], [SI[name(lo + 1)], f]];
 }
@@ -162,7 +162,7 @@ const LEG_FIX = {
   'Extensor digitorum longus': { b: 'foot', ext: 'toe', why: 'kirişler ayrı parça; insersiyo 2.-5. parmakların dorsal aponevrozu' },
   'Pectineus muscle': { a: 'pelvis', b: 'femur', near: true, why: 'Pecten ossis pubis -> Linea pectinea; iki uç kalça eklemi hizasında' },
   'Quadratus femoris muscle': { a: 'pelvis', b: 'femur', near: true, why: 'Tuber ischiadicum -> Crista intertrochanterica; yatay' },
-  ...Object.fromEntries(['Superior gemellus muscle', 'Inferior gemellus muscle', 'Obturator internus', 'Obturator externus', 'Piriformis muscle'].map(n => [n, { a: 'pelvis', b: 'femur', near: true, why: 'kısa, yatay dış rotator: uzuv ekseni boyunca yeri anlamsız' }])),
+  ...Object.fromEntries(['Superior gemellus muscle', 'Inferior gemellus muscle', 'Obturator internus', 'Obturator externus', 'Piriformis muscle', 'Gluteus maximus muscle', 'Gluteus medius muscle', 'Gluteus minimus muscle', 'Adductor magnus', 'Adductor minimus', 'Adductor longus', 'Adductor brevis'].map(n => [n, { a: 'pelvis', b: 'femur', near: true, why: 'kısa, yatay dış rotator: uzuv ekseni boyunca yeri anlamsız' }])),
 };
 const nearW = (x, segs) => segs.map(k => { const bs = k === 'pelvis' ? pelvisB : legBones.filter(b => b.seg === k), d = Math.min(...bs.map(b => dist(b, x))); return [SI[k], d < 0.15 ? 1e6 : 1 / (d * d + 0.01)]; });
 const legMus = parts.filter(p => p.sd === 'l' && p.s === 'muscle' && p.path.startsWith('Muscular system of lower limb > Muscles of lower limb'));
