@@ -49,7 +49,10 @@ const WIDE_ON = !(typeof location !== 'undefined' && /[?&]mvwide=0/.test(locatio
 // ölçüsünü tetikler; ölçü perde gibi yerel bozulmayı yakalamak içindir.
 const KEEP = new Set(['Latissimus dorsi muscle', 'Sternocostal head of pectoralis major muscle', 'Medial head of triceps brachii', 'Anconeus muscle']);
 const SHOW_BAD = typeof location !== 'undefined' && /[?&]mvshow=1/.test(location.search);   // denetim: bozulan kasları da çiz
+const STRAIGHT = new Set(['Coracobrachialis muscle', 'Flexor carpi radialis', 'Ulnar head of extensor carpi ulnaris', 'Brachioradialis muscle']);
 const HIDE = { longShare: 0.06, max: 7, shortShare: 0.10 };   // > 2 kat uzayan kenar payı, en uzun kenar oranı, < 0.4 kat kısalan pay
+// derlenmiş bir çizginin dinlenme boyu (şişme çarpanı boy okumasıyla aynı çizgiden hesaplansın diye)
+const restLen = cl => { let L = 0; for (let k = 1; k < cl.n; k++) L += Math.hypot(cl.P[3 * k] - cl.P[3 * k - 3], cl.P[3 * k + 1] - cl.P[3 * k - 2], cl.P[3 * k + 2] - cl.P[3 * k - 1]); return L; };
 const fnv = a => { const b = new Uint8Array(a.buffer, a.byteOffset, a.byteLength); let h = 0x811c9dc5; for (let i = 0; i < b.length; i++) { h ^= b[i]; h = Math.imul(h, 0x01000193); } return h >>> 0; };
 const PLANE_MIN = -100, PLANE_MAX = 135;   // gövdenin içinden geçen duruşlar (düzlem 180 çevresi) kapalı
 
@@ -168,12 +171,12 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
         const a = ix[3 * t + k], b = ix[3 * t + k + 1], l = Math.hypot(P[3 * a] - P[3 * b], P[3 * a + 1] - P[3 * b + 1], P[3 * a + 2] - P[3 * b + 2]);
         if (l > 1e-4) { E.push(a, b); EL.push(l); }
       }
-      skins.push({ joint: isJ, wide: !!wd || !!path, path, lin, mesh, pa, na, P0: pos.array, N0, R, L0: p.L0 || 0, name: p.n, la: r.la || p.n, E, EL, bad: false, a: { n: nv, P, I, W, out: null }, li: byName.get(p.n), rest: true });
+      skins.push({ joint: isJ, wide: !!wd || !!path, path, lin, mesh, pa, na, P0: pos.array, N0, R, L0: li0 === undefined ? 0 : restLen(lines[li0].len), name: p.n, la: r.la || p.n, E, EL, bad: false, a: { n: nv, P, I, W, out: null }, li: byName.get(p.n), rest: true });
     }
   }
-  // Yol izleyen bükme: lineLength az önce çağrıldığı için cl.out duruştaki orta çizgidir
+  // Yol izleyen bükme: orta çizgi (cl) önce duruşa taşınır
   function pathSkin(s, g) {
-    const cl = lines[s.li].cl, C = cl.out, m = cl.n, pt = s.path, cum = pt.cum, Q = out.dq, pa = s.pa.array, na = s.na.array, N = s.N0, U = pt.U, O = pt.O;
+    const cl = lines[s.li].cl, C = K.skinLine(out, cl), m = cl.n, pt = s.path, cum = pt.cum, Q = out.dq, pa = s.pa.array, na = s.na.array, N = s.N0, U = pt.U, O = pt.O;
     for (let k = 1; k < m; k++) cum[k] = cum[k - 1] + Math.hypot(C[3 * k] - C[3 * k - 3], C[3 * k + 1] - C[3 * k - 2], C[3 * k + 2] - C[3 * k - 1]);
     const S = cum[m - 1], a = 8 * pt.A, b = 8 * pt.B, nv = s.a.n;
     for (let v = 0; v < nv; v++) {
@@ -196,7 +199,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     if (!skins) return;
     for (const s of skins) {
       const pa = s.pa.array, na = s.na.array;
-      const Lnow = s.li === undefined ? 0 : K.lineLength(out, lines[s.li].cl);
+      const Lnow = s.li === undefined ? 0 : K.lineLength(out, lines[s.li].len);
       // hacim korunumu: kalınlık çarpanı sqrt(L0 / L), 0.85 ile 1.3 arasında (L0: model duruşundaki boy)
       const g = away && Lnow > 0 && s.L0 > 0 ? Math.max(0.85, Math.min(1.3, Math.sqrt(s.L0 / Lnow))) - 1 : 0;
       if (!away) { if (!s.rest) { pa.set(s.P0); na.set(s.N0); s.rest = true; s.pa.needsUpdate = s.na.needsUpdate = true; } }
@@ -271,6 +274,9 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
   function fixLine(p) {
     const ts = D.joints.scapula?.ts;
     if (p.n === 'Ascending part of trapezius muscle' && ts) return [p.line[0], { p: ts, w: [['scapula', 1]] }];
+    // Orta çizgisi eklemin çevresinde yanlış yöne büküldüğü için ters okunan kaslar: boy origo - insersiyo düz çizgisinden
+    // okunur (validate-2.txt bölüm d, "düz çizgi" sütunu). Bükme için orta çizgi değişmez.
+    if (STRAIGHT.has(p.n) && p.line.length > 2) return [p.line[0], p.line[p.line.length - 1]];
     return p.line;
   }
   // Parça kayıtları: segment başına kemikler ve tek segmentli eklem parçaları; çok segmentli eklem parçaları ayrı
@@ -289,7 +295,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     moved = [...segRecs.flatMap(x => x[1]), ...multi];
     lines = D.skin.parts.filter(p => p.kind === 'muscle' && p.line?.length > 1).map(p => {
       const r = model.items.get(p.id);
-      return { n: p.n, la: r?.la || p.n, de: r?.de || '', cl: K.compileLine(KM, fixLine(p)) };
+      return { n: p.n, la: r?.la || p.n, de: r?.de || '', cl: K.compileLine(KM, p.line), len: K.compileLine(KM, fixLine(p)) };      // cl: bükme için orta çizgi, len: boy okuması için çizgi
     });
     byName = new Map(lines.map((l, i) => [l.n, i]));
   }
@@ -311,7 +317,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
     glow.syncMatrices();
     stage.requestRender();
   }
-  const lengthsAt = q => { K.fk(KM, K.clampPose(KM, q, {}), out2); return lines.map(l => K.lineLength(out2, l.cl)); };
+  const lengthsAt = q => { K.fk(KM, K.clampPose(KM, q, {}), out2); return lines.map(l => K.lineLength(out2, l.len)); };
   const neutral = () => K.clampPose(KM, K.neutralPose(), {});
   function setBase(q) { baseLen = lengthsAt(q || KM.rest); if (active) { K.fk(KM, pose, out); updateSkins(); stage.requestRender(); } }
 
@@ -345,7 +351,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
   const pct = d => (Math.abs(d) < 0.005 ? '0 %' : (d > 0 ? '+' : '−') + Math.abs(d * 100).toFixed(0) + ' %');
   const mrow = (l, d) => `<li><span lang="la">${esc(l.la)}</span>${l.de ? `<small lang="de">${esc(l.de)}</small>` : ''}<b class="${d < 0 ? 'mv-sh' : 'mv-lo'}">${pct(d)}</b></li>`;
   function listsHTML() {
-    const ch = lines.map((l, i) => ({ l, d: baseLen[i] > 0 ? (K.lineLength(out, l.cl) - baseLen[i]) / baseLen[i] : 0 }));
+    const ch = lines.map((l, i) => ({ l, d: baseLen[i] > 0 ? (K.lineLength(out, l.len) - baseLen[i]) / baseLen[i] : 0 }));
     const sh = ch.filter(x => x.d <= -0.02).sort((a, b) => a.d - b.d).slice(0, 6), lo = ch.filter(x => x.d >= 0.02).sort((a, b) => b.d - a.d).slice(0, 4);
     let h = `<p class="mv-base">Boylar şuna göre: ${mv ? '<b lang="de">' + esc(mv.de) + '</b> hareketinin başlangıcı' : 'model duruşu (modun açıldığı duruş)'}</p>`;
     h += `<h4>En çok kısalan kaslar</h4>${sh.length ? `<ul class="mv-list">${sh.map(x => mrow(x.l, x.d)).join('')}</ul>` : '<p class="mv-dim">Belirgin kısalan kas yok (eşik % 2).</p>'}`;
@@ -387,7 +393,7 @@ export function createMotion({ stage, model, state, refresh, defer, viewLayers, 
   }
   function pickHTML() {
     if (!picked) return '<p class="mv-dim">Bir kasa tıkla: adı ve boy değişimi burada görünür.</p>';
-    const l = picked.li === undefined ? null : lines[picked.li], L0 = l ? baseLen[picked.li] : 0, d = L0 > 0 ? (K.lineLength(out, l.cl) - L0) / L0 : 0;
+    const l = picked.li === undefined ? null : lines[picked.li], L0 = l ? baseLen[picked.li] : 0, d = L0 > 0 ? (K.lineLength(out, l.len) - L0) / L0 : 0;
     return `<p class="mv-picked"><b lang="la">${esc(picked.la)}</b>${l?.de ? ` <small lang="de">${esc(l.de)}</small>` : ''}<br>Boy değişimi: <b class="${d < 0 ? 'mv-sh' : 'mv-lo'}">${pct(d)}</b>${picked.bad ? ' · bu duruşta çizilemiyor' : ''}</p>${MU?.muscles?.[picked.name] ? cardHTML([MU.muscles[picked.name]]) : ''}`;
   }
   function panelHTML() {
