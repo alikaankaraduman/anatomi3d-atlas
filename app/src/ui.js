@@ -20,7 +20,7 @@ export function createUI({ state, model, actions }) {
     modes: $('#modes'), views: $('#views'), sex: $('#sex'), layers: $('#layers'), tree: $('#tree'), info: $('#info'),
     aanki: $('#aanki-tree'), treeView: $('#tree-view'),
     search: $('#search'), results: $('#results'), tooltip: $('#tooltip'),
-    isolateBar: $('#isolate-bar'), toast: $('#toast'), loading: $('#loading'), loadText: $('#load-text'), loadBar: $('#load-bar'),
+    isolateBar: $('#isolate-bar'), peelTool: $('#peel-tool'), toast: $('#toast'), loading: $('#loading'), loadText: $('#load-text'), loadBar: $('#load-bar'),
   };
 
   // ---------- beden (kadın / erkek) ----------
@@ -207,6 +207,45 @@ export function createUI({ state, model, actions }) {
     return `<div class="field"><div class="k">Kas kartı${c.whole_la && c.part_la ? ` · <span lang="la">${esc(c.whole_la)}</span>` : ''}</div>${cardHTML([c])}
       <div class="btns"><button data-act="loco" data-tab="muscles:${esc(r.n)}" title="Bu kası origo ve insersiyo yamaları, siniri ve grubuyla göster">Hareket sistemi modunda aç</button></div></div>`;
   };
+  // ---------- kas katmanı soyma (Araçlar, boş kart, kas kartı) ----------
+  // Katmanlar data/muscle-depth.json'dan; düğmeler data-peel taşır (tıklamalar belge düzeyinde tek dinleyicide).
+  const studyOn = () => !!(state.primary && (panels[state.primary.type] || state.primary.type === 'quiz'));
+  // katman sırasının kaba adı: 1 yüzeyel, son üçte bir derin, arası orta
+  const depthWord = (k, max) => (k <= 1 ? 'yüzeyel' : k > Math.ceil((2 * max) / 3) ? 'derin' : 'orta');
+  function peelHTML(r) {
+    const D = model.depth; if (!D) return '';
+    const n = state.peel.n, max = D.max, off = studyOn() || model.failed?.has('muscle');
+    const dis = c => (off || c ? ' disabled' : '');
+    const state_ = !n ? 'Bütün kaslar görünüyor' : `${n} katman kaldırıldı · görünen: ${n + 1}.–${max}. katman (${depthWord(n + 1, max)})`;
+    const mine = r && D.d[r.id];
+    return `<div class="peel${off ? ' off' : ''}">
+      <div class="peel-btns">
+        <button data-peel="up"${dis(n >= max - 1)} title="Dıştaki kas katmanını kaldır: altındaki derin kaslar görünür ve tıklanabilir">Üst katmanı kaldır</button>
+        <button data-peel="down"${dis(!n)} title="Son kaldırılan kas katmanını geri getir">Geri getir</button>
+        ${n > 1 ? `<button data-peel="reset"${dis(false)} title="Bütün kas katmanlarını geri getir">Hepsi</button>` : ''}
+      </div>
+      <div class="peel-state"><span class="hint">${state_}</span>
+        <div class="seg tiny" role="group" aria-label="Kaldırılan kaslar"><button data-peel="hide" class="${state.peel.ghost ? '' : 'active'}" title="Kaldırılan kaslar gizlensin">Gizle</button><button data-peel="ghost" class="${state.peel.ghost ? 'active' : ''}" title="Kaldırılan kaslar saydam kalsın (yer bulmak için)">Saydam</button></div>
+      </div>
+      ${mine ? `<div class="peel-own"><span class="hint">Bu kas: ${mine}. katman / ${max} (${depthWord(mine, max)})</span>${mine > 1 && n !== mine - 1 ? `<button data-peel="to:${mine - 1}"${dis(false)} title="Bu kasın üstündeki bütün katmanları kaldır">Üstündekileri kaldır</button>` : ''}</div>` : ''}
+      ${off && studyOn() ? '<div class="hint">Çalışma modunda kullanılmaz.</div>' : ''}
+    </div>`;
+  }
+  const peelField = r => (model.depth && r.s === 'muscle' && r.sub === 'muscle' ? `<div class="field"><div class="k">Kas katmanı</div>${peelHTML(r)}</div>` : '');
+  document.addEventListener('click', e => {
+    const b = e.target.closest('button[data-peel]'); if (!b || b.disabled) return;
+    const v = b.dataset.peel;
+    actions.peel(v === 'up' ? 1 : v === 'down' ? -1 : v === 'reset' ? 0 : v.startsWith('to:') ? { to: +v.slice(3) } : v);
+  });
+  // Kraniyal sinir mi: adı ya da üst gruplarından biri "<…> nerve (Roma rakamı)" (dalları ve kökleri de sayılır)
+  const CN_RE = /^(Olfactory|Optic|Oculomotor|Trochlear|Trigeminal|Abducens|Facial|Vestibulocochlear|Glossopharyngeal|Vagus|Accessory|Hypoglossal) nerve \(([IVX]+)\)$/;
+  function cranialOf(r) {
+    if (r.s !== 'nerve') return null;
+    for (const o of [r, ...(r.g >= 0 ? model.groupPath(r.g).slice().reverse() : [])]) { const m = CN_RE.exec(o.n); if (m) return m[2]; if (o.n === 'Cranial nerves') return ''; }
+    return null;
+  }
+  const cranialBtn = num => (num === null ? '' : `<div class="btns"><button data-act="cn" data-tab="${num}" title="Beyin çalışma modu, Sinirler: I–XII beyin sapından çıkış yerleriyle renkli ve etiketli; beyin ve kafatası saydam">Kraniyal sinirler görünümü${num ? ` (${num})` : ''}</button></div>`);
+
   const BRAIN_TAB = {
     's4-neu-3': 'csf', 's4-neu-p6': 'csf',
     's4-neu-7': 'nerves:exit', 's4-neu-8': 'nerves:exit', 's4-neu-p2': 'nerves:exit', 's4-neu-p3': 'nerves:exit', 's4-neu-p1b': 'nerves:exit', 's4-neu-0': 'nerves:nuclei',
@@ -376,8 +415,9 @@ export function createUI({ state, model, actions }) {
           <div class="chips"><span class="chip sys ${state.mode}"><i class="dot ${state.mode}"></i>${sys.label} modu</span></div>
           <h1>Bir yapıya tıklayın</h1>
           <p>Şu anda <b>${sys.label.toLowerCase()}</b> seçebilirsiniz. Tıkladığınız yapı parlar ve adı burada görünür.</p>
-          <p class="dim mouse-only">Başka bir sistemi seçmek için üstteki mod düğmelerini kullanın. Ctrl ile tıklayarak birden fazla yapı seçebilirsiniz. Derindeki bir yapıya ulaşmak için üstündekini seçip <b>H</b> (ya da karttaki Gizle) ile gizleyin.</p>
-          <p class="dim touch-only">Başka bir sistem için üstteki mod düğmelerine dokunun. Bir parmakla döndürün, iki parmakla yakınlaştırıp kaydırın, dokunarak seçin, çift dokunuşla odaklanın. Derindeki bir yapı için üstündekini seçip karttaki Gizle ile gizleyin.</p>
+          <p class="dim mouse-only">Başka bir sistemi seçmek için üstteki mod düğmelerini kullanın. Ctrl ile tıklayarak birden fazla yapı seçebilirsiniz. Derindeki bir yapıya ulaşmak için üstündekini seçip <b>H</b> (ya da karttaki Gizle) ile gizleyin; derin kaslar için aşağıdaki <b>Kas katmanı</b> ile dıştaki katmanları kaldırın (kas modunda).</p>
+          <p class="dim touch-only">Başka bir sistem için üstteki mod düğmelerine dokunun. Bir parmakla döndürün, iki parmakla yakınlaştırıp kaydırın, dokunarak seçin, çift dokunuşla odaklanın. Derindeki bir yapı için üstündekini seçip karttaki Gizle ile gizleyin; derin kaslar için: Kas katmanı.</p>
+          ${state.mode === 'muscle' && model.depth ? `<div class="field"><div class="k">Kas katmanı: derindeki kaslara ulaşmak için</div>${peelHTML(null)}</div>` : ''}
           ${state.hidden.size || state.isolate ? `<div class="btns">${state.isolate ? '<button data-act="isolate" title="İzole görünümden çık (I)">İzolasyondan çık</button>' : ''}${showAllBtn()}</div>` : ''}
         </div>`;
     } else if (p.type === 'item') {
@@ -393,6 +433,8 @@ export function createUI({ state, model, actions }) {
         ${namesHTML(r)}
         ${pathHTML(r.g)}
         ${muscleField(r)}
+        ${peelField(r)}
+        ${cranialBtn(cranialOf(r))}
         ${aankiField(r)}
         ${actionsHTML(twin)}`;
     } else if (p.type === 'group') {
@@ -404,6 +446,7 @@ export function createUI({ state, model, actions }) {
         </div>
         ${namesHTML(g)}
         ${pathHTML(g.p)}
+        ${cranialBtn(cranialOf({ s: g.s, n: g.n, g: g.p }))}
         ${actionsHTML()}
         <div class="field"><div class="k">Bu gruptaki yapılar</div>${memberList(recs, titleName(g))}</div>`;
     } else {
@@ -432,6 +475,7 @@ export function createUI({ state, model, actions }) {
     else if (act === 'showall') actions.showAll();
     else if (act === 'quiz' && state.primary?.type === 'topic') actions.topicQuiz(state.primary.id);
     else if (act === 'heart') actions.heartMode(e.target.closest('button[data-act]').dataset.tab || 'flow');
+    else if (act === 'cn') actions.cranialNerves(e.target.closest('button[data-act]').dataset.tab || '');
     else if (act === 'brain') actions.brainMode(e.target.closest('button[data-act]').dataset.tab || 'csf');
     else if (act === 'loco') actions.locoMode(e.target.closest('button[data-act]').dataset.tab || 'nerves');
     else if (act === 'sect') actions.sectMode(e.target.closest('button[data-act]').dataset.tab || '');
@@ -449,8 +493,16 @@ export function createUI({ state, model, actions }) {
     // Baştaki sıra numarası yok sayılır: "1. kaburga", "1. Rippe" de "kaburga", "Rippe" aramasında tam eşleşme sayılır.
     const namesOf = o => [o.tr, o.n, o.la, o.de].filter(Boolean).map(s => fold(s).replace(/^\d+ /, ''));
     for (const r of model.list) index.push({ kind: 'item', o: r, key: fold(`${r.tr || ''} ${r.n} ${r.la || ''} ${r.de || ''} ${sideWords(r.sd)}`), name: fold(titleName(r)), names: namesOf(r) });
+    // hızlı görünümler: aramada yapılardan önce gelir (anahtar sözcüklerin hepsi dört dilde ve yaygın yazımlarıyla)
+    for (const v of QUICK) index.push({ kind: 'view', o: v, key: fold(`${v.label} ${v.words}`), name: fold(v.label), names: [v.label, ...v.words.split(',')].map(x => fold(x.trim())) });
     for (const g of model.groups) index.push({ kind: 'group', o: g, key: fold(`${g.tr || ''} ${g.n} ${g.la || ''} ${g.de || ''}`), name: fold(titleName(g)), names: namesOf(g) });
   }
+  const QUICK = [
+    { key: 'cn', label: 'Kraniyal sinirler (I–XII)', sub: 'Hızlı görünüm: beyin modu › Sinirler, çıkış yerleri', run: () => actions.cranialNerves(''),
+      words: 'kraniyal sinirler, kranial sinirler, kafa çiftleri, beyin sinirleri, cranial nerves, nervi craniales, hirnnerven, kraniyal, kranial, cranial, hirnnerv' },
+    { key: 'peel', label: 'Derin kaslar: üst kas katmanını kaldır', sub: 'Hızlı görünüm: Araçlar › Kas katmanı', run: () => actions.peel(1),
+      words: 'derin kaslar, kas katmanı, katman, deep muscles, tiefe muskeln, muskelschicht, soy, yüzeyel kaslar, oberflächliche' },
+  ];
   const SIDE_TOKENS = new Set(['sag', 'sol', 'right', 'left', 'dexter', 'sinister', 'rechts', 'links']);
   // Sonuç satırı kartla aynı düzende: Latince ad, altında Almanca. Arama yalnızca Türkçe ya da İngilizce adla
   // eşleştiyse Almanca yerine eşleşen ad gösterilir; böylece sonucun neden çıktığı görülür.
@@ -470,7 +522,8 @@ export function createUI({ state, model, actions }) {
       if (!toks.every(t => e.key.includes(t))) continue;
       const starts = e.names.filter(n => core.some(t => n.startsWith(t)));
       let score = coreQ && e.names.includes(coreQ) ? -1 : starts.length ? 0 : (' ' + e.key).includes(' ' + (core[0] || toks[0])) ? 1 : 2;
-      if (e.kind === 'group') score += 0.5;
+      if (e.kind === 'view') score = -2;
+      else if (e.kind === 'group') score += 0.5;
       // kas yapışma yerleri (İskelet sistemi > Kas yapışmaları: origo / insertio yamaları) aynı eşleşme düzeyinde kasın
       // kendisinden, başlarından ve kas grubundan sonra gelir; gizlenmez ("biceps brachii" önce kası getirir)
       else if (e.o.sub === 'attach') score += 0.6;
@@ -483,6 +536,7 @@ export function createUI({ state, model, actions }) {
     out.sort((a, b) => a.score - b.score || byName(a.e.o, b.e.o));   // eşitlikte ağaçtaki sıra: Costa prima, secunda…
     shown = out.slice(0, 40).map(o => o.e); active = shown.length ? 0 : -1;
     el.results.innerHTML = shown.length ? shown.map((e, i) => {
+      if (e.kind === 'view') return `<button class="res${i === active ? ' on' : ''}" data-i="${i}"><i class="dot view"></i><span class="label"><span class="t">${esc(e.o.label)}</span><small>${esc(e.o.sub)}</small></span><span class="tag">görünüm</span></button>`;
       if (e.kind === 'topic') return `<button class="res${i === active ? ' on' : ''}" data-i="${i}" title="${esc(`${e.o.place}\n${e.o.title}`)}"><i class="dot aanki"></i><span class="label"><span class="t" lang="de">${esc(e.o.label)}</span><small>${esc(e.o.place)}</small></span><span class="tag">Aanki</span></button>`;
       const o = e.o, hint = hintFor(o, core);
       const end = e.kind === 'group' ? sexMark(sexOfGroup(o.i)) + '<span class="tag">grup</span>' : sexMark(o.x) + (o.sd ? `<span class="side ${o.sd}">${SIDE[o.sd]}</span>` : '');
@@ -493,7 +547,8 @@ export function createUI({ state, model, actions }) {
   function choose(i) {
     const e = shown[i]; if (!e) return;
     el.results.hidden = true; el.search.blur();
-    if (e.kind === 'topic') actions.selectTopic(e.o.id);
+    if (e.kind === 'view') e.o.run();
+    else if (e.kind === 'topic') actions.selectTopic(e.o.id);
     else if (e.kind === 'group') actions.selectGroup(e.o.i, { focus: true }); else actions.selectItem(e.o.id, { focus: true });
   }
   el.search.addEventListener('input', () => runSearch(el.search.value));
@@ -533,6 +588,7 @@ export function createUI({ state, model, actions }) {
       l.classList.toggle('off', state.layer[l.dataset.sys] === 'hide');   // gizli katmanın alt katmanları yer kaplamasın
     }
     el.isolateBar.hidden = !state.isolate;
+    if (el.peelTool) { const h = peelHTML(null); el.peelTool.hidden = !h; if (h) el.peelTool.querySelector('.peel-slot').innerHTML = h; }
     el.sex.hidden = !bothSexes();
     for (const b of $$('button[data-sex]', el.sex)) { const on = b.dataset.sex === state.sex; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); }
     renderInfo();

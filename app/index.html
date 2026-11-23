@@ -67,6 +67,8 @@
           <div class="tool"><label for="explode">Parçalarına ayır</label><input id="explode" type="range" min="0" max="100" value="0"><span id="explode-val">%0</span></div>
           <div class="tool"><span>Kesit</span><div id="cut-axis" class="seg small"><button data-axis="" class="active">Yok</button><button data-axis="x" title="Sagittal düzlem">Sagittal</button><button data-axis="z" title="Koronal (frontal) düzlem">Koronal</button><button data-axis="y" title="Aksiyal (transvers) düzlem">Aksiyal</button></div></div>
           <div class="tool" id="cut-row" hidden><input id="cut-pos" type="range" min="0" max="1000" value="500" aria-label="Kesit düzleminin yeri"><button id="cut-flip" class="icon-btn" title="Kesilen tarafı değiştir" aria-label="Kesilen tarafı değiştir">⇄</button><label class="cap" title="Kesilen yapıların kesit yüzünü dolu ve sınırlarını çizgili göster (BT/MR atlası gibi)"><input id="cut-cap" type="checkbox" checked>Dolu</label></div>
+          <!-- kas katmanı soyma: dıştaki kas katmanlarını kaldır (data/muscle-depth.json; denetimler src/ui.js peelHTML) -->
+          <div class="tool peel-tool" id="peel-tool" hidden><span>Kas katmanı</span><div class="peel-slot"></div></div>
           <!-- standart görünümler: üst çubuktaki #views 1320 px altında gizlenir, o zaman buradan (src/ui.js) -->
           <div class="tool" id="views-tool"><span>Görünüm</span><div class="seg small" aria-label="Görünüm"><button data-view="front" title="Önden (Numpad 1)">Ön</button><button data-view="back" title="Arkadan (Ctrl+Numpad 1)">Arka</button><button data-view="right" title="Sağ yan (Numpad 3)">Sağ</button><button data-view="left" title="Sol yan (Ctrl+Numpad 3)">Sol</button><button data-view="top" title="Üstten (Numpad 7)">Üst</button><button data-view="home" title="Tüm vücut (Home)">Tümü</button></div></div>
           <div class="tool study-block"><span class="study-head">Çalışma modları</span><div id="study-modes" class="study-grid">
@@ -75,6 +77,7 @@
             <button id="loco-mode" title="Hareket sistemi modu: sinir lezyonları, topografik geçitler, kas kartları (Ursprung, Ansatz, Innervation, Funktion), eklemler, test">Hareket</button>
             <button id="move-mode" title="Kol hareketi modu: sol kolu dirsekten ya da elden sürükle; kemikler eklem eksenlerinde döner, skapula ve klavikula eşlik eder; Neutral-Null açıları, kısalan ve uzayan kaslar">Kol hareketi</button>
             <button id="leg-mode" title="Bacak hareketi modu: sol bacağı dizden ya da ayaktan sürükle; kalça, diz, üst ve alt ayak bileği eklemleri ölçülen eksenlerde döner; Neutral-Null açıları">Bacak hareketi</button>
+            <button id="cn-view" title="Kraniyal sinirler (I–XII): beyin modunun Sinirler sekmesi; beyin sapından çıkış yerleri renkli ve etiketli, beyin ve kafatası saydam">Kraniyal sinirler</button>
             <button id="sect-mode" title="Kesit atlası: BT / MR atlası gibi kanonik kesit seviyeleri (baş-boyun, göğüs, karın, pelvis, ekstremite), kesit yüzünde tanınacak yapılar, test">Kesit atlası</button>
           </div></div>
           <div class="tool"><button id="exam-btn" class="wide" title="Deneme sınavı: bütün çalışma modlarının bilgi sorularından karışık, süreli test (konu, soru sayısı, süre, Sınav ya da Çalışma modu)">Deneme sınavı</button></div>

@@ -31,6 +31,8 @@ const model = new Model(stage, glow, { batching: new URLSearchParams(location.se
 
 // Beden: 'm' erkek, 'f' kadın. Seçim bu tarayıcıda hatırlanır; okunamazsa erkek.
 const SEX_KEY = 'anatomi3d.sex';
+const PEEL_KEY = 'anatomi3d.peelGhost';
+function readPeelGhost() { try { return localStorage.getItem(PEEL_KEY) === '1'; } catch { return false; } }
 const readSex = () => { try { return localStorage.getItem(SEX_KEY) === 'f' ? 'f' : 'm'; } catch { return 'm'; } };
 
 const state = {
@@ -43,6 +45,11 @@ const state = {
   selected: new Set(),
   primary: null,      // { type:'item', id } | { type:'group', gi } | { type:'multi' }
   hover: null,
+  // Kas katmanı soyma (Araçlar ve kas kartı): n = dıştan kaldırılan katman sayısı, ghost = kaldırılanlar saydam mı
+  // (yoksa gizli). Katmanlar data/muscle-depth.json'dan (tools/muscle-depth.mjs). peelOn: refresh hesaplar (çalışma
+  // modlarında ve testlerde soyma uygulanmaz; onlar kendi görünümlerini kurar).
+  peel: { n: 0, ghost: readPeelGhost() },
+  peelOn: false,
 };
 
 let ui, tools;
@@ -184,6 +191,7 @@ function refresh({ flash = false, reveal = false } = {}) {
   // dar ekranda küçültülmüş bilgi paneli, yeni bir konu, çalışma modu ya da test açılınca büyür
   const pt = state.primary?.type || null;
   if (pt !== lastPrimaryType) { lastPrimaryType = pt; if (ISO_VIEWS.includes(pt)) setSheet(false); }
+  state.peelOn = state.peel.n > 0 && !!model.depth && !STUDY.includes(pt) && pt !== 'quiz';
   const selMeshes = model.apply(state);
   tools?.refresh();
   const extra = [...(heart?.highlight() || []), ...(brain?.highlight() || []), ...(loco?.highlight() || []), ...allTours().flatMap(t => t.highlight()), ...(sect?.highlight() || []), ...(quiz?.highlight() || [])];   // çalışma modunda adımın, tıklanan ya da sorulan yapının parıltısı
@@ -402,6 +410,35 @@ const actions = {
     state.selected = new Set(); state.primary = null; refresh();
   },
   showAll() { state.hidden.clear(); state.isolate = null; refresh(); },
+  // Kas katmanı soyma. op: +1 (üstteki katmanı kaldır), -1 (son kaldırılanı geri getir), 0 (hepsini geri getir),
+  // { to: k } (k katman kaldırılmış olsun; kas kartındaki "Bu kasa kadar soy": k = kasın katmanı - 1), 'ghost' / 'hide'
+  // (kaldırılanların görünüşü). Kas katmanı gizliyse açılır; kaldırılan katmandaki seçim bırakılır.
+  peel(op) {
+    const D = model.depth;
+    if (op === 'ghost' || op === 'hide') {
+      state.peel.ghost = op === 'ghost';
+      try { localStorage.setItem(PEEL_KEY, state.peel.ghost ? '1' : '0'); } catch { /* yalnız bu oturum */ }
+      refresh(); return;
+    }
+    if (!D) { ui.notify('Kas katmanı verisi yüklenemedi'); return; }
+    if (STUDY.includes(state.primary?.type) || state.primary?.type === 'quiz') { ui.notify('Kas katmanı çalışma modlarında kullanılmaz: önce moddan çıkın'); return; }
+    const n = op && typeof op === 'object' ? op.to : op === 0 ? 0 : state.peel.n + op;
+    state.peel.n = Math.max(0, Math.min(D.max - 1, n));
+    if (!model.loaded.muscle) { const to = state.peel.n; defer('muscle', () => actions.peel({ to })); return; }
+    cancelDeferred();
+    if (state.layer.muscle === 'hide') state.layer = { ...state.layer, muscle: 'show' };
+    if (state.peel.n && state.mode !== 'muscle' && !state.isolate) state.mode = 'muscle';
+    // kaldırılan katmandaki seçili kas bırakılır (seçili yapı hep görünür kalır, soyma işe yaramamış görünürdü)
+    const gone = id => { const r = model.items.get(id); return r?.s === 'muscle' && (D.d[id] || 99) <= state.peel.n; };
+    if ([...state.selected].some(gone)) {
+      state.selected = new Set([...state.selected].filter(id => !gone(id)));
+      state.primary = !state.selected.size ? null : state.selected.size === 1 ? { type: 'item', id: [...state.selected][0] } : { type: 'multi' };
+    }
+    refresh();
+  },
+  // Kraniyal sinirler hızlı görünümü: beyin çalışma modunun Sinirler sekmesi (çıkış yerleri; I-XII renkli ve etiketli,
+  // beyin sapı opak, beyin ve kafatası saydam bağlam). num: 'III' gibi, o sinir seçili açılır.
+  cranialNerves(num) { actions.brainMode(`nerves:exit${num ? ':' + num : ''}`); },
   toggleIsolate() {
     if (state.isolate) state.isolate = null;
     else if (state.selected.size) {
@@ -498,6 +535,8 @@ ui.registerPanel('heart', { html: heart.panelHTML, click: heart.click });
 brain = createBrain({ stage, model, state, refresh, defer, ui, glow, viewLayers, endStudy });
 ui.registerPanel('brain', { html: brain.panelHTML, click: brain.click });
 // kas kartları: açılışı bekletmeden yüklenir; yapı kartında ve hareket sistemi modunda kullanılır
+// Kas katmanı derinlikleri (tools/muscle-depth.mjs): küçük dosya, açılışta gelir; gelmezse soyma denetimleri pasif kalır
+fetch('data/muscle-depth.json').then(r => (r.ok ? r.json() : null)).then(d => { if (d?.d) { model.depth = d; if (booted) refresh(); } }).catch(e => console.warn('muscle-depth.json yüklenemedi:', e));
 const musclesReady = loadMuscles().then(mu => { ui.setMuscles(mu); return mu; }).catch(e => { console.warn('muscles.json yüklenemedi:', e); return null; });
 loco = createLoco({ stage, model, state, refresh, defer, ui, glow, viewLayers, endStudy, musclesReady });
 ui.registerPanel('loco', { html: loco.panelHTML, click: loco.click });
@@ -538,6 +577,7 @@ document.getElementById('info').addEventListener('click', e => {
 // Almanca test metinleri boşta önceden indirilir (servis çalışanı zaten önbelleğe alır); testler beklemeden Almanca açılsın
 if (testlang.getLang() === 'de') setTimeout(() => (window.requestIdleCallback || (f => f()))(() => testlang.loadDe()), 4000);
 document.getElementById('heart-mode').addEventListener('click', e => { e.currentTarget.blur(); actions.heartMode('flow'); });
+document.getElementById('cn-view')?.addEventListener('click', e => { e.currentTarget.blur(); actions.cranialNerves(''); });
 document.getElementById('brain-mode').addEventListener('click', e => { e.currentTarget.blur(); actions.brainMode('csf'); });
 document.getElementById('sect-mode').addEventListener('click', e => { e.currentTarget.blur(); actions.sectMode(''); });
 document.getElementById('loco-mode').addEventListener('click', e => { e.currentTarget.blur(); actions.locoMode('nerves'); });

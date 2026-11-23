@@ -11,6 +11,7 @@
     "meta": "node tools/meta.mjs",
     "inspect": "node tools/inspect.mjs",
     "holes": "node tools/holes.mjs",
+    "depth": "node tools/muscle-depth.mjs",
     "android:sync": "npm run build && npx cap sync android",
     "android:res": "node tools/android-res.mjs"
   },

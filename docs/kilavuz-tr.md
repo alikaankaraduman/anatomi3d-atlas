@@ -84,7 +84,18 @@ Sol panel ekrana sığmadığında bütünüyle kaydırılır; yapı ağacı en 
 (arama, ağaç, F) yapıyı bugünkü bakış yönünden opak bir yapı örtüyorsa kamera örtülmeyen bir yönden bakar (ör. leğen
 kemiğinin arka yüzündeki Gluteus maximus origosu arkadan).
 
-Derindeki bir yapıya ulaşmak için üstündekini seçip `H` ile gizleyin.
+Derindeki bir yapıya ulaşmak için üstündekini seçip `H` ile (ya da bilgi kartındaki **Gizle** ile) gizleyin;
+*Gizlenenleri göster* hepsini geri getirir.
+
+**Kas katmanı** (Araçlar › Kas katmanı; kas modunda boş bilgi kartında ve her kasın kartında da): **Üst katmanı
+kaldır** dıştaki kas katmanını kaldırır, altındaki derin kaslar görünür ve tıklanabilir olur (ör. iki adımda
+M. supinator, M. subscapularis, Mm. rotatores); **Geri getir** son kaldırılanı, **Hepsi** bütün katmanları geri getirir.
+*Gizle / Saydam* kaldırılan kasların kaybolmasını ya da soluk bir gölge olarak kalmasını seçer (saydam kaslar,
+arkalarında başka kas yoksa yine tıklanır). Bir kasın kartında kasın kaçıncı katmanda olduğu yazar; **Üstündekileri
+kaldır** o kasın üstündeki bütün katmanları tek adımda kaldırır. Katmanlar modelin geometrisinden bir kez hesaplanmıştır
+(her kasın yüzeyinden dışarı atılan ışınlarla "soğan soyma"; deri yoktur, bu yüzden en dıştaki kaslar 1. katmandır);
+ders kitabının katman sayımıyla bire bir aynı değildir. Aramada "derin kaslar" ya da "kas katmanı" da bu araca götürür.
+Çalışma modlarında ve testlerde kullanılmaz.
 
 Kemik katmanındaki **Kas yapışmaları** alt katmanı (varsayılan kapalı) kasların başlangıç (origo, kırmızı) ve
 sonlanma (insersiyo, mavi) yerlerini kemiklerin üzerinde gösterir; bir alana tıklamak kasın adını verir, kasın
@@ -123,6 +134,10 @@ Sol paneldeki **Araçlar** bölümü:
   puan tutulur. Deneme sınavında bu sorular "Kalp" konusudur.
 - **Beyin çalışma modu** (Araçlar › Beyin çalışma modu; Aanki'deki nöro derslerinin ve göz, kulak, kafatası derslerinin
   kartında da düğmesi var, ders uygun bölüm ve görünümle açılır): BOS, kranial sinirler ve beyin arterleri için görsel tekrar.
+  **Kraniyal sinirleri hızlı görmek** için: Araçlar › Çalışma modları › **Kraniyal sinirler**, aramada "kraniyal sinirler" /
+  "Hirnnerven" (ilk sonuç "görünüm") ya da bir kraniyal sinirin (dalının, kökünün) kartındaki **Kraniyal sinirler görünümü**
+  düğmesi: bu mod Sinirler sekmesinde, Çıkış görünümünde ve o sinir seçili açılır. On iki sinir modelde vardır (sinir
+  sistemi › Nervi craniales), ama normal atlasta incedirler ve opak beynin altında kalırlar; en kolay bu görünümde görülür.
   **BOS yolu**: 13 adım. Ventriküller yarı saydam mavi, plexus choroideus pembe; damlalar plexustan yan ventrikül, Foramen
   interventriculare, III. ventrikül, aquaeductus ve IV. ventrikülün içinden aperturalara, oradan subaraknoid aralıkta
   (modelde yok, şematik) sinus sagittalis superior'a ve sinüslerden V. jugularis interna'ya gider. Modelde olmayan delikler

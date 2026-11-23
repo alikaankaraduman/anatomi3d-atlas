@@ -308,6 +308,13 @@ export class Model {
         ghost = vis && ls === 'ghost';
         if (isSel && !vis) vis = true;      // seçili yapı her zaman görünür
       }
+      // Kas katmanı soyma (state.peelOn, main.js): dıştan peel.n katmandaki kaslar gizlenir ya da saydam çizilir;
+      // saydam olanlar ikinci sırada tıklanır (içlerindeki derin kaslar önce gelir) ve hiçbir şeyi örtmez. Seçili kas kalır.
+      let peeled = false;
+      if (vis && state.peelOn && r.sub === 'muscle' && !isSel && (this.depth?.d[r.id] || 99) <= state.peel.n) {
+        peeled = true;
+        if (state.peel.ghost) ghost = true; else vis = false;
+      }
       const kind = isSel ? 'selected' : state.hover === r.id ? 'hover' : 'layer';
       this._present(r, vis, kind, ghost);
       if (vis && isSel) selMeshes.push(r.mesh);
@@ -317,7 +324,8 @@ export class Model {
         // içlerindeki yapılar önce gelir, arkalarında bir şey yoksa kendileri seçilir
         // userData.noPick taşıyan özel malzeme (çalışma modlarında neredeyse görünmez bağlam, kesilip gizlenen kafatası
         // kubbesi): çizilir ama tıklanmaz ve üzerine gelinmez
-        if (state.isolate) { const ovm = this.overrides.get(r.id); if (!ovm?.userData?.noPick) (ghost || this.isGhostMat(ovm) ? soft : pick).push(r.mesh); }
+        if (peeled) { if (state.isolate || r.s === state.mode) soft.push(r.mesh); }
+        else if (state.isolate) { const ovm = this.overrides.get(r.id); if (!ovm?.userData?.noPick) (ghost || this.isGhostMat(ovm) ? soft : pick).push(r.mesh); }
         else if (r.s === state.mode) pick.push(r.mesh);
         else if (!this.isGhostMat(r.mesh.material)) occ.push(r.mesh);   // gerçekten opak çizilenler (seçili saydam parça da)
       }
