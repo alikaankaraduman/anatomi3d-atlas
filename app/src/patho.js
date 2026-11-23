@@ -29,6 +29,10 @@ const MODEL_NOTE = {
   'medianus-karpaltunnel': 'Mm. lumbricales modelde tek parça: aslında yalnız I-II felçli.',
   'ulnaris-sulcus': 'M. flexor digitorum profundus ve Mm. lumbricales modelde tek parça: aslında yalnız ulnar yarı (III-IV) felçli.',
   'gluteus-superior-trendelenburg': 'Modelde Foramen suprapiriforme kapalı; lezyon noktası yaklaşık.',
+  'gluteus-inferior-tep': 'N. gluteus inferior modelde yok: lezyon yalnız Foramen infrapiriforme\'deki kırmızı noktayla gösteriliyor.',
+  'ulnaris-guyon': 'Modelde N. ulnaris bilekte ders kitabındaki yerinden biraz farklı geçiyor; Guyon noktası yaklaşık.',
+  'musculocutaneus-coracobrachialis': 'Modelde sinir M. coracobrachialis\'i ders kitabındaki yerinden biraz farklı deliyor; lezyon noktası yaklaşık.',
+  'ischiadicus-hueftluxation': 'Modelde N. ischiadicus gluteal bölgede ders kitabındaki yerinden biraz farklı geçiyor; lezyon noktası yaklaşık.',
 };
 
 const V3 = p => new THREE.Vector3(p[0], p[1], p[2]);
@@ -207,7 +211,8 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
   function panelHTML() {
     if (!D) return '<p class="htext">Yükleniyor…</p>';
     const c = cur(), f = c.frage, lg = lang(), other = lg === 'de' ? 'tr' : 'de';
-    const groups = [['nerve', 'Periferik sinir lezyonları'], ['brain', 'Beyin ve omurilik infarktları']];
+    const groups = [['arm', 'Kol sinirleri'], ['leg', 'Bacak sinirleri'], ['brain', 'Beyin ve omurilik infarktları']];
+    const grpOf = x => (x.system === 'brain' ? 'brain' : nerveOf(x)?.region === 'leg' ? 'leg' : 'arm');
     const done = Object.values(p.score), right = done.filter(Boolean).length;
     const opts = f['options_' + lg];
     const answered = p.pick !== null;
@@ -216,7 +221,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
       return `<button class="qopt ${cls}" data-po="${j}"${answered ? ' disabled' : ''}><b>${esc(opts[j])}</b></button>`;
     }).join('')}</div>`;
     const legend = c.system === 'nerve'
-      ? `${sw(COL.nerve, 'sinir')} ${sw(COL.mark, 'lezyon')} ${sw(COL.lost, 'felçli')} ${sw(COL.kept, 'aynı sinir, sağlam')}`
+      ? `${sw(COL.nerve, 'sinir')} ${sw(COL.mark, 'lezyon')} ${c.folge.paralysed.length ? sw(COL.lost, 'felçli') + ' ' : ''}${sw(COL.kept, 'aynı sinir, sağlam')}`
       : `${sw(COL.artery, 'tıkanan arter')} ${sw(COL.terr, 'etkilenen alan')}`;
     const where = c.system === 'nerve' ? (() => { const s = siteOf(c), nv = nerveOf(c); return `<span lang="la">${esc(nv?.la || '')}</span>${s ? ` · <span lang="de">${esc(s.de || s.la || '')}</span>` : ''}`; })()
       : `<span lang="la">${esc(artName(c))}</span>`;
@@ -229,13 +234,13 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
       </div>
       <details class="clinic" open><summary>Mechanismus</summary><p lang="de">${esc(c.mechanismus_de)}</p><p class="htext small dim">${esc(c.mechanismus_tr)}</p></details>
       <details class="clinic" open><summary>Ausfälle</summary>${c.folge.deficits_de.map((d, j) => `<p><b lang="de">${esc(d)}</b><br><small>${esc(c.folge.deficits_tr[j] || '')}</small></p>`).join('')}</details>
-      <details class="clinic"><summary>${c.system === 'nerve' ? 'Felçli kaslar' : 'Etkilenen yapılar'} (${affected.length})</summary><p lang="la">${affected.map(esc).join(', ')}</p></details>
+      ${affected.length ? `<details class="clinic"><summary>${c.system === 'nerve' ? 'Felçli kaslar' : 'Etkilenen yapılar'} (${affected.length})</summary><p lang="la">${affected.map(esc).join(', ')}</p></details>` : '<p class="htext small">Kas felci yok: yalnız duyu kaybı.</p>'}
       ${MODEL_NOTE[c.key] ? `<div class="tip">${esc(MODEL_NOTE[c.key])}</div>` : ''}
       <div class="btns">${c.system === 'nerve' ? `<button data-pg="loco" title="Bu siniri bütün lezyon yerleriyle Hareket modunda aç">Hareket modunda aç</button>` : `<button data-pg="brain" title="Beyin arterlerini ve beslenme alanlarını Beyin modunda aç">Beyin modunda aç</button>`}</div>`
       : `<div class="btns"><button data-pa="show" title="Soruyu cevaplamadan lezyonu 3B görünümde göster">Tabloyu şimdi göster</button></div>`;
     return `
       <div class="chips"><span class="chip loco">Patoloji vakaları</span><span class="chip dim">pilot</span></div>
-      <div class="field"><select data-psel="case" aria-label="Vaka">${groups.map(([k, t]) => `<optgroup label="${t}">${D.cases.map((x, j) => x.system === k ? `<option value="${j}"${j === p.i ? ' selected' : ''}>${j + 1}. ${esc(x.title_de)}${p.score[x.key] === true ? ' ✓' : p.score[x.key] === false ? ' ✗' : ''}</option>` : '').join('')}</optgroup>`).join('')}</select></div>
+      <div class="field"><select data-psel="case" aria-label="Vaka">${groups.map(([k, t]) => `<optgroup label="${t}">${D.cases.map((x, j) => grpOf(x) === k ? `<option value="${j}"${j === p.i ? ' selected' : ''}>${j + 1}. ${esc(x.title_de)}${p.score[x.key] === true ? ' ✓' : p.score[x.key] === false ? ' ✗' : ''}</option>` : '').join('')}</optgroup>`).join('')}</select></div>
       <div class="btns"><button data-pa="prev" title="Önceki vaka">◀</button><span class="htext small dim">${p.i + 1} / ${D.cases.length}${done.length ? ` · ${right}/${done.length} doğru` : ''}</span><button data-pa="next" title="Sonraki vaka">▶</button></div>
       <h1 class="name" lang="de">${esc(c.title_de)}</h1>
       <p lang="de" class="htext">${esc(c.befund_de)}</p>

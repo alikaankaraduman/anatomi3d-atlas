@@ -7,7 +7,9 @@ import fs from 'node:fs';
 
 const SRC = '../data/work/patho/cases.json', OUT = 'public/data/patho.json';
 const read = p => JSON.parse(fs.readFileSync(p, 'utf8'));
-const src = read(SRC), meta = read('public/data/meta.json'), loco = read('public/data/locomotor.json'), brain = read('public/data/brain.json');
+const src = read(SRC);
+for (const f of fs.readdirSync('../data/work/patho').filter(f => /^new-.*.json$/.test(f)).sort()) src.cases.push(...read('../data/work/patho/' + f));   // sonraki partiler (new-arm.json, new-leg.json …)
+const meta = read('public/data/meta.json'), loco = read('public/data/locomotor.json'), brain = read('public/data/brain.json');
 const names = new Set(meta.items.map(i => i.n));
 const errs = [];
 const err = (c, s) => errs.push(`${c.key}: ${s}`);
@@ -22,7 +24,7 @@ for (const c of src.cases) {
     const nv = loco.nerves.list.find(n => n.key === nk), site = nv?.sites?.find(s => s.key === sk);
     if (!site) err(c, `lezyon yeri yok: ${c.struktur?.site}`);
     if (!loco.geo?.sites?.[c.struktur?.site]?.p) err(c, `geo.sites noktası yok: ${c.struktur?.site}`);
-    if (!c.folge?.paralysed?.length) err(c, 'folge.paralysed boş');
+    if (!Array.isArray(c.folge?.paralysed) || (!c.folge.paralysed.length && (site?.lost || []).length)) err(c, 'folge.paralysed boş');   // yalnız duyusal lezyonda (lost boş) boş olabilir
     need(c, c.folge?.paralysed, 'paralysed');
     if (site && !same(site.lost || [], c.folge?.paralysed || [])) err(c, 'paralysed, lezyon yerinin lost listesiyle aynı değil');
   } else if (c.system === 'brain') {
@@ -39,6 +41,9 @@ const keys = src.cases.map(c => c.key);
 if (new Set(keys).size !== keys.length) errs.push('yinelenen vaka anahtarı');
 
 if (errs.length) { console.error(errs.join('\n')); console.error(`${errs.length} hata; ${OUT} yazılmadı`); process.exit(1); }
+// sıra: kol sinirleri, bacak sinirleri, beyin (panelde ◀ ▶ bu sırayla gezer); grup içinde dosyadaki sıra korunur
+const rank = c => (c.system === 'brain' ? 2 : loco.nerves.list.find(n => n.key === c.struktur.site.split('@')[0])?.region === 'leg' ? 1 : 0);
+src.cases = src.cases.map((c, i) => [rank(c), i, c]).sort((x, y) => x[0] - y[0] || x[1] - y[1]).map(x => x[2]);
 const out = { v: src.v, date: src.date, title_de: src.title_de, note: src.note, cases: src.cases };
 fs.writeFileSync(OUT, JSON.stringify(out));
 console.log(`${OUT}: ${src.cases.length} vaka (${src.cases.filter(c => c.system === 'nerve').length} sinir, ${src.cases.filter(c => c.system === 'brain').length} beyin), ${(fs.statSync(OUT).size / 1024).toFixed(1)} KB`);
