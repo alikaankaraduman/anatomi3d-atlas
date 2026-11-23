@@ -9,6 +9,7 @@ import { createAanki } from './aanki.js';
 import { createHeart } from './heart.js';
 import { createBrain } from './brain.js';
 import { createLoco } from './locomotor.js';
+import { createPatho } from './patho.js';
 import { createMotion } from './motion.js';
 import { createTour } from './tour.js';
 import { createSections } from './sections.js';
@@ -58,6 +59,7 @@ let heart = null;     // kalp çalışma modu (heart.js)
 let brain = null;     // beyin çalışma modu (brain.js)
 let move = null;      // kol hareketi modu (motion.js)
 let loco = null;      // hareket sistemi çalışma modu (locomotor.js)
+let patho = null;     // patoloji vakaları (patho.js)
 let quiz = null;      // Aanki konu testi (quiz.js)
 let sect = null;      // kesit atlası ve kesit testi (sections.js)
 let exam = null;      // deneme sınavı (exam.js): bütün bilgi sorusu bankalarından süreli, karışık test
@@ -75,7 +77,7 @@ const TOURS = [
 const TOUR_KEYS = TOURS.map(t => t.key);
 const tours = Object.create(null);     // anahtar -> createTour örneği (prototipsiz: #m=constructor gibi bağlantılar tur sayılmasın)
 const allTours = () => Object.values(tours);
-const STUDY = ['heart', 'brain', 'loco', 'move', ...TOUR_KEYS, 'sect'];   // kendi paneli ve renkleri olan çalışma modları
+const STUDY = ['heart', 'brain', 'loco', 'patho', 'move', ...TOUR_KEYS, 'sect'];   // kendi paneli ve renkleri olan çalışma modları
 const ISO_VIEWS = ['topic', ...STUDY, 'quiz'];            // izole görünümle yaşayan birincil görünümler
 // İzole görünümler (Aanki konusu, kalp modu, I ile izolasyon) katman durumlarını kullanır: gereken sistemler açılır,
 // izolasyondan çıkınca önceki katman durumları geri gelir.
@@ -182,7 +184,7 @@ stage.setInsetsProvider(measureInsets);
 function refresh({ flash = false, reveal = false } = {}) {
   // Aanki konusu izole görünümle birlikte yaşar: izolasyondan çıkılınca kart da konuyu bırakır
   if (ISO_VIEWS.includes(state.primary?.type) && !state.isolate) state.primary = null;
-  heart?.sync(); brain?.sync(); loco?.sync(); move?.sync(); for (const t of allTours()) t.sync(); sect?.sync(); quiz?.sync();      // çalışma modu bittiyse renkler, akış çizgileri ve etiketler kaldırılır
+  heart?.sync(); brain?.sync(); loco?.sync(); patho?.sync(); move?.sync(); for (const t of allTours()) t.sync(); sect?.sync(); quiz?.sync();      // çalışma modu bittiyse renkler, akış çizgileri ve etiketler kaldırılır
   if (savedLayers && !state.isolate) {
     state.layer = savedLayers; savedLayers = null;
     if (state.layer[state.mode] === 'hide') state.layer = presetFor(state.mode);   // görünümde mod değiştiyse
@@ -194,7 +196,7 @@ function refresh({ flash = false, reveal = false } = {}) {
   state.peelOn = state.peel.n > 0 && !!model.depth && !STUDY.includes(pt) && pt !== 'quiz';
   const selMeshes = model.apply(state);
   tools?.refresh();
-  const extra = [...(heart?.highlight() || []), ...(brain?.highlight() || []), ...(loco?.highlight() || []), ...allTours().flatMap(t => t.highlight()), ...(sect?.highlight() || []), ...(quiz?.highlight() || [])];   // çalışma modunda adımın, tıklanan ya da sorulan yapının parıltısı
+  const extra = [...(heart?.highlight() || []), ...(brain?.highlight() || []), ...(loco?.highlight() || []), ...(patho?.highlight() || []), ...allTours().flatMap(t => t.highlight()), ...(sect?.highlight() || []), ...(quiz?.highlight() || [])];   // çalışma modunda adımın, tıklanan ya da sorulan yapının parıltısı
   glow.setSelected(extra.length ? [...selMeshes, ...extra] : selMeshes, flash);
   // Üzerine gelme vurgusunu yeni durumla eşitle: gizlenen yapının halesi ve balonu kalmasın,
   // seçilen yapı beyaz hale almasın, seçimi kaldırılıp hâlâ imlecin altında kalan yapı halesini geri alsın.
@@ -213,7 +215,7 @@ function setHover(id, x, y) {
     const r = id && model.items.get(id);
     glow.setHovered(r?.mesh && r.vis && !state.selected.has(id) ? [r.mesh] : []);
   }
-  if (x !== undefined) ui.tooltip(id && !heart?.hideTips() && !brain?.hideTips() && !loco?.hideTips() && !move?.hideTips() && !allTours().some(t => t.hideTips()) && !sect?.hideTips() && !quiz?.isActive() ? model.items.get(id) : null, x, y);
+  if (x !== undefined) ui.tooltip(id && !heart?.hideTips() && !brain?.hideTips() && !loco?.hideTips() && !patho?.hideTips() && !move?.hideTips() && !allTours().some(t => t.hideTips()) && !sect?.hideTips() && !quiz?.isActive() ? model.items.get(id) : null, x, y);
 }
 const selectedRecs = () => [...state.selected].map(id => model.items.get(id)).filter(r => r?.mesh);
 // Konu çerçevesi: yapıların çoğunun durduğu yer. Omurilik boyunca inen uzun yollar gibi uçta kalan birkaç yapı
@@ -260,13 +262,13 @@ function flushDeferred(sys) {
 }
 // Kullanıcı bu arada başka bir şey seçerse ya da yaparsa bekleyen istek iptal olur (yeni seçim eskisinin önüne geçer).
 // Hiçbir şey değiştirmeyen eylemler (boşluğa tık, seçimsiz Esc) isteği iptal etmez: bu yüzden koruyuculardan sonra çağrılır.
-function cancelDeferred() { brain?.cancelPending(); loco?.cancelPending(); move?.cancelPending(); for (const t of allTours()) t.cancelPending(); sect?.cancelPending(); if (deferred) { deferred = null; ui?.setLoadingHint(null); } }
+function cancelDeferred() { brain?.cancelPending(); loco?.cancelPending(); patho?.cancelPending(); move?.cancelPending(); for (const t of allTours()) t.cancelPending(); sect?.cancelPending(); if (deferred) { deferred = null; ui?.setLoadingHint(null); } }
 // Bir çalışma modundan ötekine geçilirken önceki mod renklerini, çizgilerini ve etiketlerini yenisi kurulmadan kaldırsın
 // (modlar model.overrides'ı ve #labels katmanını paylaşır).
 function endStudy(next) {
   const t = state.primary?.type;
   // yeni modun viewLayers'ı kullanıcının ilk moddan önceki katmanlarının üstüne kurulsun, eski modunkilerin değil
-  if (STUDY.includes(t) && t !== next) { if (savedLayers) state.layer = { ...savedLayers }; state.primary = null; heart?.sync(); brain?.sync(); loco?.sync(); move?.sync(); for (const x of allTours()) x.sync(); sect?.sync(); }
+  if (STUDY.includes(t) && t !== next) { if (savedLayers) state.layer = { ...savedLayers }; state.primary = null; heart?.sync(); brain?.sync(); loco?.sync(); patho?.sync(); move?.sync(); for (const x of allTours()) x.sync(); sect?.sync(); }
 }
 
 // Bedeni değiştir: karşı cinsiyetin parçaları seçimden ve izolasyondan çıkar, birincil seçim buna göre düzelir.
@@ -455,6 +457,7 @@ const actions = {
   heartMode(tab) { cancelDeferred(); setPanelOpen(false); heart.enter(tab); },
   brainMode(spec) { cancelDeferred(); setPanelOpen(false); brain.enter(spec); },
   locoMode(spec) { cancelDeferred(); setPanelOpen(false); loco.enter(spec); },
+  pathoMode(spec) { cancelDeferred(); setPanelOpen(false); patho.enter(spec); },
   moveMode(spec) { cancelDeferred(); setPanelOpen(false); move.enter(spec); },
   // çalışma turu: spec 'sekme[:madde]' ya da 'quiz[:sahne]'
   tour(key, spec) { if (!tours[key]) return; cancelDeferred(); setPanelOpen(false); tours[key].enter(spec); },
@@ -540,6 +543,8 @@ fetch('data/muscle-depth.json').then(r => (r.ok ? r.json() : null)).then(d => { 
 const musclesReady = loadMuscles().then(mu => { ui.setMuscles(mu); return mu; }).catch(e => { console.warn('muscles.json yüklenemedi:', e); return null; });
 loco = createLoco({ stage, model, state, refresh, defer, ui, glow, viewLayers, endStudy, musclesReady });
 ui.registerPanel('loco', { html: loco.panelHTML, click: loco.click });
+patho = createPatho({ stage, model, state, refresh, defer, ui, viewLayers, endStudy, actions });
+ui.registerPanel('patho', { html: patho.panelHTML, click: patho.click });
 move = createMotion({ stage, model, state, refresh, defer, viewLayers, endStudy, tools, glow, musclesReady });
 ui.registerPanel('move', { html: move.panelHTML, click: move.click });
 // çalışma turları: örnek, panel ve "Çalışma modları" ızgarasındaki kısa düğme listeden kurulur (kalp, beyin ve hareket
@@ -565,7 +570,7 @@ ui.registerPanel('quiz', { html: quiz.panelHTML, click: quiz.click });
 // Test dili (testlang.js): test panelinin puan satırındaki "DE | TR" düğmesi. Paneli yakalama evresinde işler (panelin
 // kendi tıklaması çalışmaz); dil değişince ya da Almanca metinler gelince açık test paneli ve sınav penceresi aynı
 // durumla yeniden çizilir (soru, şık sırası, cevap, puan, kamera değişmez). Test açık değilse hiçbir şey çizilmez.
-const testOpen = () => state.primary?.type === 'quiz' || [heart, brain, loco, ...allTours(), sect].some(m => m?.isActive() && m.hideTips?.());
+const testOpen = () => state.primary?.type === 'quiz' || [heart, brain, loco, patho, ...allTours(), sect].some(m => m?.isActive() && m.hideTips?.());
 testlang.onLang(() => { exam?.relang(); if (testOpen()) refresh(); });
 document.getElementById('info').addEventListener('click', e => {
   const b = e.target.closest('[data-tlang]'); if (!b) return;
@@ -581,6 +586,7 @@ document.getElementById('cn-view')?.addEventListener('click', e => { e.currentTa
 document.getElementById('brain-mode').addEventListener('click', e => { e.currentTarget.blur(); actions.brainMode('csf'); });
 document.getElementById('sect-mode').addEventListener('click', e => { e.currentTarget.blur(); actions.sectMode(''); });
 document.getElementById('loco-mode').addEventListener('click', e => { e.currentTarget.blur(); actions.locoMode('nerves'); });
+document.getElementById('patho-mode')?.addEventListener('click', e => { e.currentTarget.blur(); actions.pathoMode(''); });
 document.getElementById('move-mode').addEventListener('click', e => { e.currentTarget.blur(); actions.moveMode(''); });
 document.getElementById('leg-mode').addEventListener('click', e => { e.currentTarget.blur(); actions.moveMode('leg'); });
 // Yanlışlarım (genel tekrar) ve ilerlemeyi sıfırlama. Sıfırlama iki adımlıdır: ilk tıklama düğmeyi birkaç saniyeliğine
@@ -643,7 +649,7 @@ canvas.addEventListener('pointerup', e => {
   const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y); down = null;
   if (moved > 5) return;
   const rec = model.pick(e.clientX, e.clientY, 9);
-  if (rec && (sect?.onPick(rec.id, e.clientX, e.clientY) || heart?.onPick(rec.id) || brain?.onPick(rec.id, e.clientX, e.clientY) || loco?.onPick(rec.id, e.clientX, e.clientY) || move?.onPick(rec.id, e.clientX, e.clientY) || allTours().some(t => t.onPick(rec.id, e.clientX, e.clientY)) || quiz?.onPick(rec.id))) return;   // çalışma modunda tıklama modda kalır (testte cevap sayılır)
+  if (rec && (sect?.onPick(rec.id, e.clientX, e.clientY) || heart?.onPick(rec.id) || brain?.onPick(rec.id, e.clientX, e.clientY) || loco?.onPick(rec.id, e.clientX, e.clientY) || patho?.onPick(rec.id) || move?.onPick(rec.id, e.clientX, e.clientY) || allTours().some(t => t.onPick(rec.id, e.clientX, e.clientY)) || quiz?.onPick(rec.id))) return;   // çalışma modunda tıklama modda kalır (testte cevap sayılır)
   // çalışma turunda birkaç piksellik bir lenf düğümünün hemen yanına tıklama o düğümü seçer (tour.js pickNear)
   if (!rec && allTours().some(t => t.pickNear(e.clientX, e.clientY))) return;
   if (!rec && move?.pickAt(e.clientX, e.clientY)) return;      // kol hareketi modunda bükülmüş kasa tıklama (arkasında kemik yoksa)
@@ -651,7 +657,7 @@ canvas.addEventListener('pointerup', e => {
   else if (!(e.ctrlKey || e.shiftKey || e.metaKey)) actions.clearSelection();
 });
 canvas.addEventListener('dblclick', e => {
-  if (heart?.isActive() || brain?.isActive() || loco?.isActive() || move?.isActive() || allTours().some(t => t.isActive()) || sect?.isActive() || quiz?.isActive()) return;
+  if (heart?.isActive() || brain?.isActive() || loco?.isActive() || patho?.isActive() || move?.isActive() || allTours().some(t => t.isActive()) || sect?.isActive() || quiz?.isActive()) return;
   const rec = model.pick(e.clientX, e.clientY, 9);
   if (rec) { if (!state.selected.has(rec.id)) actions.selectItem(rec.id); actions.focusSelection(); }
 });
@@ -774,6 +780,7 @@ function viewHash() {
   if (p.type === 'heart') return 'm=heart:' + enc(heart.spec());
   if (p.type === 'brain') return 'm=brain:' + enc(brain.spec());
   if (p.type === 'loco') return 'm=loco:' + enc(loco.spec());
+  if (p.type === 'patho') return 'm=patho:' + enc(patho.spec());
   if (p.type === 'move') return 'm=move:' + enc(move.spec());
   if (p.type === 'sect') return 'm=sect:' + enc(sect.spec());
   if (tours[p.type]) return 'm=' + p.type + ':' + enc(tours[p.type].spec());
@@ -812,6 +819,7 @@ function applyHash(raw) {
     else if (kind === 'heart') actions.heartMode(spec || 'flow');
     else if (kind === 'brain') actions.brainMode(spec || 'csf');
     else if (kind === 'loco') actions.locoMode(spec || 'nerves');
+    else if (kind === 'patho') actions.pathoMode(spec || '');
     else if (kind === 'move') actions.moveMode(spec || '');
     else if (tours[kind]) actions.tour(kind, spec || '');
     else if (kind === 'sect') actions.sectMode(spec || '');
@@ -968,4 +976,4 @@ window.addEventListener('popstate', e => {
 }
 
 // hata ayıklama / test için
-window.__anatomi ={ state, model, stage, actions, glow, progress, get aanki() { return aanki; }, get heart() { return heart; }, get brain() { return brain; }, get loco() { return loco; }, get move() { return move; }, tours, get situs() { return tours.situs; }, get thorax() { return tours.thorax; }, get uro() { return tours.uro; }, get head() { return tours.head; }, get sect() { return sect; }, get exam() { return exam; }, tools, users, usersUI };
+window.__anatomi ={ state, model, stage, actions, glow, progress, get aanki() { return aanki; }, get heart() { return heart; }, get brain() { return brain; }, get loco() { return loco; }, get patho() { return patho; }, get move() { return move; }, tours, get situs() { return tours.situs; }, get thorax() { return tours.thorax; }, get uro() { return tours.uro; }, get head() { return tours.head; }, get sect() { return sect; }, get exam() { return exam; }, tools, users, usersUI };

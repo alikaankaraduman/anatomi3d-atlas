@@ -87,6 +87,14 @@ kemiğinin arka yüzündeki Gluteus maximus origosu arkadan).
 Derindeki bir yapıya ulaşmak için üstündekini seçip `H` ile (ya da bilgi kartındaki **Gizle** ile) gizleyin;
 *Gizlenenleri göster* hepsini geri getirir.
 
+**Patoloji vakaları** (Araçlar › Çalışma modları › **Patoloji**; pilot, 15 vaka): 8 periferik sinir lezyonu ve
+7 arter tıkanması. Her vaka bir klinik tablo (Almanca; Türkçesi "Türkçe" altında) ve tek bir soruyla açılır; soru test
+dilinde (DE | TR) sorulur. Cevap verince açıklama ve 3B tablo açılır: sinir vakasında sinir sarı, lezyon yeri kırmızı
+nokta, felçli kaslar mor, aynı sinirin sağlam kalan kasları turuncu; beyin vakasında tıkanan arter kırmızı, etkilenen
+alan turuncu. **Tabloyu şimdi göster** cevaplamadan açar. Altta Mechanismus, Ausfälle, felçli kaslar ya da etkilenen
+yapılar ve modelin o vakada gösteremedikleri yazar; **Hareket modunda aç** / **Beyin modunda aç** konuyu o modda açar.
+◀ ▶ ya da liste ile vakalar arasında geçilir. Vakaları yapay zekâ yazdı ve kaynaklarla denetledi; bir hekim bakmadı.
+
 **Kas katmanı** (Araçlar › Kas katmanı; kas modunda boş bilgi kartında ve her kasın kartında da): **Üst katmanı
 kaldır** dıştaki kas katmanını kaldırır, altındaki derin kaslar görünür ve tıklanabilir olur (ör. iki adımda
 M. supinator, M. subscapularis, Mm. rotatores); **Geri getir** son kaldırılanı, **Hepsi** bütün katmanları geri getirir.
