@@ -34,6 +34,7 @@ for (const c of src.cases) {
   } else if (c.system === 'brain') {
     if (!brain.arteries.list.some(a => a.key === c.struktur?.artery)) err(c, `arter yok: ${c.struktur?.artery}`);
     if (!c.folge?.territory?.length) err(c, 'folge.territory boş');
+    if (c.struktur?.view && !['lateral', 'medial', 'deep', 'orbit'].includes(c.struktur.view)) err(c, `bilinmeyen bakış: ${c.struktur.view}`);
     need(c, c.folge?.territory, 'territory');
   } else if (c.system === 'cranial') {
     // kranial sinir vakası: struktur.cn (I–XII), sarı parçalar n, kırmızı parçalar lesion, lezyon noktası at {on, near};

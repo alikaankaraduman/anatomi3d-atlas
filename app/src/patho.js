@@ -116,25 +116,27 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
   }
   // beyin vakası: beyin; gösterilince arter ve etkilenen alan
   function brainScene(c) {
-    const view = VIEW[c.struktur.artery] || 'deep';
+    const view = viewOf(c), side = sideOf(c);
     const seen = new Set(), parts = [];
     for (const n of BRAIN) for (const r of groupRecs(n)) if (sexOk(r) && !seen.has(r.id)) { seen.add(r.id); parts.push({ r, ctx: CORTEX.has(n) }); }
-    const keep = view === 'medial' ? parts.filter(x => L(x.r)) : parts;
+    const keep = view === 'orbit' ? [] : view === 'medial' ? parts.filter(x => L(x.r)) : parts;
+    const eye = view === 'orbit' ? grp(['Eyeball']).filter(L) : [];   // orbita vakası: beyin yok, göz küresi saydam
     const cord = c.struktur.artery === 'asa' ? groupRecs('Spinal cord') : [];
     const ov = model.overrides, list = [];
-    const terr = p.shown ? lrecs(c.folge.territory) : [];
-    const art = p.shown ? lrecs(c.struktur.n) : [];
+    const terr = p.shown ? side(c.folge.territory) : [];
+    const art = p.shown ? side(c.struktur.n) : [];
     const terrIds = ids(terr), artIds = ids(art);
     for (const { r, ctx } of keep) if (!terrIds.has(r.id) && !artIds.has(r.id)) {
       if (p.shown || view === 'deep') ov.set(r.id, view === 'deep' && ctx ? mats.ctx : mats.ctxN);
     }
     for (const r of cord) if (!terrIds.has(r.id)) ov.set(r.id, mats.cord);
+    for (const r of eye) if (!terrIds.has(r.id)) ov.set(r.id, mats.ctxN);
     for (const r of terr) ov.set(r.id, mats.terr);
     for (const r of art) ov.set(r.id, mats.artery);
     setMark(null);
     if (art.length) list.push({ text: `<b>${esc(artName(c))}</b>`, p: anchorOf(art), cls: 'on' });
     if (terr.length) list.push({ text: 'Infarkt', p: anchorOf(terr), cls: '' });
-    return { iso: [...keep.map(x => x.r), ...cord, ...terr, ...art], ghost: [], list };
+    return { iso: [...keep.map(x => x.r), ...cord, ...eye, ...terr, ...art], ghost: [], list };
   }
   // kranial sinir vakası: baş-boyun kasları, beyin sapı, kranial sinirler; gösterilince felçli ve sağlam kaslar
   function cranialScene(c) {
@@ -168,6 +170,9 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
   }
   const CN_LABEL = { 'foramen-jugulare': 'Foramen jugulare' };   // birden çok sinirin ortak lezyon yeri
   const cranialName = c => CN_LABEL[c.key] || (c.struktur.lesion?.length ? nameOf(c.struktur.lesion[0]) : nameOf(c.struktur.n[0]));
+  // bakış vakada verilebilir (struktur.view: lateral | medial | deep | orbit); struktur.both: alan iki taraflı (ör. Percheron)
+  const viewOf = c => c.struktur.view || VIEW[c.struktur.artery] || 'deep';
+  const sideOf = c => (c.struktur.both ? recs : lrecs);
   const artName = c => { const r = recs([c.struktur.n[0]])[0]; return r ? (r.la || titleName(r)) : c.struktur.n[0]; };
 
   function apply() {
@@ -192,11 +197,12 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
       if (st.p) box.expandByPoint(V3(st.p));
       dir = (st.cn || []).includes('II') ? new THREE.Vector3(0.25, -0.55, 1) : new THREE.Vector3(0.9, 0.15, 0.8);
     } else {
-      const view = VIEW[c.struktur.artery] || 'deep', terr = lrecs(c.folge.territory);
+      const view = viewOf(c), terr = sideOf(c)(c.folge.territory);
       box = boxOf(view === 'deep' ? [...terr, ...lrecs(c.struktur.n)] : grp(['Frontal lobe', 'Occipital lobe', 'Temporal lobe']).filter(L));
       if (view === 'deep') box.union(boxOf(groupRecs('Brainstem'))).expandByScalar(1.5);   // derin vakalar: beyin sapıyla birlikte, biraz uzaktan
+      if (view === 'orbit') box = boxOf([...terr, ...lrecs(c.struktur.n), ...grp(['Eyeball']).filter(L)]);
       if (c.struktur.artery === 'asa') box = boxOf(lrecs(c.struktur.n).length ? lrecs(c.struktur.n) : groupRecs('Spinal cord'));
-      dir = view === 'lateral' ? new THREE.Vector3(1, 0.2, 0.1) : view === 'medial' ? new THREE.Vector3(-1, 0.15, 0.08) : new THREE.Vector3(0.7, -0.05, 1);
+      dir = view === 'orbit' ? new THREE.Vector3(0.55, 0.2, 1) : view === 'lateral' ? new THREE.Vector3(1, 0.2, 0.1) : view === 'medial' ? new THREE.Vector3(-1, 0.15, 0.08) : new THREE.Vector3(0.7, -0.05, 1);
     }
     if (box && !box.isEmpty()) stage.frameBox(box, dir);
   }
