@@ -13,6 +13,9 @@
 // Açılış şeridi: saklanan not bir gün sayacı (since) ya da mesaj kaynağı (feed + fk) taşıyorsa uygulama her açılışta
 // 30 saniye üstte küçük bir şerit gösterir: "Birlikte N. gün" ve bağlantı sahibinin en son yazdığı mesaj (GitHub Gist'ten
 // şifreli okunur, src/welcome.js openFeed; ağ yoksa son okunan mesaj, localStorage anatomi3d.welcome.feed).
+// Mektup: bağlantıyla gelen yeni not, kart yerine tam ekran bir zarfla açılır; zarfa dokununca kapak açılır, kâğıt
+// çıkar ve not kâğıtta okunur. Bağlantıda "ask" varsa kâğıdın altında Evet / Hayır çıkar (Hayır her basışta küçülür,
+// sonunda kaybolur; Evet kalp yağmuru ve "Başla"). Hakkında'dan yeniden açılan not eski kart görünümündedir.
 // İmza denetimi eşzamansızdır (crypto.subtle.verify); sonuçlar sıra numarasıyla eşlenir, eskimiş bir denetim yok sayılır.
 //
 // iOS: ana ekrana eklenen web uygulamasının depolaması Safari'ninkinden ayrıdır; Safari'de saklanan not ana ekrandaki
@@ -70,6 +73,42 @@ function cardNode(d) {
   c.append(el('p', 'wl-small wl-by', 'Bu not, bağlantıyı gönderen kişi tarafından yazıldı.'));
   return c;
 }
+// ---------- mektup ----------
+function envelopeNode(d) {
+  const scene = el('div', 'wlx-scene');
+  const env = el('button', 'wlx-env'); env.type = 'button'; env.dataset.a = 'envelope';
+  env.setAttribute('aria-label', `${d.to} için mektup. Açmak için dokun.`);
+  env.append(el('span', 'wlx-back'), el('span', 'wlx-peek'), el('span', 'wlx-front'), el('span', 'wlx-flap'), el('span', 'wlx-seal', '♥'));
+  const to = el('p', 'wlx-to', `${d.to} için`);
+  scene.append(to, env, el('p', 'wlx-hint', 'Açmak için zarfa dokun'));
+  return scene;
+}
+function paperNode(d) {
+  const paper = el('div', 'wlx-paper');
+  paper.append(el('p', 'wlx-dear', `${d.to},`));
+  if (d.msg) paper.append(el('p', 'wlx-msg', d.msg));
+  const sign = [d.from || '', d.date ? W.dateText(d.date) : ''].filter(Boolean).join(' · ');
+  if (sign) paper.append(el('p', 'wlx-sign', '— ' + sign));
+  const row = el('div', 'wlx-row');
+  if (d.ask) row.append(button('Evet', 'yes', 'wlx-yes'), button('Hayır', 'no', 'wlx-no'));
+  else row.append(button('Başla', 'start', 'wlx-yes'));
+  paper.append(row);
+  return paper;
+}
+const NO_TEXT = ['Hayır', 'Emin misin?', 'Bir daha düşün', 'Gerçekten mi?', 'Son kararın mı?'];
+function hearts(host) {
+  const box = el('div', 'wlx-hearts'); box.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < 32; i++) {
+    const h = el('span', 'wlx-heart', '♥');
+    h.style.left = ((i * 37) % 100) + '%';
+    h.style.animationDelay = ((i * 0.13) % 2.4).toFixed(2) + 's';
+    h.style.animationDuration = (3.2 + (i % 5) * 0.45).toFixed(2) + 's';
+    h.style.fontSize = (16 + (i * 7) % 26) + 'px';
+    box.append(h);
+  }
+  host.append(box);
+}
+
 const paint = (node, d) => {
   const p = d?.color && W.PALETTE[d.color];
   if (p) { node.style.setProperty('--accent', p.accent); node.style.setProperty('--accent-ink', p.ink); }
@@ -128,7 +167,27 @@ export function setupWelcome({ notify, onHash } = {}) {
   }
 
   // ---------- karşılama kartı ----------
+  let noCount = 0;
+  function renderLetter(d, stage) {
+    card.replaceChildren();
+    card.classList.add('wl-letter');
+    paint(card, d);
+    if (stage === 'envelope') { card.append(envelopeNode(d)); return; }
+    if (stage === 'paper') { noCount = 0; card.append(paperNode(d)); return; }
+    // evet: kalpler, kısa yazı, (Apple'da) ana ekran ipucu ve Başla
+    hearts(card);
+    const done = el('div', 'wlx-paper wlx-done');
+    done.append(el('p', 'wlx-big', '♥'), el('p', 'wlx-dear', 'Evet!'));
+    if (isIOSSafari() && !inApp()) done.append(el('p', 'wl-hint', 'Bunu ana ekranına eklemek için tam bu sayfadan: Paylaş › "Ana Ekrana Ekle". Ana ekrandaki uygulama, her açılışta seni bekleyen küçük notları gösterir.'));
+    else if (isMacSafari() && !inApp()) done.append(el('p', 'wl-hint', 'Mac\'te Dock\'a eklemek için tam bu sayfadan: Safari › Dosya › "Dock\'a Ekle".'));
+    if (saveFailed) done.append(el('p', 'wl-hint', 'Bu cihazın tarayıcı depolaması kapalı: not yalnız bu açılışta görünür.'));
+    const row = el('div', 'wlx-row'); row.append(button('Başla', 'start', 'wlx-yes'));
+    done.append(row);
+    card.append(done);
+  }
   function renderCard() {
+    card.classList.remove('wl-letter');
+    if (view === 'card' && !manage && fresh) { renderLetter(fresh.data, 'envelope'); return; }
     card.replaceChildren();
     const x = button('×', 'close', 'wl-x'); x.setAttribute('aria-label', 'Kapat'); x.title = 'Kapat (Esc)';
     const body = el('div', 'wl-body');
@@ -186,6 +245,25 @@ export function setupWelcome({ notify, onHash } = {}) {
       if (saveFailed) notify?.('Bu cihazın tarayıcı depolaması kapalı: not yalnız bu açılışta görünür.');
     }
     if (a === 'close' || a === 'start') { card.close(); return; }
+    if (a === 'envelope' && fresh) {
+      const scene = card.querySelector('.wlx-scene');
+      if (!scene || scene.classList.contains('open')) return;
+      scene.classList.add('open');
+      const reduce = mq('(prefers-reduced-motion: reduce)');
+      setTimeout(() => { if (fresh && card.open) { renderLetter(fresh.data, 'paper'); card.querySelector('.wlx-row button')?.focus({ preventScroll: true }); } }, reduce ? 0 : 1250);
+      return;
+    }
+    if (a === 'no') {
+      noCount++;
+      const no = card.querySelector('.wlx-no'), yes = card.querySelector('.wlx-yes');
+      if (yes) yes.style.transform = `scale(${(1 + noCount * 0.18).toFixed(2)})`;
+      if (no) {
+        if (noCount >= NO_TEXT.length) no.remove();
+        else { no.textContent = NO_TEXT[noCount]; no.style.transform = `scale(${Math.max(0.55, 1 - noCount * 0.1).toFixed(2)})`; }
+      }
+      return;
+    }
+    if (a === 'yes' && fresh) { renderLetter(fresh.data, 'yes'); card.querySelector('.wlx-yes')?.focus({ preventScroll: true }); return; }
     if (a === 'replace') {
       const rec = pending; pending = null; pendingFromHash = false;
       if (rec) save(rec);
@@ -201,7 +279,7 @@ export function setupWelcome({ notify, onHash } = {}) {
     if (view === 'replace' && pending) decline();   // Esc, Geri ya da ×: eski not kalır
     fresh = null;                                   // kabul edilmeyen yeni not unutulur (adresteyse yeniden yüklemede gelir)
     view = 'card'; manage = false; armed = false;
-    card.replaceChildren();
+    card.replaceChildren(); card.classList.remove('wl-letter');
   });
 
   // ---------- bağlantıyı uygula (adres ya da yapıştırma) ----------

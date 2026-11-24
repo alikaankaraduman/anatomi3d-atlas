@@ -243,6 +243,7 @@ const rejected = async (signed, msg, key) => { const v = await vk(signed, key); 
   ok(W.counterText('2026-11-24T21:00', new Date(2026, 10, 24, 23, 30)) === 'Birlikte 2 saat', 'saatli sayaç: aynı gün');
   ok(W.counterText('2026-10-11T21:00', new Date(2026, 10, 24, 12, 10)) === 'Birlikte 43 gün 15 saat', 'saatli sayaç: gün ve saat (' + W.counterText('2026-10-11T21:00', new Date(2026, 10, 24, 12, 10)) + ')');
   ok(W.counterText('2026-11-25T08:00', new Date(2026, 10, 24, 23, 30)) === '', 'saatli sayaç: gelecek');
+  ok(W.validate({ v: 1, to: 'A', ask: '1' }).data.ask === '1' && !('ask' in W.validate({ v: 1, to: 'A', ask: 'evet' }).data), 'ask yalnız 1 olabilir');
   const sealed = await W.sealFeed('Merhaba\nikinci satır', fk, '2026-11-24T10:00:00.000Z');
   const o = await W.openFeed(sealed, fk);
   ok(o.ok && o.msg === 'Merhaba\nikinci satır' && o.at === '2026-11-24T10:00:00.000Z', 'mesaj şifrelenir ve çözülür');

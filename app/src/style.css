@@ -1016,3 +1016,77 @@ dialog#welcome .wl-link-danger { min-height: 32px !important; margin-top: 10px; 
 .wl-banner-bar { height: 3px; background: var(--accent); transform-origin: left; animation: wl-banner-bar linear forwards; }
 @keyframes wl-banner-bar { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 @media (prefers-reduced-motion: reduce) { .wl-banner { transition: none; } }
+
+/* Kişisel not: mektup (yeni bağlantı tam ekran zarfla açılır; src/welcome-ui.js renderLetter) */
+dialog#welcome.wl-letter {
+  width: 100vw; height: 100vh; height: 100dvh; max-width: none; max-height: none; margin: 0; inset: 0; padding: 0;
+  border: 0; border-radius: 0; box-shadow: none; display: grid; place-items: center; overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 40%, color-mix(in srgb, var(--accent) 22%, #1c1d22) 0%, #15161a 70%);
+}
+dialog#welcome.wl-letter::backdrop { background: #15161a; }
+.wlx-scene { display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 24px; }
+.wlx-to { margin: 0; font-family: Noteworthy, "Bradley Hand", "Segoe Print", "Comic Sans MS", cursive; font-size: 26px; color: #f5ece0; text-align: center; transition: opacity 0.4s; }
+.wlx-hint { margin: 0; font-size: 14px; color: rgba(245, 236, 224, 0.7); animation: wlx-pulse 1.8s ease-in-out infinite; transition: opacity 0.3s; }
+@keyframes wlx-pulse { 50% { opacity: 0.35; } }
+.wlx-env {
+  position: relative; width: min(340px, 82vw); aspect-ratio: 3 / 2; padding: 0; border: 0; background: none; cursor: pointer;
+  perspective: 900px; animation: wlx-float 3.2s ease-in-out infinite; -webkit-tap-highlight-color: transparent;
+}
+.wlx-env:focus:not(:focus-visible), dialog#welcome.wl-letter:focus { outline: none; }
+.wlx-env:focus-visible { outline: 2px solid var(--accent); outline-offset: 8px; border-radius: 8px; }
+@keyframes wlx-float { 50% { transform: translateY(-7px) rotate(-0.6deg); } }
+.wlx-env > span { position: absolute; display: block; }
+.wlx-back { inset: 0; background: #d9c2a5; border-radius: 6px; box-shadow: 0 22px 50px rgba(0, 0, 0, 0.45); }
+.wlx-peek {
+  left: 7%; right: 7%; top: 8%; bottom: 8%; border-radius: 3px; background: #fbf6ec; z-index: 1;
+  background-image: repeating-linear-gradient(transparent 0 13px, rgba(120, 90, 80, 0.14) 13px 14px);
+  transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.45s;
+}
+.wlx-front { inset: 0; z-index: 2; border-radius: 6px; background: #ecdcc6; clip-path: polygon(0 0, 50% 52%, 100% 0, 100% 100%, 0 100%); }
+.wlx-flap {
+  left: 0; right: 0; top: 0; height: 58%; z-index: 3; background: #e3cfb4; clip-path: polygon(0 0, 100% 0, 50% 100%);
+  transform-origin: 50% 0; transition: transform 0.6s ease-in, z-index 0s 0.3s; backface-visibility: visible;
+}
+.wlx-seal {
+  z-index: 4; left: 50%; top: 52%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%;
+  display: grid !important; place-items: center; font-size: 22px; color: #fff; background: var(--accent);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3), inset 0 -3px 0 rgba(0, 0, 0, 0.15); transition: opacity 0.25s, transform 0.25s;
+}
+.wlx-scene.open .wlx-env { animation: none; cursor: default; }
+.wlx-scene.open .wlx-seal { opacity: 0; transform: scale(0.4); }
+.wlx-scene.open .wlx-flap { transform: rotateX(180deg); z-index: 0; }
+.wlx-scene.open .wlx-peek { transform: translateY(-62%); }
+.wlx-scene.open .wlx-hint, .wlx-scene.open .wlx-to { opacity: 0; }
+.wlx-paper {
+  position: relative; z-index: 2; width: min(540px, calc(100vw - 28px)); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px - var(--sat) - var(--sab));
+  overflow: auto; overscroll-behavior: contain; box-sizing: border-box; padding: 30px 28px 24px; border-radius: 4px;
+  background-color: #fbf6ec; color: #3a2b28; box-shadow: 0 26px 70px rgba(0, 0, 0, 0.55);
+  background-image: repeating-linear-gradient(transparent 0 31px, rgba(120, 90, 80, 0.13) 31px 32px);
+  background-attachment: local; background-position: 0 22px;
+  font-family: Noteworthy, "Bradley Hand", "Segoe Print", "Comic Sans MS", cursive;
+  animation: wlx-unfold 0.75s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes wlx-unfold { from { transform: translateY(60px) scale(0.86); opacity: 0; } }
+.wlx-dear { margin: 0 0 6px; font-size: 22px; line-height: 32px; font-weight: 700; }
+.wlx-msg { margin: 0; font-size: 17px; line-height: 32px; white-space: pre-line; overflow-wrap: anywhere; }
+.wlx-sign { margin: 10px 0 0; font-size: 17px; line-height: 32px; text-align: right; }
+.wlx-row { display: flex; justify-content: center; align-items: center; gap: 18px; margin-top: 22px; flex-wrap: wrap; }
+dialog#welcome .wlx-row button {
+  font: 700 17px/1 system-ui, sans-serif; min-height: 46px; min-width: 110px; padding: 12px 22px; border-radius: 999px; cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+dialog#welcome .wlx-row .wlx-yes { border: 0; background: var(--accent); color: var(--accent-ink); box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 45%, transparent); }
+dialog#welcome .wlx-row .wlx-no { border: 1px solid rgba(58, 43, 40, 0.35); background: transparent; color: #3a2b28; }
+.wlx-done { text-align: center; }
+.wlx-done .wl-hint { font-family: system-ui, sans-serif; font-size: 13.5px; line-height: 1.5; color: #5a4a46; }
+.wlx-big { margin: 0; font-size: 64px; line-height: 1; color: var(--accent); animation: wlx-beat 1s ease-in-out infinite; }
+@keyframes wlx-beat { 15% { transform: scale(1.18); } 30% { transform: scale(1); } 45% { transform: scale(1.12); } 60% { transform: scale(1); } }
+.wlx-hearts { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
+.wlx-heart { position: absolute; bottom: -40px; color: var(--accent); opacity: 0; animation: wlx-rise linear infinite; }
+@keyframes wlx-rise { 0% { transform: translateY(0) rotate(0); opacity: 0; } 10% { opacity: 0.9; } 100% { transform: translateY(-110vh) rotate(25deg); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .wlx-env, .wlx-hint, .wlx-big, .wlx-paper { animation: none; }
+  .wlx-heart { display: none; }
+}
+dialog#welcome .wlx-row { padding: 6px 0 10px; }
+dialog#welcome .wlx-row button:focus:not(:focus-visible) { outline: none; }

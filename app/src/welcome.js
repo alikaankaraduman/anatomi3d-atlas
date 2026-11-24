@@ -10,7 +10,7 @@
 // reddedilir: hep aynı kısa ileti (INVALID), imzadan söz edilmez. crypto.subtle olmayan yerde (güvensiz bağlam)
 // bağlantılar yok sayılır. Bağlantı oluşturan kod tarayıcı paketinde yoktur (tools/welcome-sign.mjs, yalnız Node).
 //
-// JSON: { v: 1, to, from?, msg?, date?, color?, title?, since?, feed?, fk? }. Okuma katıdır: çözmeden önce boyut sınırı, bilinen alanlar
+// JSON: { v: 1, to, from?, msg?, date?, color?, title?, since?, feed?, fk?, ask? }. Okuma katıdır: çözmeden önce boyut sınırı, bilinen alanlar
 // tür ve uzunluk denetimiyle, bilinmeyen alanlar yok sayılır, __proto__ / constructor / prototype anahtarı olan bağlantı
 // geçersizdir. Metinler düz metindir; ekrana yalnız textContent ya da esc() ile yazılır, asla HTML olarak değil.
 
@@ -52,7 +52,8 @@ export const COLOR_KEYS = Object.freeze(Object.keys(PALETTE));
 export const isColor = k => typeof k === 'string' && Object.prototype.hasOwnProperty.call(PALETTE, k);
 
 const BAD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-export const FIELDS = Object.freeze(['to', 'from', 'msg', 'date', 'color', 'title', 'since', 'feed', 'fk']);
+export const FIELDS = Object.freeze(['to', 'from', 'msg', 'date', 'color', 'title', 'since', 'feed', 'fk', 'ask']);
+// ask: "1" ise mektubun altında Evet / Hayır çıkar (cevap hiçbir yere gönderilmez)
 // since: sayacın başlangıcı (YYYY-MM-DD ya da YYYY-MM-DDTHH:MM, cihazın yerel saatiyle). feed + fk: bağlantı sahibinin değiştirebildiği kısa mesajın kaynağı
 // (bir GitHub Gist kimliği) ve o mesajın AES-GCM anahtarı (32 bayt, base64url). İkisi de imzalı yükün içindedir:
 // mesaj yalnız bu bağlantıyı açan cihazda çözülür, kaynağı bağlantıyı yapan kişiden başkası yönlendiremez.
@@ -132,6 +133,7 @@ export function validate(o) {
   const feed = str('feed'), fk = str('fk');
   if ((feed || fk) && !(FEED_RE.test(feed) && FK_RE.test(fk))) return fail('feed', 'Mesaj kaynağı geçerli değil.');
   if (feed) { data.feed = feed; data.fk = fk; }
+  if (str('ask') === '1') data.ask = '1';
   return { ok: true, data };
 }
 
