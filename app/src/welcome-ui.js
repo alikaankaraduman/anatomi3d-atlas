@@ -109,6 +109,69 @@ function hearts(host) {
   host.append(box);
 }
 
+// yukarıdan yağan çiçekler (emoji, CSS ile düşer ve sallanır)
+const FLOWERS = ['🌸', '🌷', '🌹', '🌼', '💮', '🌺'];
+function flowers(host) {
+  const box = el('div', 'wlx-flowers'); box.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < 28; i++) {
+    const f = el('span', 'wlx-flower', FLOWERS[i % FLOWERS.length]);
+    f.style.left = ((i * 29 + 7) % 100) + '%';
+    f.style.animationDelay = ((i * 0.23) % 4).toFixed(2) + 's';
+    f.style.animationDuration = (5 + (i % 6) * 0.7).toFixed(2) + 's';
+    f.style.fontSize = (18 + (i * 5) % 16) + 'px';
+    box.append(f);
+  }
+  host.append(box);
+}
+// sağdan ve soldan havai fişek: alt köşelerden çıkan roketler patlayıp renkli kıvılcımlara dağılır (canvas)
+function fireworks(host, accent) {
+  const cv = el('canvas', 'wlx-fireworks'); cv.setAttribute('aria-hidden', 'true');
+  host.append(cv);
+  const ctx = cv.getContext('2d'); if (!ctx) return;
+  const COLORS = [accent, '#ff5d8f', '#ffd166', '#7bdff2', '#b9fbc0', '#cdb4ff', '#ffffff'];
+  let w = 0, h = 0, dpr = 1;
+  const size = () => { dpr = Math.min(2, window.devicePixelRatio || 1); w = cv.clientWidth; h = cv.clientHeight; cv.width = w * dpr; cv.height = h * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
+  size();
+  const rockets = [], sparks = [];
+  let side = 0, last = 0, t0 = performance.now();
+  const launch = () => {
+    const left = side++ % 2 === 0;
+    const x = left ? w * (0.04 + Math.random() * 0.1) : w * (0.86 + Math.random() * 0.1);
+    const tx = left ? w * (0.15 + Math.random() * 0.3) : w * (0.55 + Math.random() * 0.3);
+    const ty = h * (0.12 + Math.random() * 0.3);
+    const frames = 55 + Math.random() * 20;
+    rockets.push({ x, y: h + 10, vx: (tx - x) / frames, vy: (ty - h - 10) / frames, n: frames, c: COLORS[(Math.random() * COLORS.length) | 0] });
+  };
+  const burst = (x, y, c) => {
+    const n = 70 + ((Math.random() * 30) | 0), c2 = COLORS[(Math.random() * COLORS.length) | 0];
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2, v = 2 + Math.random() * 3.2;
+      sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, fade: 0.008 + Math.random() * 0.01, c: i % 3 ? c : c2 });
+    }
+  };
+  const tick = now => {
+    if (!cv.isConnected) return;
+    if (cv.clientWidth !== w || cv.clientHeight !== h) size();
+    if (now - last > 650 && now - t0 < 20000) { last = now; launch(); }
+    ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = rockets.length - 1; i >= 0; i--) {
+      const q = rockets[i]; q.x += q.vx; q.y += q.vy; q.n--;
+      ctx.fillStyle = q.c; ctx.beginPath(); ctx.arc(q.x, q.y, 2.2, 0, 7); ctx.fill();
+      if (q.n <= 0) { burst(q.x, q.y, q.c); rockets.splice(i, 1); }
+    }
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const k = sparks[i]; k.vx *= 0.985; k.vy = k.vy * 0.985 + 0.045; k.x += k.vx; k.y += k.vy; k.life -= k.fade;
+      if (k.life <= 0) { sparks.splice(i, 1); continue; }
+      ctx.globalAlpha = k.life; ctx.fillStyle = k.c; ctx.beginPath(); ctx.arc(k.x, k.y, 1.8, 0, 7); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    if (now - t0 < 20000 || rockets.length || sparks.length) requestAnimationFrame(tick);
+    else ctx.clearRect(0, 0, w, h);
+  };
+  requestAnimationFrame(tick);
+}
+
 const paint = (node, d) => {
   const p = d?.color && W.PALETTE[d.color];
   if (p) { node.style.setProperty('--accent', p.accent); node.style.setProperty('--accent-ink', p.ink); }
@@ -175,6 +238,8 @@ export function setupWelcome({ notify, onHash } = {}) {
     if (stage === 'envelope') { card.append(envelopeNode(d)); return; }
     if (stage === 'paper') { noCount = 0; card.append(paperNode(d)); return; }
     // evet: kalpler, kısa yazı, (Apple'da) ana ekran ipucu ve Başla
+    const accent = (d.color && W.PALETTE[d.color]?.accent) || W.PALETTE[W.DEFAULT_COLOR].accent;
+    if (!mq('(prefers-reduced-motion: reduce)')) { fireworks(card, accent); flowers(card); }
     hearts(card);
     const done = el('div', 'wlx-paper wlx-done');
     done.append(el('p', 'wlx-big', '♥'), el('p', 'wlx-dear', 'Evet!'));

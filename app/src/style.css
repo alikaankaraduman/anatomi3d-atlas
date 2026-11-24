@@ -1094,3 +1094,16 @@ dialog#welcome .wlx-row button:focus:not(:focus-visible) { outline: none; }
 .wlx-paper { overflow-x: hidden; }
 .wlx-big { display: inline-block; }
 .wlx-done { overflow: hidden; }
+/* Evet: havai fişek (canvas), yağan çiçekler */
+.wlx-fireworks { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+.wlx-flowers { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
+.wlx-flower { position: absolute; top: -50px; opacity: 0; animation: wlx-fall linear infinite; }
+@keyframes wlx-fall {
+  0% { transform: translate(0, 0) rotate(0); opacity: 0; }
+  8% { opacity: 1; }
+  25% { transform: translate(18px, 25vh) rotate(60deg); }
+  50% { transform: translate(-14px, 52vh) rotate(130deg); }
+  75% { transform: translate(16px, 80vh) rotate(200deg); }
+  100% { transform: translate(-6px, 112vh) rotate(260deg); opacity: 0.9; }
+}
+@media (prefers-reduced-motion: reduce) { .wlx-flower { display: none; } }
