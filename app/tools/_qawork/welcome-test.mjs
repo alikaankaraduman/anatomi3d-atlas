@@ -56,9 +56,9 @@ for (const [k, lim] of Object.entries(W.LIMITS)) {
   throwsCode(() => W.encode(field(rep('🙂', lim + 1))), k, `${k}: ${lim + 1} emoji reddedilir`);
 }
 // en uzun gerçekçi bağlantı sınırın altında
-const longest = W.encode({ to: rep('🙂', 40), from: rep('🙂', 40), msg: rep('🙂', 600), date: '2026-01-01', color: 'pembe', title: rep('🙂', 30) });
+const longest = W.encode({ to: rep('🙂', 40), from: rep('🙂', 40), msg: rep('🙂', W.LIMITS.msg), date: '2026-01-01', color: 'pembe', title: rep('🙂', 30) });
 ok(longest.length <= W.PAYLOAD_MAX, `en uzun emoji bağlantısı sınırda (${longest.length} <= ${W.PAYLOAD_MAX})`);
-const quotes = W.encode({ to: rep('"', 40), from: rep('\\', 40), msg: rep('"', 600), title: rep('"', 30), date: '2026-01-01', color: 'pembe' });
+const quotes = W.encode({ to: rep('"', 40), from: rep('\\', 40), msg: rep('"', W.LIMITS.msg), title: rep('"', 30), date: '2026-01-01', color: 'pembe' });
 ok(quotes.length <= W.PAYLOAD_MAX, `en uzun kaçışlı bağlantı sınırda (${quotes.length})`);
 ok(W.decode(quotes).ok, 'kaçışlı karakterler gidiş-dönüş');
 
@@ -139,7 +139,7 @@ ok(W.cleanText('🙂\ud83d') === '🙂', 'eşli vekil (emoji) kalır, sondaki e�
   ok(sp.length <= W.PAYLOAD_MAX && W.decode(sp).ok && W.decode(sp).data.msg === 'b', 'eşsiz vekillerle yapılan bağlantı çözülür');
   let threw = false; try { W.encode({ to: '𐀀'.slice(0, 1) }); } catch (e) { threw = e.code === 'to'; }
   ok(threw, 'yalnız eşsiz vekilden oluşan ad boş sayılır');
-  bad(b64(JSON.stringify({ v: 1, to: 'A', msg: 'a' + '\ud800'.repeat(700) })), 'size', 'çok sayıda kaçışlı eşsiz vekil: boyut sınırı');
+  bad(b64(JSON.stringify({ v: 1, to: 'A', msg: 'a' + '\ud800'.repeat(1600) })), 'size', 'çok sayıda kaçışlı eşsiz vekil: boyut sınırı');
   const lone = W.decode(b64('{"v":1,"to":"A\\ud800","msg":"x\\udc00y"}'));
   ok(lone.ok && lone.data.to === 'A' && lone.data.msg === 'xy', 'çözerken JSON kaçışlı eşsiz vekiller atılır');
 }

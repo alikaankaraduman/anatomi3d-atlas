@@ -29,10 +29,10 @@ export const STORE_VERSION = 2;    // { v: 2, link: '<yük>.<imza>', saved } (s�
 // Her geçersiz bağlantı için aynı ileti (neden geçersiz olduğu söylenmez)
 export const INVALID = 'Kişisel bağlantı açılamadı.';
 // uzunluklar karakter (kod noktası) sayısıdır: bir emoji bir karakter sayılır
-export const LIMITS = Object.freeze({ to: 40, from: 40, msg: 600, title: 30 });
-// base64url yükünün en çok uzunluğu (çözmeden önce denetlenir). En kötü durum: 600 karakterlik not, her biri 4 bayt
-// ya da JSON'da kaçışlı tırnak; ad alanları ve öteki alanlarla birlikte ~3200 bayt, base64 ile ~4300 karakter.
-export const PAYLOAD_MAX = 4600;
+export const LIMITS = Object.freeze({ to: 40, from: 40, msg: 1500, title: 30 });
+// base64url yükünün en çok uzunluğu (çözmeden önce denetlenir). En kötü durum: 1500 karakterlik not, her biri 4 bayt
+// ya da JSON'da kaçışlı tırnak; ad alanları ve öteki alanlarla birlikte ~6500 bayt, base64 ile ~8700 karakter.
+export const PAYLOAD_MAX = 9200;
 export const SIG_LEN = 86;         // 64 bayt base64url
 export const LINK_MAX = PAYLOAD_MAX + 1 + SIG_LEN;
 
