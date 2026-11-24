@@ -5,6 +5,9 @@
 //    modunun lezyon yeriyle aynıdır (tools/patho-build.mjs denetler).
 //  - Beyin vakası: sol yarımküre; tıkanan arter kırmızı, etkilenen alan (model parçaları) turuncu, beynin kalanı saydam.
 //    MCA dışarıdan, ACA ve PCA içten (sağ yarımküre gizli), derin ve beyin sapı vakaları önden-yandan görünür.
+//  - Kranial sinir vakası: baş ve boyun, sol taraf; beyin sapı ve kafatası saydam, öteki kranial sinirler soluk, etkilenen
+//    sinir sarı, çekirdek ya da Chiasma lezyonu kırmızı, lezyon noktası kırmızı top (data/work/patho/cranial-points.json'dan
+//    derlenen struktur.p); gösterilince felçli kaslar mor, aynı sinirin sağlam kasları turuncu.
 // Metinler data/patho.json'da (ilk girişte yüklenir; kaynak data/work/patho/cases.json). Sinir vakaları lezyon noktasını ve
 // sinirin bölgesini data/locomotor.json'dan alır. Şıklar vaka açılınca karışır; soru dili test diline (testlang) uyar.
 import * as THREE from 'three';
@@ -20,6 +23,8 @@ const BRAIN = ['Frontal lobe', 'Parietal lobe', 'Occipital lobe', 'Temporal lobe
 const CORTEX = new Set(['Frontal lobe', 'Parietal lobe', 'Occipital lobe', 'Temporal lobe', 'Limbic lobe', 'Interlobar sulci']);
 // bakış: lateral (sol yarımküre dışarıdan), medial (sol yarımkürenin iç yüzü; sağ yarımküre gizli), deep (önden-yandan, korteks saydam)
 const VIEW = { mca: 'lateral', aca: 'medial', pca: 'medial' };
+const HEAD_MUSCLES = ['Muscles of head', 'Muscles of neck'];
+const CN_PARTS = ['Olfactory nerve (I)', 'Optic nerve (II)', 'Optic chiasm', 'Optic tract', 'Oculomotor nerve (III)', 'Trochlear nerve (IV)', 'Trigeminal nerve (V)', 'Sensory root of trigeminal nerve', 'Motor root of trigeminal nerve', 'Ophthalmic nerve', 'Maxillary nerve', 'Anterior division of mandibular nerve', 'Buccal nerve', 'Posterior division of mandibular nerve', 'Inferior alveolar nerve', 'Mental nerve', 'Nerve to mylohyoid muscle', 'Lingual nerve', 'Abducens nerve (VI)', 'Facial nerve (VII)', 'Chorda tympani', 'Vestibulocochlear nerve (VIII)', 'Vestibular nerve', 'Cochlear nerve', 'Glossopharyngeal nerve (IX)', 'Vagus nerve (X)', 'Accessory nerve (XI)', 'Hypoglossal nerve (XII)'];
 // modelin bu vakada gösteremedikleri (data/work/patho/notes.md)
 const MODEL_NOTE = {
   'lenticulostriata-capsula-interna': 'Modelde Capsula interna yok: asıl lezyon yeri (Crus posterius) gösterilemiyor; turuncu alan çevresindeki Putamen, Globus pallidus ve Nucleus caudatus.',
@@ -70,6 +75,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
       nerve: solid(COL.nerve, 0.35), lost: solid(COL.lost, 0.2), kept: solid(COL.kept, 0.1),
       ghostM: tint(0xd9a79d, 0.03, 0.3), ctx: noPick(tint(0xc9c0bc, 0.012, 0.18)), ctxN: noPick(tint(0xc9c0bc, 0.02, 0.28)),
       artery: solid(COL.artery, 0.3), terr: solid(COL.terr, 0.22), cord: tint(0xe9d9a0, 0.03, 0.35),
+      lesion: solid(COL.mark, 0.35), lostT: tint(COL.lost, 0.4, 0.9), keptT: tint(COL.kept, 0.35, 0.85), cnCtx: noPick(tint(0xe8dca0, 0.03, 0.3)),
       mark: new THREE.MeshBasicMaterial({ color: COL.mark, depthTest: false, transparent: true }),
     };
     built = true;
@@ -130,11 +136,43 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     if (terr.length) list.push({ text: 'Infarkt', p: anchorOf(terr), cls: '' });
     return { iso: [...keep.map(x => x.r), ...cord, ...terr, ...art], ghost: [], list };
   }
+  // kranial sinir vakası: baş-boyun kasları, beyin sapı, kranial sinirler; gösterilince felçli ve sağlam kaslar
+  function cranialScene(c) {
+    const st = c.struktur, cn = st.cn || [];
+    const all = grp([...HEAD_MUSCLES, ...(cn.includes('XI') ? ['Trapezius muscle'] : [])]).filter(r => r.sub === 'muscle' && L(r));
+    const both = cn.includes('II');   // görme yolu: iki göz ve iki N. opticus (Chiasma orta hatta)
+    const eye = grp(['Eyeball']).filter(r => both || L(r)), stem = groupRecs('Brainstem');
+    const nerve = both ? recs(st.n) : lrecs(st.n), nerveIds = ids(nerve), lesion = lrecs(st.lesion), lesionIds = ids(lesion);
+    const others = lrecs(CN_PARTS).filter(r => !nerveIds.has(r.id) && !lesionIds.has(r.id));
+    const ov = model.overrides, list = [];
+    let extra = [];
+    for (const r of stem) if (!lesionIds.has(r.id)) ov.set(r.id, mats.ctxN);
+    for (const r of eye) ov.set(r.id, mats.ctxN);
+    for (const r of others) ov.set(r.id, mats.cnCtx);
+    const lost = new Set(p.shown ? c.folge.paralysed : []), kept = new Set(p.shown ? c.folge.kept || [] : []);
+    for (const r of all) if (!lost.has(r.n) && !kept.has(r.n)) ov.set(r.id, mats.ghostM);
+    setMark(null);
+    if (p.shown) {
+      const lr = lrecs(c.folge.paralysed), kr = lrecs(c.folge.kept || []);
+      for (const r of kr) ov.set(r.id, mats.keptT);   // yarı saydam: sinir kasların içinden görünsün
+      for (const r of lr) ov.set(r.id, mats.lostT);
+      extra = [...lr, ...kr];
+      for (const r of lesion) ov.set(r.id, mats.lesion);
+      const pt = st.p ? V3(st.p) : lesion.length ? anchorOf(lesion) : null;
+      if (st.p) setMark(pt);
+      if (pt) list.push({ text: `<b>${esc(cranialName(c))}</b>`, p: st.p ? pt.clone().add(new THREE.Vector3(2.5, 1.8, 1)) : pt, at: st.p ? pt : undefined, cls: 'on' });   // etiket yana, çizgiyle noktaya
+    }
+    for (const r of nerve) if (!lesionIds.has(r.id)) ov.set(r.id, mats.nerve);
+    const skull = grp(['Cranium']).filter(r => r.sub !== 'attach' && L(r));
+    return { iso: [...all, ...eye, ...stem, ...others, ...nerve, ...lesion, ...extra], ghost: skull, list };
+  }
+  const CN_LABEL = { 'foramen-jugulare': 'Foramen jugulare' };   // birden çok sinirin ortak lezyon yeri
+  const cranialName = c => CN_LABEL[c.key] || (c.struktur.lesion?.length ? nameOf(c.struktur.lesion[0]) : nameOf(c.struktur.n[0]));
   const artName = c => { const r = recs([c.struktur.n[0]])[0]; return r ? (r.la || titleName(r)) : c.struktur.n[0]; };
 
   function apply() {
     model.overrides.clear(); marks.clear();
-    const c = cur(), s = c.system === 'nerve' ? nerveScene(c) : brainScene(c);
+    const c = cur(), s = c.system === 'nerve' ? nerveScene(c) : c.system === 'cranial' ? cranialScene(c) : brainScene(c);
     state.isolate = ids(s.iso);
     state.isoGhost = ownGhost = s.ghost.length ? ids(s.ghost) : null;
     labels.set(s.list);
@@ -148,6 +186,11 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
       const g = LO.geo?.sites?.[c.struktur.site];
       if (g?.p) box.expandByPoint(V3(g.p));
       if (g?.out) { dir = V3(g.out); dir.y = Math.max(dir.y, 0.1); }
+    } else if (c.system === 'cranial') {
+      const st = c.struktur;
+      box = boxOf([...lrecs([...st.n, ...(st.lesion || []), ...c.folge.paralysed, ...(c.folge.kept || [])]), ...groupRecs('Brainstem')]);
+      if (st.p) box.expandByPoint(V3(st.p));
+      dir = (st.cn || []).includes('II') ? new THREE.Vector3(0.25, -0.55, 1) : new THREE.Vector3(0.9, 0.15, 0.8);
     } else {
       const view = VIEW[c.struktur.artery] || 'deep', terr = lrecs(c.folge.territory);
       box = boxOf(view === 'deep' ? [...terr, ...lrecs(c.struktur.n)] : grp(['Frontal lobe', 'Occipital lobe', 'Temporal lobe']).filter(L));
@@ -211,8 +254,8 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
   function panelHTML() {
     if (!D) return '<p class="htext">Yükleniyor…</p>';
     const c = cur(), f = c.frage, lg = lang(), other = lg === 'de' ? 'tr' : 'de';
-    const groups = [['arm', 'Kol sinirleri'], ['leg', 'Bacak sinirleri'], ['brain', 'Beyin ve omurilik infarktları']];
-    const grpOf = x => (x.system === 'brain' ? 'brain' : nerveOf(x)?.region === 'leg' ? 'leg' : 'arm');
+    const groups = [['arm', 'Kol sinirleri'], ['leg', 'Bacak sinirleri'], ['cranial', 'Kranial sinirler'], ['brain', 'Beyin ve omurilik infarktları']];
+    const grpOf = x => (x.system === 'brain' ? 'brain' : x.system === 'cranial' ? 'cranial' : nerveOf(x)?.region === 'leg' ? 'leg' : 'arm');
     const done = Object.values(p.score), right = done.filter(Boolean).length;
     const opts = f['options_' + lg];
     const answered = p.pick !== null;
@@ -220,12 +263,13 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
       const cls = answered ? (j === 0 ? 'ok' : p.pick === j ? 'bad' : '') : '';
       return `<button class="qopt ${cls}" data-po="${j}"${answered ? ' disabled' : ''}><b>${esc(opts[j])}</b></button>`;
     }).join('')}</div>`;
-    const legend = c.system === 'nerve'
-      ? `${sw(COL.nerve, 'sinir')} ${sw(COL.mark, 'lezyon')} ${c.folge.paralysed.length ? sw(COL.lost, 'felçli') + ' ' : ''}${sw(COL.kept, 'aynı sinir, sağlam')}`
+    const legend = c.system !== 'brain'
+      ? `${sw(COL.nerve, 'sinir')} ${sw(COL.mark, 'lezyon')} ${c.folge.paralysed.length ? sw(COL.lost, 'felçli') + ' ' : ''}${c.system === 'nerve' || c.folge.kept?.length ? sw(COL.kept, 'aynı sinir, sağlam') : ''}`
       : `${sw(COL.artery, 'tıkanan arter')} ${sw(COL.terr, 'etkilenen alan')}`;
-    const where = c.system === 'nerve' ? (() => { const s = siteOf(c), nv = nerveOf(c); return `<span lang="la">${esc(nv?.la || '')}</span>${s ? ` · <span lang="de">${esc(s.de || s.la || '')}</span>` : ''}`; })()
+    const where = c.system === 'cranial' ? `<span lang="la">${(c.struktur.cn || []).map(k => 'N. ' + k).join(', ')} · ${esc(cranialName(c))}</span>`
+      : c.system === 'nerve' ? (() => { const s = siteOf(c), nv = nerveOf(c); return `<span lang="la">${esc(nv?.la || '')}</span>${s ? ` · <span lang="de">${esc(s.de || s.la || '')}</span>` : ''}`; })()
       : `<span lang="la">${esc(artName(c))}</span>`;
-    const affected = uniq(c.system === 'nerve' ? c.folge.paralysed.filter(n => !/tendon/i.test(n)) : c.folge.territory).map(nameOf);
+    const affected = uniq(c.system !== 'brain' ? c.folge.paralysed.filter(n => !/tendon/i.test(n)) : c.folge.territory).map(nameOf);
     const reveal = p.shown ? `
       <div class="lesion">
         <h2>Lezyon</h2>
@@ -234,9 +278,9 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
       </div>
       <details class="clinic" open><summary>Mechanismus</summary><p lang="de">${esc(c.mechanismus_de)}</p><p class="htext small dim">${esc(c.mechanismus_tr)}</p></details>
       <details class="clinic" open><summary>Ausfälle</summary>${c.folge.deficits_de.map((d, j) => `<p><b lang="de">${esc(d)}</b><br><small>${esc(c.folge.deficits_tr[j] || '')}</small></p>`).join('')}</details>
-      ${affected.length ? `<details class="clinic"><summary>${c.system === 'nerve' ? 'Felçli kaslar' : 'Etkilenen yapılar'} (${affected.length})</summary><p lang="la">${affected.map(esc).join(', ')}</p></details>` : '<p class="htext small">Kas felci yok: yalnız duyu kaybı.</p>'}
-      ${MODEL_NOTE[c.key] ? `<div class="tip">${esc(MODEL_NOTE[c.key])}</div>` : ''}
-      <div class="btns">${c.system === 'nerve' ? `<button data-pg="loco" title="Bu siniri bütün lezyon yerleriyle Hareket modunda aç">Hareket modunda aç</button>` : `<button data-pg="brain" title="Beyin arterlerini ve beslenme alanlarını Beyin modunda aç">Beyin modunda aç</button>`}</div>`
+      ${affected.length ? `<details class="clinic"><summary>${c.system !== 'brain' ? 'Felçli kaslar' : 'Etkilenen yapılar'} (${affected.length})</summary><p lang="la">${affected.map(esc).join(', ')}</p></details>` : '<p class="htext small">Kas felci yok: yalnız duyu kaybı.</p>'}
+      ${MODEL_NOTE[c.key] || c.model_note_tr ? `<div class="tip">${esc(MODEL_NOTE[c.key] || c.model_note_tr)}</div>` : ''}
+      <div class="btns">${c.system === 'cranial' ? `<button data-pg="cn" title="Bu siniri Beyin modunda, Sinirler bölümünde aç">Beyin modunda aç</button>` : c.system === 'nerve' ? `<button data-pg="loco" title="Bu siniri bütün lezyon yerleriyle Hareket modunda aç">Hareket modunda aç</button>` : `<button data-pg="brain" title="Beyin arterlerini ve beslenme alanlarını Beyin modunda aç">Beyin modunda aç</button>`}</div>`
       : `<div class="btns"><button data-pa="show" title="Soruyu cevaplamadan lezyonu 3B görünümde göster">Tabloyu şimdi göster</button></div>`;
     return `
       <div class="chips"><span class="chip loco">Patoloji vakaları</span><span class="chip dim">pilot</span></div>
@@ -269,6 +313,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     if (d.pa === 'next') { open(p.i + 1); return; }
     if (d.pa === 'exit') { state.isolate = null; refresh(); return; }
     if (d.pg === 'loco') { const nv = nerveOf(cur()); actions?.locoMode?.('nerves' + (nv ? ':' + nv.key : '')); return; }
+    if (d.pg === 'cn') { actions?.brainMode?.(`nerves:exit:${(cur().struktur.cn || [])[0] || ''}`); return; }
     if (d.pg === 'brain') { actions?.brainMode?.(cur().struktur.artery === 'asa' ? 'arteries:basal' : `arteries:${VIEW[cur().struktur.artery] || 'basal'}`); }
   }
   document.querySelector('#info')?.addEventListener('change', e => {

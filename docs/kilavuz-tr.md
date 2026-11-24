@@ -87,8 +87,9 @@ kemiğinin arka yüzündeki Gluteus maximus origosu arkadan).
 Derindeki bir yapıya ulaşmak için üstündekini seçip `H` ile (ya da bilgi kartındaki **Gizle** ile) gizleyin;
 *Gizlenenleri göster* hepsini geri getirir.
 
-**Patoloji vakaları** (Araçlar › Çalışma modları › **Patoloji**; 35 vaka): 28 periferik sinir lezyonu (17 kol,
-11 bacak; Hareket modundaki her lezyon yeri için bir vaka) ve 7 arter tıkanması. Her vaka bir klinik tablo (Almanca; Türkçesi "Türkçe" altında) ve tek bir soruyla açılır; soru test
+**Patoloji vakaları** (Araçlar › Çalışma modları › **Patoloji**; 47 vaka): 28 periferik sinir lezyonu (17 kol,
+11 bacak; Hareket modundaki her lezyon yeri için bir vaka), 12 kranial sinir lezyonu (II–XII; baş-boyun görünümü,
+sol taraf) ve 7 arter tıkanması. Her vaka bir klinik tablo (Almanca; Türkçesi "Türkçe" altında) ve tek bir soruyla açılır; soru test
 dilinde (DE | TR) sorulur. Cevap verince açıklama ve 3B tablo açılır: sinir vakasında sinir sarı, lezyon yeri kırmızı
 nokta, felçli kaslar mor, aynı sinirin sağlam kalan kasları turuncu; beyin vakasında tıkanan arter kırmızı, etkilenen
 alan turuncu. **Tabloyu şimdi göster** cevaplamadan açar. Altta Mechanismus, Ausfälle, felçli kaslar ya da etkilenen
