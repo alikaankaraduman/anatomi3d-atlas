@@ -53,7 +53,7 @@ export const isColor = k => typeof k === 'string' && Object.prototype.hasOwnProp
 
 const BAD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 export const FIELDS = Object.freeze(['to', 'from', 'msg', 'date', 'color', 'title', 'since', 'feed', 'fk']);
-// since: gün sayacının başlangıcı (YYYY-MM-DD). feed + fk: bağlantı sahibinin değiştirebildiği kısa mesajın kaynağı
+// since: sayacın başlangıcı (YYYY-MM-DD ya da YYYY-MM-DDTHH:MM, cihazın yerel saatiyle). feed + fk: bağlantı sahibinin değiştirebildiği kısa mesajın kaynağı
 // (bir GitHub Gist kimliği) ve o mesajın AES-GCM anahtarı (32 bayt, base64url). İkisi de imzalı yükün içindedir:
 // mesaj yalnız bu bağlantıyı açan cihazda çözülür, kaynağı bağlantıyı yapan kişiden başkası yönlendiremez.
 const FEED_RE = /^[0-9a-f]{20,40}$/;
@@ -127,7 +127,7 @@ export function validate(o) {
   if (cpLength(title) > LIMITS.title) return fail('title', `Uygulama adı en çok ${LIMITS.title} karakter olabilir.`);
   if (title) data.title = title;
   const since = str('since').trim();
-  if (since && !isDate(since)) return fail('since', 'Sayaç tarihi geçerli değil.');
+  if (since && !isSince(since)) return fail('since', 'Sayaç tarihi geçerli değil.');
   if (since) data.since = since;
   const feed = str('feed'), fk = str('fk');
   if ((feed || fk) && !(FEED_RE.test(feed) && FK_RE.test(fk))) return fail('feed', 'Mesaj kaynağı geçerli değil.');
@@ -256,15 +256,34 @@ export function dateText(s) {
 }
 
 // ---------- gün sayacı ----------
+// "YYYY-MM-DD" ya da "YYYY-MM-DDTHH:MM" (00:00..23:59)
+export function isSince(s) {
+  const m = /^(\d{4}-\d{2}-\d{2})(?:T(\d{2}):(\d{2}))?$/.exec(typeof s === 'string' ? s : '');
+  return !!m && isDate(m[1]) && (m[2] === undefined || (+m[2] < 24 && +m[3] < 60));
+}
 // since gününden bugüne (yerel takvim) kaç gün geçti; since bugünse 0, gelecekteyse ya da geçersizse null
 export function daysSince(since, now = new Date()) {
-  if (!isDate(since)) return null;
-  const [y, m, d] = since.split('-').map(Number);
+  if (!isSince(since)) return null;
+  const [y, m, d] = since.slice(0, 10).split('-').map(Number);
   const n = Math.round((Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) - Date.UTC(y, m - 1, d)) / 86400000);
   return n >= 0 ? n : null;
 }
-// "Birlikte 412. gün" (since günü 1. gündür)
+// Saatli başlangıçtan geçen süre: { days, hours } (yerel saat), gelecekteyse ya da saatsizse null
+export function sinceParts(since, now = new Date()) {
+  if (!isSince(since) || since.length !== 16) return null;
+  const [y, mo, d] = since.slice(0, 10).split('-').map(Number), h = +since.slice(11, 13), mi = +since.slice(14, 16);
+  const ms = now - new Date(y, mo - 1, d, h, mi);
+  if (!(ms >= 0)) return null;
+  return { days: Math.floor(ms / 86400000), hours: Math.floor((ms % 86400000) / 3600000) };
+}
+// Saatsiz: "Birlikte 412. gün" (since günü 1. gündür). Saatli: "Birlikte 44 gün 15 saat" (başlangıç anından beri)
 export function counterText(since, now = new Date()) {
+  if (isSince(since) && since.length === 16) {
+    const t = sinceParts(since, now);
+    if (!t) return '';
+    const days = t.days ? `${t.days.toLocaleString('tr-TR')} gün ` : '';
+    return `Birlikte ${days}${t.hours} saat`;
+  }
   const n = daysSince(since, now);
   return n == null ? '' : `Birlikte ${(n + 1).toLocaleString('tr-TR')}. gün`;
 }
