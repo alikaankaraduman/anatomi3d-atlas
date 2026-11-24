@@ -10,7 +10,7 @@
 // reddedilir: hep aynı kısa ileti (INVALID), imzadan söz edilmez. crypto.subtle olmayan yerde (güvensiz bağlam)
 // bağlantılar yok sayılır. Bağlantı oluşturan kod tarayıcı paketinde yoktur (tools/welcome-sign.mjs, yalnız Node).
 //
-// JSON: { v: 1, to, from?, msg?, date?, color?, title? }. Okuma katıdır: çözmeden önce boyut sınırı, bilinen alanlar
+// JSON: { v: 1, to, from?, msg?, date?, color?, title?, since?, feed?, fk? }. Okuma katıdır: çözmeden önce boyut sınırı, bilinen alanlar
 // tür ve uzunluk denetimiyle, bilinmeyen alanlar yok sayılır, __proto__ / constructor / prototype anahtarı olan bağlantı
 // geçersizdir. Metinler düz metindir; ekrana yalnız textContent ya da esc() ile yazılır, asla HTML olarak değil.
 
@@ -52,7 +52,12 @@ export const COLOR_KEYS = Object.freeze(Object.keys(PALETTE));
 export const isColor = k => typeof k === 'string' && Object.prototype.hasOwnProperty.call(PALETTE, k);
 
 const BAD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-export const FIELDS = Object.freeze(['to', 'from', 'msg', 'date', 'color', 'title']);
+export const FIELDS = Object.freeze(['to', 'from', 'msg', 'date', 'color', 'title', 'since', 'feed', 'fk']);
+// since: gün sayacının başlangıcı (YYYY-MM-DD). feed + fk: bağlantı sahibinin değiştirebildiği kısa mesajın kaynağı
+// (bir GitHub Gist kimliği) ve o mesajın AES-GCM anahtarı (32 bayt, base64url). İkisi de imzalı yükün içindedir:
+// mesaj yalnız bu bağlantıyı açan cihazda çözülür, kaynağı bağlantıyı yapan kişiden başkası yönlendiremez.
+const FEED_RE = /^[0-9a-f]{20,40}$/;
+const FK_RE = /^[A-Za-z0-9_-]{43}$/;
 
 // Görünmeyen ve yön değiştiren karakterler (sıfır genişlikli boşluk, LRM/RLM, yön gömme/geçersiz kılma, BOM, sözcük
 // birleştirici) atılır. ZWJ (U+200D) ve ZWNJ (U+200C) kalır: emoji dizileri ve bazı yazı sistemleri onlarla yazılır.
@@ -121,6 +126,12 @@ export function validate(o) {
   const title = cleanLine(str('title'));
   if (cpLength(title) > LIMITS.title) return fail('title', `Uygulama adı en çok ${LIMITS.title} karakter olabilir.`);
   if (title) data.title = title;
+  const since = str('since').trim();
+  if (since && !isDate(since)) return fail('since', 'Sayaç tarihi geçerli değil.');
+  if (since) data.since = since;
+  const feed = str('feed'), fk = str('fk');
+  if ((feed || fk) && !(FEED_RE.test(feed) && FK_RE.test(fk))) return fail('feed', 'Mesaj kaynağı geçerli değil.');
+  if (feed) { data.feed = feed; data.fk = fk; }
   return { ok: true, data };
 }
 
@@ -242,4 +253,61 @@ export function dateText(s) {
   if (!isDate(s)) return '';
   const [y, m, d] = s.split('-').map(Number);
   try { return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }); } catch { return s; }
+}
+
+// ---------- gün sayacı ----------
+// since gününden bugüne (yerel takvim) kaç gün geçti; since bugünse 0, gelecekteyse ya da geçersizse null
+export function daysSince(since, now = new Date()) {
+  if (!isDate(since)) return null;
+  const [y, m, d] = since.split('-').map(Number);
+  const n = Math.round((Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) - Date.UTC(y, m - 1, d)) / 86400000);
+  return n >= 0 ? n : null;
+}
+// "Birlikte 412. gün" (since günü 1. gündür)
+export function counterText(since, now = new Date()) {
+  const n = daysSince(since, now);
+  return n == null ? '' : `Birlikte ${(n + 1).toLocaleString('tr-TR')}. gün`;
+}
+
+// ---------- mesaj kaynağı (Gist) ----------
+// Gist'te tek dosya: FEED_FILE = { v: 1, iv, ct } (base64url). ct = AES-256-GCM(fk, iv, UTF-8 JSON { msg, at }).
+// Mesajı yalnız fk'yi bilen yazabilir ve okuyabilir; şifreli metin herkese açık olsa da okunamaz.
+export const FEED_FILE = 'm.json';
+export const FEED_MSG_MAX = 600;
+export const feedUrl = id => `https://api.github.com/gists/${id}`;
+const aesKey = (subtle, fk, use) => {
+  const raw = fromB64url(fk);
+  if (!raw || raw.length !== 32) throw new Error('fk');
+  return subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, [use]);
+};
+// Yazan taraf (sahibinin paneli, Node): { msg, at } -> FEED_FILE içeriği (metin)
+export async function sealFeed(msg, fk, at = new Date().toISOString()) {
+  const subtle = globalThis.crypto.subtle;
+  const text = cleanText(msg);
+  if (cpLength(text) > FEED_MSG_MAX) throw new Error(`Mesaj en çok ${FEED_MSG_MAX} karakter olabilir.`);
+  const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await subtle.encrypt({ name: 'AES-GCM', iv }, await aesKey(subtle, fk, 'encrypt'), new TextEncoder().encode(JSON.stringify({ msg: text, at }))));
+  return JSON.stringify({ v: 1, iv: toB64url(iv), ct: toB64url(ct) });
+}
+// Okuyan taraf: FEED_FILE içeriği -> { ok: true, msg, at } ya da { ok: false }. Hata fırlatmaz.
+export async function openFeed(fileText, fk) {
+  try {
+    const subtle = globalThis.crypto?.subtle;
+    if (!subtle || typeof fileText !== 'string' || fileText.length > 8000) return { ok: false };
+    const o = JSON.parse(fileText);
+    if (!o || o.v !== 1) return { ok: false };
+    const iv = fromB64url(o.iv), ct = fromB64url(o.ct);
+    if (!iv || iv.length !== 12 || !ct) return { ok: false };
+    const plain = await subtle.decrypt({ name: 'AES-GCM', iv }, await aesKey(subtle, fk, 'decrypt'), ct);
+    const m = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(plain));
+    const msg = cleanText(typeof m?.msg === 'string' ? m.msg : '');
+    if (cpLength(msg) > FEED_MSG_MAX) return { ok: false };
+    const at = typeof m?.at === 'string' && /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(m.at) ? m.at : '';
+    return { ok: true, msg, at };
+  } catch { return { ok: false }; }
+}
+// GitHub API yanıtından (JSON metni değil, nesne) FEED_FILE içeriği ya da null
+export function feedFileFrom(gist) {
+  const f = gist?.files?.[FEED_FILE];
+  return f && !f.truncated && typeof f.content === 'string' ? f.content : null;
 }

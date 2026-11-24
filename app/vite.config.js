@@ -34,7 +34,7 @@ const INTERNAL = {
 // ve form-action'da istisna gerekmez. frame-ancestors meta etiketinde geçersizdir, bu yüzden yoktur.
 // noindex: adres yalnız paylaşıldığı yerden açılsın, arama motorları dizine eklemesin (açmak ayrı bir karardır).
 const PAGES = process.env.ANATOMI_TARGET === 'pages';
-const PAGES_CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' blob: data:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'";
+const PAGES_CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' blob: data: https://api.github.com; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'";
 
 // Meta etiketleri <meta charset> satırının hemen ardına girer: CSP meta etiketi yalnız kendisinden sonra gelen öğeleri
 // kapsar. Sayfada zaten olan etiket (gizlilik.html'deki robots) yinelenmez.

@@ -10,6 +10,9 @@
 // Bağlantı açmayan bir ziyaretçi için hiçbir şey değişmez: depolamaya yazılmaz, soru sorulmaz.
 // Bütün metinler textContent ile yazılır (HTML olarak asla). Pencere index.html'de durur; main.js'teki Geri tuşu
 // katmanı (topLayer) onu da kapatır. Satır içi betik ya da olay özniteliği yoktur (Pages derlemesinin sıkı CSP'si).
+// Açılış şeridi: saklanan not bir gün sayacı (since) ya da mesaj kaynağı (feed + fk) taşıyorsa uygulama her açılışta
+// 30 saniye üstte küçük bir şerit gösterir: "Birlikte N. gün" ve bağlantı sahibinin en son yazdığı mesaj (GitHub Gist'ten
+// şifreli okunur, src/welcome.js openFeed; ağ yoksa son okunan mesaj, localStorage anatomi3d.welcome.feed).
 // İmza denetimi eşzamansızdır (crypto.subtle.verify); sonuçlar sıra numarasıyla eşlenir, eskimiş bir denetim yok sayılır.
 //
 // iOS: ana ekrana eklenen web uygulamasının depolaması Safari'ninkinden ayrıdır; Safari'de saklanan not ana ekrandaki
@@ -179,6 +182,7 @@ export function setupWelcome({ notify, onHash } = {}) {
     if (a === 'start' && fresh && !manage) {
       // kişiselleştirme yalnız burada saklanır ve uygulanır (×, Esc ya da Geri: hiçbir şey saklanmaz)
       const rec = fresh; fresh = null; save(rec);
+      setTimeout(() => startBanner(rec.data), 400);
       if (saveFailed) notify?.('Bu cihazın tarayıcı depolaması kapalı: not yalnız bu açılışta görünür.');
     }
     if (a === 'close' || a === 'start') { card.close(); return; }
@@ -264,7 +268,63 @@ export function setupWelcome({ notify, onHash } = {}) {
       if (r.ok) { stored = { data: r.data, signed: r.signed }; verified = stored; look(stored.data); }
     }
   })().catch(err => console.error(err));
-  if (card) ready.then(() => fromHash(startHash)).catch(err => console.error(err));
+  // adresteki bağlantı önce işlenir; kart açılmadıysa (yeni not yoksa) saklanan notun şeridi gösterilir
+  if (card) ready.then(() => fromHash(startHash)).then(() => { if (stored && !card.open) startBanner(stored.data); }).catch(err => console.error(err));
+
+  // ---------- açılış şeridi: gün sayacı ve mesaj (30 sn) ----------
+  const FEED_CACHE = 'anatomi3d.welcome.feed', BANNER_MS = 30000;
+  let bannerRun = 0;
+  async function loadFeed(d) {
+    if (!d.feed || !W.cryptoReady()) return null;
+    let text = null;
+    try {
+      const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 8000);
+      const res = await fetch(W.feedUrl(d.feed), { headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store', signal: ctl.signal });
+      clearTimeout(t);
+      if (res.ok) text = W.feedFileFrom(await res.json());
+    } catch { /* ağ yok: son okunan mesaj */ }
+    if (text) {
+      const m = await W.openFeed(text, d.fk);
+      if (m.ok) { try { localStorage.setItem(FEED_CACHE, JSON.stringify({ feed: d.feed, text })); } catch { /* depolama kapalı */ } return m; }
+    }
+    try {
+      const c = JSON.parse(localStorage.getItem(FEED_CACHE) || 'null');
+      if (c?.feed === d.feed && typeof c.text === 'string') { const m = await W.openFeed(c.text, d.fk); if (m.ok) return m; }
+    } catch { /* bozuk önbellek */ }
+    return null;
+  }
+  async function startBanner(d) {
+    if (!d || (!d.since && !d.feed)) return;
+    const run = ++bannerRun;
+    const counter = W.counterText(d.since);
+    const feed = loadFeed(d);
+    let msg = null;
+    if (!counter) { msg = await feed; if (run !== bannerRun || !msg?.msg) return; }
+    $('#wl-banner')?.remove();
+    const b = el('div', 'wl-banner'); b.id = 'wl-banner'; b.setAttribute('role', 'status');
+    paint(b, d);
+    const x = button('×', 'close', 'wl-x'); x.setAttribute('aria-label', 'Kapat'); x.title = 'Kapat';
+    const body = el('div', 'wl-banner-body');
+    if (counter) body.append(el('p', 'wl-banner-count', counter));
+    const text = el('p', 'wl-banner-msg'); text.hidden = true;
+    const sign = el('p', 'wl-banner-sign'); sign.hidden = true;
+    body.append(text, sign);
+    const bar = el('div', 'wl-banner-bar'); bar.style.animationDuration = BANNER_MS + 'ms';
+    b.append(x, body, bar);
+    const fill = m => {
+      if (!m?.msg || !b.isConnected) return;
+      text.textContent = m.msg; text.hidden = false;
+      const who = [d.from || '', m.at ? W.dateText(m.at.slice(0, 10)) : ''].filter(Boolean).join(' · ');
+      if (who) { sign.textContent = '— ' + who; sign.hidden = false; }
+    };
+    fill(msg);
+    document.body.append(b);
+    requestAnimationFrame(() => b.classList.add('on'));
+    const close = () => { b.classList.remove('on'); setTimeout(() => b.remove(), 400); };
+    x.addEventListener('click', close);
+    setTimeout(close, BANNER_MS);
+    if (!msg) feed.then(m => { if (run === bannerRun) fill(m); });
+  }
 
   // Geri tuşu (main.js topLayer): "Bu cihazdan kaldır" onayındaysa önce karta döner; true dönerse pencere açık kalır
   function back() {

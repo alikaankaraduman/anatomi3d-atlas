@@ -220,6 +220,37 @@ const rejected = async (signed, msg, key) => { const v = await vk(signed, key); 
   ok(W.parseStored('{"v":2,"link":"' + signed + '","__proto__":{}}') === null, 'kayıtta prototip anahtarı');
   ok(W.parseStored('x'.repeat(20001)) === null, 'çok büyük kayıt');
 }
+
+// gün sayacı ve mesaj kaynağı (since, feed, fk; açılış şeridi)
+{
+  const fk = W.toB64url(globalThis.crypto.getRandomValues(new Uint8Array(32)));
+  const feed = 'a'.repeat(32);
+  const v = W.validate({ v: 1, to: 'Deneme', since: '2024-02-29', feed, fk });
+  ok(v.ok && v.data.since === '2024-02-29' && v.data.feed === feed && v.data.fk === fk, 'since, feed ve fk geçerli');
+  ok(!W.validate({ v: 1, to: 'A', since: '2023-02-29' }).ok, 'geçersiz sayaç tarihi reddedilir');
+  ok(!W.validate({ v: 1, to: 'A', feed }).ok, 'anahtarsız feed reddedilir');
+  ok(!W.validate({ v: 1, to: 'A', feed: 'XYZ', fk }).ok, 'biçimsiz feed reddedilir');
+  ok(!W.validate({ v: 1, to: 'A', feed, fk: fk.slice(1) }).ok, 'kısa fk reddedilir');
+  const { link: L2, signed: s2 } = await S.makeLink('https://example.org/', { to: 'Deneme', since: '2025-01-01', feed, fk }, K.priv);
+  const v2 = await W.verifyLink(s2, K.pub);
+  ok(v2.ok && v2.data.feed === feed && v2.data.fk === fk && v2.data.since === '2025-01-01' && L2.length < 600, 'feed ve sayaç imzalı bağlantıda gidip gelir');
+  const now = new Date(2026, 10, 24, 23, 30);
+  ok(W.daysSince('2026-11-24', now) === 0 && W.daysSince('2026-11-23', now) === 1 && W.daysSince('2025-11-24', now) === 365, 'daysSince');
+  ok(W.daysSince('2026-11-25', now) === null && W.counterText('2026-11-25', now) === '', 'gelecekteki tarih sayılmaz');
+  ok(W.counterText('2026-11-24', now) === 'Birlikte 1. gün' && W.counterText('2024-11-24', now) === 'Birlikte 731. gün', 'counterText');
+  const sealed = await W.sealFeed('Merhaba\nikinci satır', fk, '2026-11-24T10:00:00.000Z');
+  const o = await W.openFeed(sealed, fk);
+  ok(o.ok && o.msg === 'Merhaba\nikinci satır' && o.at === '2026-11-24T10:00:00.000Z', 'mesaj şifrelenir ve çözülür');
+  const other = W.toB64url(globalThis.crypto.getRandomValues(new Uint8Array(32)));
+  ok(!(await W.openFeed(sealed, other)).ok, 'başka anahtarla mesaj açılmaz');
+  const j = JSON.parse(sealed); j.ct = j.ct.slice(0, -2) + (j.ct.endsWith('AA') ? 'BB' : 'AA');
+  ok(!(await W.openFeed(JSON.stringify(j), fk)).ok, 'değiştirilmiş şifreli mesaj açılmaz');
+  ok(!(await W.openFeed('çöp', fk)).ok && !(await W.openFeed(null, fk)).ok, 'bozuk içerik hata fırlatmaz');
+  let threw = false; try { await W.sealFeed('x'.repeat(601), fk); } catch { threw = true; }
+  ok(threw, '600 karakterden uzun mesaj yazılmaz');
+  ok((await W.openFeed(await W.sealFeed('', fk), fk)).msg === '', 'boş mesaj (yalnız sayaç)');
+  ok(W.feedFileFrom({ files: { 'm.json': { content: sealed, truncated: false } } }) === sealed && W.feedFileFrom({ files: {} }) === null && W.feedFileFrom({ files: { 'm.json': { content: 'x', truncated: true } } }) === null, 'feedFileFrom');
+}
 // crypto.subtle yok (güvensiz bağlam): bağlantılar yok sayılır
 {
   const desc = Object.getOwnPropertyDescriptor(globalThis, 'crypto');

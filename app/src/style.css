@@ -997,3 +997,22 @@ dialog#welcome .wl-link-danger { min-height: 32px !important; margin-top: 10px; 
 @media (pointer: coarse) {
   .peel-btns button, .peel-own button { min-height: 40px; padding: 8px 12px; }
 }
+
+/* Kişisel not: açılış şeridi (gün sayacı ve bağlantı sahibinin mesajı, 30 sn; src/welcome-ui.js startBanner) */
+.wl-banner {
+  position: fixed; z-index: 40; left: 50%; top: calc(14px + var(--sat)); width: min(440px, calc(100vw - 32px));
+  transform: translate(-50%, -12px); opacity: 0; transition: opacity 0.35s, transform 0.35s;
+  background: var(--panel-solid); color: var(--text); border: 1px solid var(--accent); border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5); overflow: hidden;
+}
+.wl-banner.on { opacity: 1; transform: translate(-50%, 0); }
+.wl-banner-body { padding: 14px 44px 14px 18px; }
+.wl-banner .wl-x { position: absolute; top: 6px; right: 6px; width: 32px; height: 32px; border: 0; background: none; color: var(--muted, #aab); font-size: 20px; cursor: pointer; border-radius: 8px; }
+.wl-banner .wl-x:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
+.wl-banner-count { margin: 0; color: var(--accent); font-weight: 700; font-size: 15px; letter-spacing: 0.01em; }
+.wl-banner-msg { margin: 6px 0 0; font-size: 15px; line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; }
+.wl-banner-sign { margin: 6px 0 0; font-size: 12.5px; opacity: 0.7; }
+.wl-banner-msg[hidden], .wl-banner-sign[hidden] { display: none; }
+.wl-banner-bar { height: 3px; background: var(--accent); transform-origin: left; animation: wl-banner-bar linear forwards; }
+@keyframes wl-banner-bar { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .wl-banner { transition: none; } }
