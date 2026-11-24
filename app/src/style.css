@@ -1090,3 +1090,7 @@ dialog#welcome .wlx-row .wlx-no { border: 1px solid rgba(58, 43, 40, 0.35); back
 }
 dialog#welcome .wlx-row { padding: 6px 0 10px; }
 dialog#welcome .wlx-row button:focus:not(:focus-visible) { outline: none; }
+/* "Evet" kalbi atarken kâğıtta yatay kaydırma çubuğu çıkmasın: kalp kendi kutusunda büyür, kâğıt yatayda kaydırmaz */
+.wlx-paper { overflow-x: hidden; }
+.wlx-big { display: inline-block; }
+.wlx-done { overflow: hidden; }
