@@ -589,6 +589,7 @@ document.getElementById('loco-mode').addEventListener('click', e => { e.currentT
 document.getElementById('patho-mode')?.addEventListener('click', e => { e.currentTarget.blur(); actions.pathoMode(''); });
 document.getElementById('move-mode').addEventListener('click', e => { e.currentTarget.blur(); actions.moveMode(''); });
 document.getElementById('leg-mode').addEventListener('click', e => { e.currentTarget.blur(); actions.moveMode('leg'); });
+document.getElementById('spine-mode')?.addEventListener('click', e => { e.currentTarget.blur(); actions.moveMode('spine'); });
 // Yanlışlarım (genel tekrar) ve ilerlemeyi sıfırlama. Sıfırlama iki adımlıdır: ilk tıklama düğmeyi birkaç saniyeliğine
 // "onay" durumuna getirir, ikinci tıklama siler.
 // Düğmedeki sayı, tekrarın açabileceği yapı adlarıdır: bu bedende kaydı olan ve sistemi yüklenebilen zayıf yapılar.

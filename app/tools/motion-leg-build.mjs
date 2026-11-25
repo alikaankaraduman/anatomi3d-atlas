@@ -163,8 +163,11 @@ const LEG_FIX = {
   'Pectineus muscle': { a: 'pelvis', b: 'femur', near: true, why: 'Pecten ossis pubis -> Linea pectinea; iki uç kalça eklemi hizasında' },
   'Quadratus femoris muscle': { a: 'pelvis', b: 'femur', near: true, why: 'Tuber ischiadicum -> Crista intertrochanterica; yatay' },
   ...Object.fromEntries(['Superior gemellus muscle', 'Inferior gemellus muscle', 'Obturator internus', 'Obturator externus', 'Piriformis muscle', 'Gluteus maximus muscle', 'Gluteus medius muscle', 'Gluteus minimus muscle', 'Adductor magnus', 'Adductor minimus', 'Adductor longus', 'Adductor brevis'].map(n => [n, { a: 'pelvis', b: 'femur', near: true, why: 'kısa, yatay dış rotator: uzuv ekseni boyunca yeri anlamsız' }])),
+  // 2026-11-25: daha yumuşak uzaklık geçişi (pw 1,5) + uygulamada doğrusal karışım (motion.js LBS_M): kalça 90-120'de gizlenmiyorlar (tools/_qawork/motion-leg-hide.mjs)
+  ...Object.fromEntries(['Superior gemellus muscle', 'Inferior gemellus muscle', 'Adductor magnus'].map(n => [n, { a: 'pelvis', b: 'femur', near: true, pow: 1.5, why: 'kemiğe uzaklık, yumuşak geçiş (pw 1,5)' }])),
 };
-const nearW = (x, segs) => segs.map(k => { const bs = k === 'pelvis' ? pelvisB : legBones.filter(b => b.seg === k), d = Math.min(...bs.map(b => dist(b, x))); return [SI[k], d < 0.15 ? 1e6 : 1 / (d * d + 0.01)]; });
+// pw: uzaklık kuvveti (2 = 1 / d^2; 1.5 daha yumuşak geçiş, kasın ortası iki kemiğe daha eşit dağılır)
+const nearW = (x, segs, pw = 2) => segs.map(k => { const bs = k === 'pelvis' ? pelvisB : legBones.filter(b => b.seg === k), d = Math.min(...bs.map(b => dist(b, x))); return [SI[k], d < 0.15 ? 1e6 : 1 / ((pw === 2 ? d * d : d ** pw) + 0.01)]; });
 const legMus = parts.filter(p => p.sd === 'l' && p.s === 'muscle' && p.path.startsWith('Muscular system of lower limb > Muscles of lower limb'));
 const skinParts = [], chunks = []; let offset = 0;
 for (const p of legMus) {
@@ -178,8 +181,8 @@ for (const p of legMus) {
   if (segA === 'talus') segA = 'foot'; if (segB === 'talus') segB = 'foot';
   const s0 = S[order[0]], s1 = S[order[order.length - 1]], span = Math.max(1e-6, s1 - s0);
   const buf = new Uint8Array(9 * v.length);
-  const WA = x => (fx.near ? nearW(x, [segA, segB]) : weightsAt(sOf(x), a, b, segA, segB, (sOf(x) - s0) / span));
-  for (let i = 0; i < v.length; i++) { q4(fx.near ? nearW(v[i], [segA, segB]) : weightsAt(S[i], a, b, segA, segB, (S[i] - s0) / span), buf, 9 * i); buf[9 * i + 8] = Math.round(255 * Math.max(0, Math.min(1, (S[i] - s0) / span))); }
+  const WA = x => (fx.near ? nearW(x, [segA, segB], fx.pow) : weightsAt(sOf(x), a, b, segA, segB, (sOf(x) - s0) / span));
+  for (let i = 0; i < v.length; i++) { q4(fx.near ? nearW(v[i], [segA, segB], fx.pow) : weightsAt(S[i], a, b, segA, segB, (S[i] - s0) / span), buf, 9 * i); buf[9 * i + 8] = Math.round(255 * Math.max(0, Math.min(1, (S[i] - s0) / span))); }
   // orta çizgi: s'ye göre 12 dilimin ağırlık merkezi; uçlar uç köşelerinin merkezi
   const line = [];
   for (let j = 0; j < 12; j++) {

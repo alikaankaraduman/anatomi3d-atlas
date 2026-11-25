@@ -179,6 +179,14 @@ Sol paneldeki **Araçlar** bölümü:
   kalınlaşır, uzayan maviye döner. Eklemi saran bir kas, ağının bozulduğu duruşta (ör. tam abduksiyonda latissimus, tam
   dirsek fleksiyonunda anconeus) gizlenir; o an gizlenenler panelin sonunda adlarıyla yazılır. Bir kasa tıklayınca kas parlar, panelde adı, o anki boy
   değişimi ve kas kartı (Ursprung, Ansatz, Innervation, Funktion) görünür; aynı kasa yeniden tıklamak seçimi kaldırır. Bağlar ve kapsüller kol hareket edince gizlenir.
+- **Gövde hareketi modu** (Araçlar › Çalışma modları › Gövde hareketi; bağlantı `#m=move:spine` ya da
+  `#m=move:spine.<hareket>`, ör. `spine.cRot`): küçük sürüm. Boyun (HWS, baş eklemleri dahil), göğüs (BWS) ve bel (LWS)
+  omurgası için Flexion / Extension, Lateralflexion ve Rotation sürgüleri ve ▶ düğmeleri; her bölgenin açısı hareket
+  segmentlerine ders kitabı tablosuna göre dağıtılır (ör. HWS rotasyonunun yaklaşık yarısı C1/C2'de, bel rotasyonu çok az).
+  Turuncu top (baş) sürüklenince boyun öne / arkaya ve yana eğilir. Kaburgalar kendi omurlarıyla, sternum, omuz kuşağı ve
+  kollar göğüs kafesiyle birlikte döner; pelvis ve bacaklar sabittir. Panel açıları Neutral-Null olarak yazar ve seçilen
+  hareketin ana kaslarını (Latince, Almanca, hangi yandaki kas) listeler. Kaslar bu sürümde çizilmez; diskler ve uzun bağlar
+  omurlar farklı hareket ettiği sürece gizlenir.
 - **Hareket sistemi modu** (Araçlar › Hareket sistemi modu; BWA ve eklem derslerinin Aanki kartında ve her kasın bilgi
   kartında da düğmesi var): kol ve bacak için görsel tekrar; sol kol ya da sol bacak gösterilir. **Sinir**: 19 periferik
   sinir (N. radialis, medianus, ulnaris, femoralis, ischiadicus, fibularis …). Sinir sarı, innerve ettiği kaslar kırmızı,
