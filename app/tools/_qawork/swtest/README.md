@@ -33,8 +33,10 @@ başlıkları bilgisayardaki Edge ile sınanır. Hiçbir şey indirilmez; geçic
   her mod için `mobile-<n>.png` yazar.
 - `node quizflow.mjs [adres]`: modların ve turların testlerinde çoktan seçmeli soruları cevaplar (her birinde 6 soru);
   ilerlemenin kaydedildiğini ve konsol hatası olmadığını denetler.
-- `node heartfind.mjs [adres]`: kalp testinde "Yapıyı bul": sorulan yapıya, önünde yalnız saydam parçalar olan bir
-  noktadan gerçek fare tıklaması; doğru sayılmalı.
+- `node heartfind.mjs [adres] [mod:sekme]` (varsayılan `heart:quiz`; `brain:quiz`, `loco:quiz` da olur): testte
+  "Yapıyı bul": sorulan yapıya, önünde yalnız saydam parçalar olan bir noktadan gerçek fare tıklaması; doğru sayılmalı.
+  Nokta tam pikseldir ve dört komşusu aynı sonucu verir (ince sinirlerin kenarında yuvarlama ışını ıskalatır). Ön
+  görünümde görünmeyen yapılar (ör. M. infraspinatus) ve modelde tek parça olarak bulunmayan adlar atlanır.
 - `node sectfind.mjs [adres] [n]` (`SEX=f`; `FLIP=1`: her 4 soruda bir beden değiştirir): kesit testinde "Yapıyı bul":
   sorulan yapının kesit yüzündeki noktasına gerçek tıklama.
 - `node brainlp.mjs [adres]`: düşük bellekli telefon taklidiyle (sistemler gerektiğinde yüklenir) beyin modunun lomber
