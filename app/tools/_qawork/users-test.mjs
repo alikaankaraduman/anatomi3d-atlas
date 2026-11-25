@@ -138,6 +138,21 @@ await bad(JSON.stringify({ ...ex, progress: { 's:A': ['1', 2, 0] } }), 'metin sa
 await bad(JSON.stringify({ ...ex, history: [{ d: 1 }] }), 'geçmiş biçimi');
 await bad(JSON.stringify({ ...ex, exam: { evil: 1 } }), 'sınav ayarı alanı');
 await bad(JSON.stringify({ ...ex, name: 42 }), 'ad sayı');
+// patoloji kaydı (patho-store.js biçimi): dışa aktarılır, sıkı denetlenir, birleştirmede yeni cevap kazanır
+{
+  const pc = { b: 2, d: 5000, r: 3, w: 1, lr: 1, lw: 0, t: 4000, k: 1 }, px = { t: 3000, n: 10, ok: 7, loc: 5, locN: 8, ms: 600000, keys: ['radialis-sulcus'] };
+  LS.setItem(`anatomi3d.u.${id2}.patho.v1`, JSON.stringify({ c: { 'radialis-sulcus': pc, 'bozuk': { b: 9 } }, x: [px] }));
+  const ex2 = U.exportData(id2);
+  ok(ex2.patho && ex2.patho.c['radialis-sulcus'].k === 1 && !ex2.patho.c.bozuk && ex2.patho.x.length === 1, 'patoloji kaydı dışa aktarılır (bozuk kayıt atılır)');
+  const imp2 = U.parseImport(JSON.stringify(ex2));
+  ok(imp2.patho && imp2.patho.c['radialis-sulcus'].b === 2 && imp2.patho.x[0].keys[0] === 'radialis-sulcus', 'patoloji kaydı içe aktarılır');
+  ok(U.parseImport(exText).patho === null, 'patoloji alanı olmayan eski dosya kabul edilir');
+  await bad(JSON.stringify({ ...ex2, patho: { c: { a: { b: 7, d: 0, r: 0, w: 0, lr: 0, lw: 0, t: 0 } }, x: [] } }), 'patoloji kutu sınırı');
+  await bad(JSON.stringify({ ...ex2, patho: { c: {}, x: [{ t: 1 }] } }), 'patoloji Testat biçimi');
+  await bad(JSON.stringify({ ...ex2, patho: { c: { a: { ...pc, k: 5 } }, x: [] } }), 'patoloji son sonuç değeri');
+  const m = U.mergePatho({ c: { 'radialis-sulcus': { ...pc, t: 9000, b: 0, k: 0 }, x1: { ...pc } }, x: [px] }, imp2.patho);
+  ok(m.c['radialis-sulcus'].t === 9000 && m.c['radialis-sulcus'].k === 0 && m.c.x1 && m.x.length === 1, 'patoloji birleştirme: daha yeni cevap kalır, Testat tekrarsız');
+}
 await bad(exText.replace('"progress":{', '"progress":{"__proto__":[1,1,1],'), '__proto__ anahtarı');
 await bad(exText.replace('"progress":{', '"progress":{"constructor":[1,1,1],'), 'constructor anahtarı');
 await bad(exText.replace('"app":', '"__proto__":{"polluted":1},"app":'), 'üst düzey __proto__');

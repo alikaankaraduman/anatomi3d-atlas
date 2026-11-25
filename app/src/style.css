@@ -440,7 +440,7 @@ button.tw:hover { background: rgba(255, 255, 255, 0.1); color: var(--text); }
 .selrow { display: flex; gap: 4px; margin: 6px 0; }
 .selrow select { flex: 1; min-width: 0; }
 .selrow button { border: 1px solid var(--line); background: rgba(255, 255, 255, 0.05); border-radius: 6px; padding: 3px 9px; }
-#info select { background: #1b1e26; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 6px; font: inherit; font-size: 12.5px; }
+#info select { background: #1b1e26; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 6px; font: inherit; font-size: 12.5px; max-width: 100%; text-overflow: ellipsis; }   /* uzun seçenek metni (vaka listesi) paneli telefonda yana taşırmasın */
 #info select.wide { width: 100%; margin-top: 6px; }
 .plist { margin: 4px 0; padding-left: 0; list-style: none; font-size: 12.5px; line-height: 1.45; }
 ol.plist { counter-reset: pl; }

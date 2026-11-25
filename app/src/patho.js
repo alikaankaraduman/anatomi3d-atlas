@@ -654,6 +654,13 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     const affected = uniq(c.system === 'brain' ? c.folge.territory : c.system === 'organ' ? [...(c.folge.affected || []), ...(c.folge.paralysed || [])] : c.folge.paralysed.filter(n => !/tendon/i.test(n))).map(nameOf);
     const tractsHTML = c.system === 'spinal' && (c.struktur.tracts || []).length ? `<details class="clinic" open><summary>Kesilen yollar</summary><p class="htext small">${c.struktur.tracts.map(t => `<span lang="la">${esc(nameOf(t.n))}</span> (${SIDE[t.side]}, ${PART[t.part]})`).join('<br>')}</p></details>` : '';
     const st = S.get(c.key);
+    // vakanın yapıları yalnız öbür cinsiyetin modelinde varsa (ör. V. testicularis): not ve geçiş düğmesi
+    const sexNote = (() => {
+      const names = c.struktur.n?.length ? c.struktur.n : c.folge.territory || [];   // lezyonlu yapılar (yoksa alan)
+      if (!names.length || sideOf(c)(names).length) return '';
+      const other = [...model.items.values()].find(r => names.includes(r.n) && r.x && r.x !== state.sex)?.x;
+      return other ? `<div class="tip">Bu vakanın yapıları yalnız ${other === 'm' ? 'erkek' : 'kadın'} modelinde var. <button data-pa="sex" data-sex="${other}">${other === 'm' ? 'Erkek' : 'Kadın'} modeline geç</button></div>` : '';
+    })();
     const revealHTML = p.shown ? `
       <div class="lesion">
         <h2>Lezyon</h2>
@@ -689,6 +696,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
       <h1 class="name" lang="de">${esc(c.title_de)}</h1>
       <p lang="de" class="htext">${esc(c.befund_de)}</p>
       <details class="clinic"><summary>Türkçe</summary><p class="htext small">${esc(c.befund_tr)}</p></details>
+      ${sexNote}
       <p class="htext qtext" lang="${lg}"><b>${esc(f['q_' + lg])}</b></p>
       ${optsHTML}
       ${reveal ? `<div class="qres ${p.pick === 0 ? 'ok' : 'bad'}">${p.pick === 0 ? (lg === 'de' ? 'Richtig' : 'Doğru') : (lg === 'de' ? 'Falsch' : 'Yanlış')}</div>
@@ -731,6 +739,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
       } else p.shown = true;
       apply(); refresh(); frame(); return;
     }
+    if (d.pa === 'sex') { actions?.setSex?.(t.dataset.sex); return; }
     if (d.pa === 'skip') { if (p.pick !== null && p.loc === null) { p.loc = 'skip'; finishCase(); } return; }
     if (d.pa === 'show') {
       if (p.pick !== null && p.loc === null) { p.loc = 'skip'; finishCase(); return; }
