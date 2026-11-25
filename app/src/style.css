@@ -344,6 +344,18 @@ button.tw:hover { background: rgba(255, 255, 255, 0.1); color: var(--text); }
 .qopt:hover:not([disabled]) { border-color: var(--accent); }
 .qopt.ok { border-color: #3fc46a; background: rgba(63, 196, 106, 0.18); }
 .qopt.bad { border-color: #e0473f; background: rgba(224, 71, 63, 0.18); }
+.qopt.picked { border-color: var(--accent); background: rgba(25, 200, 245, 0.16); }
+/* Patoloji: 3B görevi, Testat tablosu, Hata bildir bağlantısı */
+.lesion.locask { background: rgba(77, 163, 255, 0.1); border-left-color: #4da3ff; }
+.lesion.locask h2 { color: #b9dcff; }
+.ptab { width: 100%; border-collapse: collapse; font-size: 12px; margin: 8px 0; }
+.ptab th { text-align: left; color: var(--dim); font-weight: 500; padding: 3px 4px; }
+.ptab td { padding: 3px 4px; border-top: 1px solid var(--line); vertical-align: middle; }
+.ptab td button { padding: 2px 8px; border: 1px solid var(--line-strong); background: rgba(255, 255, 255, 0.06); border-radius: 6px; }
+.ptab .ok, .htext.ok { color: #7be09b; } .ptab .bad { color: #ff9e9e; } .ptab .dim { color: var(--dim); }
+.btns a.btnlink { border: 1px solid var(--line); border-radius: 7px; padding: 6px 11px; font-weight: 500; color: var(--dim); text-decoration: none; }
+.btns a.btnlink:hover { color: var(--text); border-color: var(--accent); }
+.btns button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .qres { margin: 8px 0; font-weight: 600; font-size: 13px; }
 .qres.ok { color: #7be09b; } .qres.bad { color: #ff9e9e; }
 .qnext { margin-top: 6px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.06); border-radius: 7px; padding: 5px 10px; }

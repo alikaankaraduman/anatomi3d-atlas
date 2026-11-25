@@ -649,10 +649,11 @@ canvas.addEventListener('pointerup', e => {
   const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y); down = null;
   if (moved > 5) return;
   const rec = model.pick(e.clientX, e.clientY, 9);
-  if (rec && (sect?.onPick(rec.id, e.clientX, e.clientY) || heart?.onPick(rec.id) || brain?.onPick(rec.id, e.clientX, e.clientY) || loco?.onPick(rec.id, e.clientX, e.clientY) || patho?.onPick(rec.id) || move?.onPick(rec.id, e.clientX, e.clientY) || allTours().some(t => t.onPick(rec.id, e.clientX, e.clientY)) || quiz?.onPick(rec.id))) return;   // çalışma modunda tıklama modda kalır (testte cevap sayılır)
+  if (rec && (sect?.onPick(rec.id, e.clientX, e.clientY) || heart?.onPick(rec.id) || brain?.onPick(rec.id, e.clientX, e.clientY) || loco?.onPick(rec.id, e.clientX, e.clientY) || patho?.onPick(rec.id, e.clientX, e.clientY) || move?.onPick(rec.id, e.clientX, e.clientY) || allTours().some(t => t.onPick(rec.id, e.clientX, e.clientY)) || quiz?.onPick(rec.id))) return;   // çalışma modunda tıklama modda kalır (testte cevap sayılır)
   // çalışma turunda birkaç piksellik bir lenf düğümünün hemen yanına tıklama o düğümü seçer (tour.js pickNear)
   if (!rec && allTours().some(t => t.pickNear(e.clientX, e.clientY))) return;
   if (!rec && move?.pickAt(e.clientX, e.clientY)) return;      // kol hareketi modunda bükülmüş kasa tıklama (arkasında kemik yoksa)
+  if (!rec && patho?.pickAt(e.clientX, e.clientY)) return;     // patoloji vakasının 3B görevi: boş yere (saydam parçaya) tıklama da sayılır
   if (rec) actions.selectItem(rec.id, { additive: e.ctrlKey || e.shiftKey || e.metaKey });
   else if (!(e.ctrlKey || e.shiftKey || e.metaKey)) actions.clearSelection();
 });

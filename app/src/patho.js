@@ -14,8 +14,11 @@ import * as THREE from 'three';
 import { titleName, esc } from './text.js';
 import { tint, solid, hex, nameIndex, anchorOf, isExploded, createLabels, shuffle } from './study.js';
 import { getLang } from './testlang.js';
+import * as S from './patho-store.js';
 
-const COL = { nerve: 0xf5d742, lost: 0x9a6cf0, kept: 0xd9705f, artery: 0xe0302a, terr: 0xf0923f, mark: 0xff4d3d };
+const COL = { nerve: 0xf5d742, lost: 0x9a6cf0, kept: 0xd9705f, artery: 0xe0302a, terr: 0xf0923f, mark: 0xff4d3d, hit: 0x3fc46a, miss: 0x4da3ff };
+const GROUPS = [['arm', 'Kol sinirleri'], ['leg', 'Bacak sinirleri'], ['plexus', 'Pleksus ve kökler'], ['passage', 'Geçitler ve sıkışmalar'], ['spinal', 'Omurilik ve kauda'], ['cranial', 'Kranial sinirler'], ['brain', 'Beyin ve omurilik infarktları']];
+const ISSUES = 'https://github.com/alikaankaraduman/anatomi3d-atlas/issues/new';   // Hata bildir: herkese açık depo
 const BONES = { arm: ['Bones of upper limb'], leg: ['Bones of lower limb'] };
 const BONE_CTX = { arm: ['Thoracic skeleton', 'Vertebral column'], leg: ['Vertebral column'] };
 const MUSCLES = { arm: ['Muscular system of upper limb'], leg: ['Muscular system of lower limb'] };
@@ -46,7 +49,9 @@ const sw = (c, t = '') => `<span class="sw" style="background:${hex(c)}"></span>
 
 export function createPatho({ stage, model, state, refresh, defer, viewLayers, endStudy, ui, actions }) {
   let built = false, active = false, D = null, LO = null, loading = null, enterSeq = 0;
-  const p = { i: 0, order: null, pick: null, shown: false, sex: null, score: {} };
+  // mode: browse | review | testat (Testat ayarı); q: çalışan sıra (Tekrar ya da Testat); loc: 3B görevinin sonucu ('skip' = atlandı)
+  const p = { i: 0, order: null, pick: null, shown: false, sex: null, loc: null, mode: 'browse', q: null, tf: 'all' };
+  let scene = null;
   const { recs, groupRecs } = nameIndex(model, state);
   const ids = rs => new Set(rs.map(r => r.id));
   const L = r => r.sd === 'l' || (!r.sd && !(r.sphere && r.sphere.center.x < -2));
@@ -75,8 +80,11 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
       nerve: solid(COL.nerve, 0.35), lost: solid(COL.lost, 0.2), kept: solid(COL.kept, 0.1),
       ghostM: tint(0xd9a79d, 0.03, 0.3), ctx: noPick(tint(0xc9c0bc, 0.012, 0.18)), ctxN: noPick(tint(0xc9c0bc, 0.02, 0.28)),
       artery: solid(COL.artery, 0.3), terr: solid(COL.terr, 0.22), cord: tint(0xe9d9a0, 0.03, 0.35),
-      lesion: solid(COL.mark, 0.35), lostT: tint(COL.lost, 0.4, 0.9), keptT: tint(COL.kept, 0.35, 0.85), cnCtx: noPick(tint(0xe8dca0, 0.03, 0.3)),
+      lesion: solid(COL.mark, 0.35), wall: noPick(tint(0x7fd6c8, 0.05, 0.42)),
+      k_n: tint(COL.nerve, 0.05, 0.45), k_a: tint(0xe0473f, 0.06, 0.45), k_v: tint(0x3f7fe0, 0.06, 0.45), k_t: tint(0xd9a066, 0.06, 0.45), k_l: tint(0x4fc46a, 0.05, 0.4), k_o: tint(0xd8d8e0, 0.05, 0.4),
+      s_n: solid(COL.nerve, 0.35), s_a: solid(COL.artery, 0.3), s_v: solid(0x3f7fe0, 0.3), s_t: solid(0xd9a066, 0.25), s_l: solid(0x4fc46a, 0.25), s_o: solid(0xd8d8e0, 0.2), lostT: tint(COL.lost, 0.4, 0.9), keptT: tint(COL.kept, 0.35, 0.85), cnCtx: noPick(tint(0xe8dca0, 0.03, 0.3)),
       mark: new THREE.MeshBasicMaterial({ color: COL.mark, depthTest: false, transparent: true }),
+      hit: new THREE.MeshBasicMaterial({ color: COL.hit, depthTest: false, transparent: true }), miss: new THREE.MeshBasicMaterial({ color: COL.miss, depthTest: false, transparent: true }),
     };
     built = true;
   }
@@ -136,7 +144,9 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     setMark(null);
     if (art.length) list.push({ text: `<b>${esc(artName(c))}</b>`, p: anchorOf(art), cls: 'on' });
     if (terr.length) list.push({ text: 'Infarkt', p: anchorOf(terr), cls: '' });
-    return { iso: [...keep.map(x => x.r), ...cord, ...eye, ...terr, ...art], ghost: [], list };
+    // 3B görevinde ışın sınamasına girmeyenler: derin bakışta saydam korteks, orbitada göz küresinin etkilenmeyen parçaları
+    const tn = new Set(c.folge.territory), skip = new Set([...(view === 'deep' ? keep.filter(x => x.ctx).map(x => x.r.id) : []), ...eye.filter(r => !tn.has(r.n)).map(r => r.id)]);
+    return { iso: [...keep.map(x => x.r), ...cord, ...eye, ...terr, ...art], ghost: [], list, skip };
   }
   // kranial sinir vakası: baş-boyun kasları, beyin sapı, kranial sinirler; gösterilince felçli ve sağlam kaslar
   function cranialScene(c) {
@@ -168,6 +178,114 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     const skull = grp(['Cranium']).filter(r => r.sub !== 'attach' && L(r));
     return { iso: [...all, ...eye, ...stem, ...others, ...nerve, ...lesion, ...extra], ghost: skull, list };
   }
+  // pleksus ve geçit vakası: kol (pleksusta boyun kaslarıyla) ya da bacak; geçitte duvarlar ve içerikler locomotor.json'dan
+  const PASS_LEG = new Set(['groin', 'thigh', 'hip', 'knee', 'foot']);
+  const passOf = c => LO.passages.list.find(x => x.key === c.struktur.passage);
+  const regOf = c => (c.system === 'passage' && PASS_LEG.has(passOf(c)?.region) ? 'leg' : 'arm');
+  function pointOf(c) {
+    if (c.system === 'nerve') { const g = LO.geo?.sites?.[c.struktur.site]; return g?.p ? V3(g.p) : null; }
+    if (c.system === 'passage') { const g = LO.geo?.passages?.[c.struktur.passage]?.contents?.[c.struktur.content]; return g?.p ? V3(g.p) : null; }
+    if (c.system === 'spinal') return spinalPoint(c);
+    if (c.struktur.p) return V3(c.struktur.p);
+    const les = lrecs(c.struktur.lesion); return les.length ? anchorOf(les) : null;
+  }
+  function regionScene(c) {
+    const st = c.struktur, reg = regOf(c), ps = c.system === 'passage' ? passOf(c) : null;
+    const bones = grp(BONES[reg]).filter(r => r.sub !== 'attach' && L(r));
+    const all = grp([...MUSCLES[reg], ...(c.system === 'plexus' || ps?.region === 'neck' ? ['Muscles of neck'] : [])]).filter(r => r.sub === 'muscle' && L(r));
+    const nerve = lrecs(st.n), lesion = lrecs(st.lesion), ves = lrecs(st.v), lesionIds = ids(lesion);
+    const ov = model.overrides, list = [];
+    let extra = [];
+    // bağlam: pleksusun bütün parçaları ya da geçidin duvarları ve içerikleri soluk
+    const plex = c.system === 'plexus' ? grp(['Brachial plexus']).filter(L) : [];
+    const walls = ps ? ps.bounds.flatMap(b => lrecs(b.n)) : [], cont = ps ? ps.contents.map(x => ({ k: x.kind, rs: lrecs(x.n) })) : [];
+    for (const r of walls) ov.set(r.id, mats.wall);
+    for (const x of cont) for (const r of x.rs) ov.set(r.id, r.sub === 'sheath' ? mats.ctxN : mats['k_' + x.k] || mats.cnCtx);
+    for (const r of plex) ov.set(r.id, mats.cnCtx);
+    const lost = new Set(p.shown ? c.folge.paralysed : []), kept = new Set(p.shown ? c.folge.kept || [] : []);
+    const wallIds = ids([...walls, ...cont.flatMap(x => x.rs)]);
+    for (const r of all) if (!lost.has(r.n) && !kept.has(r.n) && !wallIds.has(r.id)) ov.set(r.id, mats.ghostM);
+    setMark(null);
+    if (p.shown) {
+      const lr = lrecs(c.folge.paralysed), kr = lrecs(c.folge.kept || []);
+      for (const r of kr) ov.set(r.id, mats.keptT);
+      for (const r of lr) ov.set(r.id, mats.lostT);
+      extra = [...lr, ...kr];
+      for (const r of lesion) ov.set(r.id, mats.lesion);
+      const hit = ps?.contents.find(x => x.key === st.content);   // gösterilince etkilenen içerik güçlü renkle
+      if (hit) for (const r of lrecs(hit.n)) if (r.sub !== 'sheath') ov.set(r.id, mats['s_' + hit.kind] || mats.s_o);
+      const pt = pointOf(c);
+      if (pt) {
+        setMark(pt);
+        const txt = ps ? (ps.contents.find(x => x.key === st.content)?.la || ps.la).split(':')[0] : nameOf((st.lesion?.[0]) || st.n[0]);
+        list.push({ text: `<b>${esc(ps ? ps.la : txt)}</b>`, p: pt.clone().add(new THREE.Vector3(2.5, 1.8, 1)), at: pt, cls: 'on' });
+      }
+    }
+    for (const r of ves) if (!lesionIds.has(r.id)) ov.set(r.id, mats.artery);
+    for (const r of nerve) if (!lesionIds.has(r.id)) ov.set(r.id, mats.nerve);
+    if (!p.shown) for (const r of lesion) if (!nerve.includes(r)) ov.set(r.id, mats.nerve);   // gösterilmeden lezyon parçası sarı (ele vermesin)
+    const ghost = grp(BONE_CTX[reg]).filter(r => r.sub !== 'attach' && L(r));
+    return { iso: [...bones, ...all, ...plex, ...walls, ...cont.flatMap(x => x.rs), ...nerve, ...lesion, ...ves, ...extra], ghost, list };
+  }
+
+  // omurilik vakası: omurga saydam, omurilik parçaları soluk; seviye/taraf kesitli kopyalar (kesit düzlemleriyle) mor ve kırmızı
+  const spinalExtra = new THREE.Group(); root.add(spinalExtra);
+  const SPINE = ['Spinal cord'], CORD_EXTRA = ['Cauda equina', 'Anterior root of spinal nerve', 'Posterior root of spinal nerve'];
+  const yOf = n => { const r = recs([n])[0]; return r ? (r.box.min.y + r.box.max.y) / 2 : null; };
+  // omuriliğin bir yükseklikteki merkezi (beyaz cevherin o dilimdeki köşelerinin ortalaması; omurilik bitmişse kaudanın)
+  function cordCentre(y) {
+    for (const n of ['White matter of spinal cord', 'Cauda equina']) {
+      const r = recs([n])[0]; if (!r?.geo) continue;
+      const a = r.geo.attributes.position; let sx = 0, sz = 0, k = 0;
+      for (let i = 0; i < a.count; i++) if (Math.abs(a.getY(i) - y) < 0.6) { sx += a.getX(i); sz += a.getZ(i); k++; }
+      if (k) return new THREE.Vector3(sx / k, y, sz / k);
+    }
+    return null;
+  }
+  function spinalPoint(c) {
+    const y = yOf(c.struktur.level || ''); if (y === null) return null;
+    const ctr = cordCentre(y); if (!ctr) return null;
+    const side = (c.struktur.lesion || c.struktur.tracts || [])[0]?.side;
+    if (side === 'l') ctr.x += 0.35; else if (side === 'r') ctr.x -= 0.35;   // sol taraf +x
+    return ctr;
+  }
+  function clipPlanes(t, st) {
+    const y0 = yOf(st.level || ''), y1 = st.level2 ? yOf(st.level2) : null, P = [];
+    if (t.side === 'l') P.push(new THREE.Plane(new THREE.Vector3(1, 0, 0), 0));      // x >= 0 kalır
+    if (t.side === 'r') P.push(new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0));
+    if (t.part === 'below') P.push(new THREE.Plane(new THREE.Vector3(0, -1, 0), y0));
+    if (t.part === 'above') P.push(new THREE.Plane(new THREE.Vector3(0, 1, 0), -y0));
+    if (t.part === 'level') { P.push(new THREE.Plane(new THREE.Vector3(0, -1, 0), y0 + 1.5)); P.push(new THREE.Plane(new THREE.Vector3(0, 1, 0), -(y0 - 1.5))); }
+    if (t.part === 'range') { const lo = Math.min(y0, y1), hi = Math.max(y0, y1); P.push(new THREE.Plane(new THREE.Vector3(0, -1, 0), hi)); P.push(new THREE.Plane(new THREE.Vector3(0, 1, 0), -lo)); }
+    return P;
+  }
+  function spinalScene(c) {
+    const st = c.struktur, ov = model.overrides, list = [];
+    spinalExtra.clear();
+    const cord = grp(SPINE), more = recs(CORD_EXTRA), vert = grp(['Vertebral column']).filter(r => r.sub !== 'attach');
+    for (const r of [...cord, ...more]) ov.set(r.id, mats.cord);
+    const add = (t, col) => {
+      for (const r of recs([t.n])) {
+        if (!r.geo) continue;
+        const m = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.35, roughness: 0.5, side: THREE.DoubleSide, clippingPlanes: clipPlanes(t, st) });
+        const mesh = new THREE.Mesh(r.geo, m); mesh.renderOrder = 5; mesh.userData.noPick = true; spinalExtra.add(mesh);
+      }
+    };
+    setMark(null);
+    if (p.shown) {
+      for (const t of st.tracts || []) add(t, COL.lost);
+      for (const t of st.lesion || []) add(t, COL.mark);
+      const pt = spinalPoint(c);
+      if (pt) {
+        setMark(pt);
+        list.push({ text: `<b>${esc(nameOf(st.level))}${st.level2 ? ' – ' + esc(nameOf(st.level2)) : ''}</b>`, p: pt.clone().add(new THREE.Vector3(4, 1.5, 0)), at: pt, cls: 'on' });
+      }
+    }
+    // kas felci listesi varsa (ör. kök lezyonu) gösterilince mor
+    const lr = p.shown ? lrecs(c.folge.paralysed) : [];
+    for (const r of lr) ov.set(r.id, mats.lostT);
+    return { iso: [...cord, ...more, ...lr], ghost: vert, list };
+  }
   const CN_LABEL = { 'foramen-jugulare': 'Foramen jugulare' };   // birden çok sinirin ortak lezyon yeri
   const cranialName = c => CN_LABEL[c.key] || (c.struktur.lesion?.length ? nameOf(c.struktur.lesion[0]) : nameOf(c.struktur.n[0]));
   // bakış vakada verilebilir (struktur.view: lateral | medial | deep | orbit); struktur.both: alan iki taraflı (ör. Percheron)
@@ -176,8 +294,9 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
   const artName = c => { const r = recs([c.struktur.n[0]])[0]; return r ? (r.la || titleName(r)) : c.struktur.n[0]; };
 
   function apply() {
-    model.overrides.clear(); marks.clear();
-    const c = cur(), s = c.system === 'nerve' ? nerveScene(c) : c.system === 'cranial' ? cranialScene(c) : brainScene(c);
+    model.overrides.clear(); marks.clear(); spinalExtra.clear();
+    const c = cur(), sys = c.system;
+    const s = scene = sys === 'nerve' ? nerveScene(c) : sys === 'cranial' ? cranialScene(c) : sys === 'plexus' || sys === 'passage' ? regionScene(c) : sys === 'spinal' ? spinalScene(c) : brainScene(c);
     state.isolate = ids(s.iso);
     state.isoGhost = ownGhost = s.ghost.length ? ids(s.ghost) : null;
     labels.set(s.list);
@@ -191,6 +310,19 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
       const g = LO.geo?.sites?.[c.struktur.site];
       if (g?.p) box.expandByPoint(V3(g.p));
       if (g?.out) { dir = V3(g.out); dir.y = Math.max(dir.y, 0.1); }
+    } else if (c.system === 'plexus') {
+      box = boxOf(lrecs([...c.struktur.n, ...(c.struktur.lesion || [])]));
+      const pt = pointOf(c); if (pt) box.expandByPoint(pt);
+      box.expandByScalar(4);
+    } else if (c.system === 'passage') {
+      const g = LO.geo?.passages?.[c.struktur.passage];
+      if (g?.box) { box = new THREE.Box3(V3(g.box.min), V3(g.box.max)); if (g.dir) dir = V3(g.dir); } else box = boxOf(lrecs(c.struktur.n));
+      const pt = pointOf(c); if (pt) box.expandByPoint(pt);
+    } else if (c.system === 'spinal') {
+      const pt = spinalPoint(c), cord = grp(SPINE);
+      box = boxOf(cord);
+      if (pt) box = new THREE.Box3(pt.clone().add(new THREE.Vector3(-6, -14, -6)), pt.clone().add(new THREE.Vector3(6, 14, 6)));
+      dir = new THREE.Vector3(1, 0.12, -0.55);
     } else if (c.system === 'cranial') {
       const st = c.struktur;
       box = boxOf([...lrecs([...st.n, ...(st.lesion || []), ...c.folge.paralysed, ...(c.folge.kept || [])]), ...groupRecs('Brainstem')]);
@@ -221,14 +353,16 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     apply(); refresh(); frame();
   }
   function open(i, redraw = true) {
-    p.i = (i + D.cases.length) % D.cases.length; p.pick = null; p.shown = false;
+    p.i = (i + D.cases.length) % D.cases.length; p.pick = null; p.shown = false; p.loc = null;
     p.order = shuffle(cur().frage.options_de.map((_, j) => j));
+    clickMark.clear();
     if (redraw) { apply(); refresh(); frame(); }
   }
+  const openKey = (key, redraw = true) => { const i = D.cases.findIndex(c => c.key === key); if (i >= 0) open(i, redraw); };
   function cleanup() {
     active = false; enterSeq++;
     model.overrides.clear(); if (ownGhost && state.isoGhost === ownGhost) state.isoGhost = null;
-    ownGhost = null; root.visible = false; marks.clear(); labels.set([]);
+    ownGhost = null; root.visible = false; marks.clear(); clickMark.clear(); labels.set([]);
   }
   function sync() {
     if (!active) return;
@@ -240,10 +374,66 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     const c = cur();
     return lrecs(c.struktur.n).filter(r => r.vis).map(r => r.mesh);
   }
-  function onPick(id) {
+
+  // --- 3B görevi: lezyonu modelde bul ---
+  // Sinir ve kranial vaka: tıklama ışınının lezyon noktasına en yakın geçtiği uzaklık R'den küçükse doğru (R: sinir
+  // vakasında aynı sinirin öteki lezyon yerlerine uzaklığın 0,45'i, 1,5-3,5 cm; kranial vakada 2 cm). Beyin vakası:
+  // ışının ilk çarptığı yapı (derin bakışta saydam korteks, orbitada göz küresinin öteki parçaları sayılmaz) etkilenen
+  // alanda ya da tıkanan arterdeyse doğru. Her vakada tek deneme; boşluğa tıklama sayılmaz.
+  const hasLoc = c => (c.system === 'brain' ? !!c.folge.territory?.length : !!pointOf(c));
+  function radiusOf(c) {
+    if (c.system !== 'nerve') return c.system === 'cranial' || c.system === 'plexus' ? 2 : 2.5;
+    const nk = c.struktur.site.split('@')[0], me = V3(LO.geo.sites[c.struktur.site].p);
+    let m = Infinity;
+    for (const [k, g] of Object.entries(LO.geo.sites)) if (k !== c.struktur.site && k.split('@')[0] === nk && g?.p) m = Math.min(m, me.distanceTo(V3(g.p)));
+    return Number.isFinite(m) ? Math.max(1.5, Math.min(3.5, 0.45 * m)) : 3;
+  }
+  const ray = new THREE.Raycaster(), v2 = new THREE.Vector2();
+  const clickMark = new THREE.Group(); root.add(clickMark);
+  function showClick(pt, ok) {
+    clickMark.clear(); if (!pt) return;
+    const s = new THREE.Mesh(ballGeo, ok ? mats.hit : mats.miss); s.position.copy(pt); s.scale.setScalar(0.36); s.renderOrder = 7; clickMark.add(s);
+  }
+  const locPending = () => active && D && p.pick !== null && !p.shown && p.loc === null && hasLoc(cur()) && !(p.q?.kind === 'testat' && p.q.done);
+  function locClick(x, y) {
+    const c = cur(), rect = stage.canvas.getBoundingClientRect();
+    v2.set((x - rect.left) / rect.width * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
+    ray.setFromCamera(v2, stage.camera);
+    const o = ray.ray.origin, d = ray.ray.direction;
+    if (c.system === 'brain') {
+      const side = sideOf(c), good = ids([...side(c.folge.territory), ...side(c.struktur.n)]);
+      const skip = scene?.skip || new Set(), hits = [];
+      let best = null, bd = Infinity, bp = null;
+      for (const id of state.isolate || []) {
+        if (skip.has(id)) continue;
+        const r = model.items.get(id); if (!r?.mesh) continue;
+        hits.length = 0; r.mesh.raycast(ray, hits);
+        for (const h of hits) if (h.distance < bd) { bd = h.distance; best = r; bp = h.point.clone(); }
+      }
+      if (!best) { ui?.notify?.('Bir yapının üstüne tıkla'); return; }
+      p.loc = { ok: good.has(best.id), name: nameOf(best.n), pt: bp };
+    } else {
+      const target = pointOf(c);
+      const t = Math.max(0, target.clone().sub(o).dot(d)), q = o.clone().addScaledVector(d, t), dist = target.distanceTo(q), R = radiusOf(c);
+      p.loc = { ok: dist <= R, d: dist, R, pt: q };
+    }
+    showClick(p.loc.pt, p.loc.ok);
+    finishCase();
+  }
+  // vaka bitti: sonuç kaydedilir; Testat dışında tablo açılır
+  function finishCase() {
+    const c = cur(), mc = p.pick === 0, loc = p.loc && p.loc !== 'skip' ? p.loc.ok : null;
+    S.answer(c.key, mc, loc);
+    if (p.q?.kind === 'testat') { p.q.res[c.key] = { mc, loc, pick: p.pick }; refresh(); return; }
+    if (p.q?.kind === 'review') p.q.res[c.key] = { mc, loc };
+    p.shown = true; apply(); refresh();
+  }
+  function onPick(id, x, y) {
     if (!active) return false;
+    if (x !== undefined && locPending()) locClick(x, y);
     return true;   // vaka görünümünde tıklama paneli değiştirmez
   }
+  const pickAt = (x, y) => { if (!locPending()) return false; locClick(x, y); return true; };
   let wasExploded = false;
   stage.onFrame(() => {
     if (!active || !D) return false;
@@ -254,29 +444,128 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     return false;
   });
 
+  // --- Tekrar ve Testat ---
+  const allKeys = () => D.cases.map(c => c.key);
+  const grpOf = x => (x.system !== 'nerve' ? x.system : nerveOf(x)?.region === 'leg' ? 'leg' : 'arm');
+  const TESTAT_N = 10, TESTAT_MS = 90e3;   // 10 vaka, vaka başına 90 sn
+  function startReview() {
+    const keys = S.due(allKeys());
+    if (!keys.length) { refresh(); return; }
+    p.q = { kind: 'review', keys, i: 0, res: {} }; openKey(keys[0]);
+  }
+  function startTestat() {
+    const pool = D.cases.filter(c => p.tf === 'all' || grpOf(c) === p.tf).map(c => c.key);
+    const keys = shuffle(pool).slice(0, TESTAT_N);
+    if (!keys.length) return;
+    p.q = { kind: 'testat', keys, i: 0, res: {}, t0: Date.now(), limit: keys.length * TESTAT_MS, done: false, ms: 0 };
+    openKey(keys[0]);
+  }
+  function step(dir) {
+    const q = p.q;
+    if (!q) { open(p.i + dir); return; }
+    if (q.kind === 'testat' && dir > 0 && q.i === q.keys.length - 1) { endTestat(); refresh(); return; }
+    q.i = Math.max(0, Math.min(q.keys.length - 1, q.i + dir)); openKey(q.keys[q.i]);
+  }
+  function endTestat() {
+    const q = p.q; if (!q || q.kind !== 'testat' || q.done) return;
+    q.done = true; q.ms = Math.min(Date.now() - q.t0, q.limit);
+    const r = Object.values(q.res);
+    S.testat({ t: q.t0, n: q.keys.length, ok: r.filter(x => x.mc).length, loc: r.filter(x => x.loc === true).length, locN: r.filter(x => x.loc !== null).length, ms: q.ms, keys: q.keys });
+    clickMark.clear();
+  }
+  const mmss = ms => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  setInterval(() => {
+    const q = p.q; if (!active || !q || q.kind !== 'testat' || q.done) return;
+    const left = q.limit - (Date.now() - q.t0), el = document.getElementById('pa-timer');
+    if (el) el.textContent = mmss(left);
+    if (left <= 0) { endTestat(); refresh(); }
+  }, 1000);
+
   // --- panel ---
   const nameOf = n => { const r = recs([n])[0]; return r ? (r.la || titleName(r)) : n; };
   const uniq = a => [...new Set(a)];
+  const day = ms => new Date(ms).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+  const issueURL = c => {
+    const body = `Vaka: ${c.key}\nBaşlık: ${c.title_de}\nSoru dili: ${lang()}\nAdres: ${location.origin}${location.pathname}#m=patho:${c.key}\n\nNe yanlış? (hangi cümle, ne olmalı, varsa kaynak):\n\n`;
+    return `${ISSUES}?title=${encodeURIComponent('Vaka: ' + c.title_de)}&body=${encodeURIComponent(body)}`;
+  };
+  const tabs = () => {
+    const dueN = S.due(allKeys()).length, m = p.q ? p.q.kind : p.mode;
+    const b = (k, t, title) => `<button data-pm="${k}" class="${m === k || (k === 'browse' && m === 'browse') ? 'active' : ''}" title="${title}">${t}</button>`;
+    return `<div class="seg tiny bview">${b('browse', 'Vakalar', 'Bütün vakalar, listeden seç')}${b('review', `Tekrar${dueN ? ` (${dueN})` : ''}`, 'Tekrar zamanı gelen vakalar (aralıklı tekrar)')}${b('testat', 'Testat', '10 rastgele vaka, süreli, sonuç sonda')}</div>`;
+  };
+  function locHTML(c, lg, testat) {
+    if (!hasLoc(c) || p.pick === null) return '';
+    const what = c.system === 'brain' ? ['Welches Areal ist betroffen? Klicke im 3D-Modell darauf.', 'Hangi bölge etkilendi? 3B modelde o bölgeye tıkla.']
+      : ['Wo liegt die Läsion? Klicke im 3D-Modell auf die Stelle am gelben Nerv.', 'Lezyon nerede? 3B modelde sarı sinirin üzerinde lezyon yerine tıkla.'];
+    if (p.loc === null && !p.shown) return `<div class="lesion locask"><h2>3B görevi</h2><p lang="de"><b>${what[0]}</b></p><p class="htext small dim">${what[1]}</p><div class="btns"><button data-pa="skip" title="3B görevini atla">Atla</button></div></div>`;
+    if (!p.loc || p.loc === 'skip') return '';
+    if (testat) return '<p class="htext small dim">3B cevabın kaydedildi.</p>';
+    const l = p.loc, ok = l.ok;
+    const txt = c.system === 'brain'
+      ? (ok ? `Doğru: tıkladığın yer (${esc(l.name)}) etkilenen alanda.` : `Yanlış: tıkladığın yer (${esc(l.name)}) etkilenmiyor; etkilenen alan turuncu.`)
+      : (ok ? `Doğru: lezyon yerine ${l.d.toFixed(1).replace('.', ',')} cm.` : `Yanlış: lezyon yeri ${l.d.toFixed(1).replace('.', ',')} cm ötede (kırmızı nokta; ${l.R.toFixed(1).replace('.', ',')} cm içi doğru sayılır).`);
+    return `<div class="qres ${ok ? 'ok' : 'bad'}">3B: ${txt}</div>`;
+  }
+  function testatSetupHTML() {
+    const h = S.testats().slice(-5).reverse();
+    const opt = (k, t) => `<option value="${k}"${p.tf === k ? ' selected' : ''}>${t}</option>`;
+    return `
+      <h1 class="name">Testat</h1>
+      <p class="htext">${TESTAT_N} rastgele vaka, vaka başına ${TESTAT_MS / 1000} saniye (toplam ${mmss(TESTAT_N * TESTAT_MS)}). Her vakada önce soru, sonra 3B'de lezyon yeri. Doğru cevaplar ve açıklamalar sonda gösterilir; sonuçlar tekrar takvimine yazılır.</p>
+      <div class="field"><select data-psel="tf" aria-label="Konu">${opt('all', 'Bütün vakalar')}${GROUPS.map(([k, t]) => opt(k, t)).join('')}</select></div>
+      <div class="btns"><button data-pt="start" class="primary">Testatı başlat</button></div>
+      ${h.length ? `<details class="clinic" open><summary>Son Testatlar</summary>${h.map(x => `<p class="htext small">${day(x.t)} · soru ${x.ok}/${x.n} · 3B ${x.loc}/${x.locN || 0} · ${mmss(x.ms)}</p>`).join('')}</details>` : ''}`;
+  }
+  function testatSummaryHTML(q) {
+    const r = q.keys.map(k => ({ k, c: D.cases.find(c => c.key === k), x: q.res[k] }));
+    const ok = r.filter(e => e.x?.mc).length, locOk = r.filter(e => e.x?.loc === true).length, locN = r.filter(e => e.x && e.x.loc !== null).length;
+    const mark = v => (v === true ? '<span class="ok">✓</span>' : v === false ? '<span class="bad">✗</span>' : '<span class="dim">–</span>');
+    return `
+      <h1 class="name">Testat sonucu</h1>
+      <p class="htext"><b>Soru: ${ok}/${q.keys.length}</b> · 3B: ${locOk}/${locN} · süre ${mmss(q.ms)}${q.ms >= q.limit ? ' (süre doldu)' : ''}</p>
+      <table class="ptab"><tr><th>Vaka</th><th>Soru</th><th>3B</th><th></th></tr>${r.map(e => `<tr><td lang="de">${esc(e.c?.title_de || e.k)}</td><td>${e.x ? mark(e.x.mc) : '<span class="dim">cevapsız</span>'}</td><td>${mark(e.x?.loc ?? null)}</td><td><button data-pt="open" data-k="${e.k}" title="Vakayı açıklamasıyla aç">Aç</button></td></tr>`).join('')}</table>
+      <div class="btns"><button data-pt="again" class="primary">Yeni Testat</button><button data-pm="browse">Vakalara dön</button></div>`;
+  }
   function panelHTML() {
     if (!D) return '<p class="htext">Yükleniyor…</p>';
-    const c = cur(), f = c.frage, lg = lang(), other = lg === 'de' ? 'tr' : 'de';
-    const groups = [['arm', 'Kol sinirleri'], ['leg', 'Bacak sinirleri'], ['cranial', 'Kranial sinirler'], ['brain', 'Beyin ve omurilik infarktları']];
-    const grpOf = x => (x.system === 'brain' ? 'brain' : x.system === 'cranial' ? 'cranial' : nerveOf(x)?.region === 'leg' ? 'leg' : 'arm');
-    const done = Object.values(p.score), right = done.filter(Boolean).length;
+    const head = `<div class="chips"><span class="chip loco">Patoloji vakaları</span><span class="chip dim">${D.cases.length} vaka</span></div>${tabs()}`;
+    const foot = `<p class="htext small dim">Vakalar yapay zekâyla yazıldı ve kaynaklarla denetlendi; bir hekim ya da anatomist bakmadı.</p>
+      <div class="btns"><button data-pa="exit" title="Patoloji modundan çık (Esc)">Moddan çık</button></div>`;
+    const q = p.q;
+    if (!q && p.mode === 'testat') return head + testatSetupHTML() + foot;
+    if (q?.kind === 'testat' && q.done) return head + testatSummaryHTML(q) + foot;
+    if (!q && p.mode === 'review') {
+      const s = S.summary(allKeys()), nd = S.nextDue(allKeys());
+      return head + `<h1 class="name">Aralıklı tekrar</h1>
+        <p class="htext">Cevapladığın her vaka bir tekrar kutusuna girer: yanlışsa ertesi gün, doğruysa sırayla 3, 7, 16, 35 ve 90 gün sonra yeniden sorulur.</p>
+        <p class="htext small">Çözülen ${s.seen}/${s.total} vaka · doğru kutuda ${s.ok} · bugün tekrar ${s.due}</p>
+        ${s.due ? `<div class="btns"><button data-pt="review" class="primary">Tekrara başla (${s.due})</button></div>` : `<p class="htext small dim">${s.seen ? `Bugün tekrar edilecek vaka yok.${Number.isFinite(nd) ? ` Sonraki tekrar: ${day(nd)}.` : ''}` : 'Henüz cevaplanmış vaka yok: Vakalar sekmesinden başla.'}</p>`}` + foot;
+    }
+    const c = cur(), f = c.frage, lg = lang(), other = lg === 'de' ? 'tr' : 'de', testat = q?.kind === 'testat';
     const opts = f['options_' + lg];
-    const answered = p.pick !== null;
+    const answered = p.pick !== null, reveal = answered && !testat;
     const optsHTML = `<div class="qopts" lang="${lg}">${p.order.map(j => {
-      const cls = answered ? (j === 0 ? 'ok' : p.pick === j ? 'bad' : '') : '';
-      return `<button class="qopt ${cls}" data-po="${j}"${answered ? ' disabled' : ''}><b>${esc(opts[j])}</b></button>`;
+      const cls = reveal ? (j === 0 ? 'ok' : p.pick === j ? 'bad' : '') : testat && p.pick === j ? 'picked' : '';
+      return `<button class="qopt ${cls}" data-po="${j}"${answered || p.shown ? ' disabled' : ''}><b>${esc(opts[j])}</b></button>`;
     }).join('')}</div>`;
-    const legend = c.system !== 'brain'
-      ? `${sw(COL.nerve, 'sinir')} ${sw(COL.mark, 'lezyon')} ${c.folge.paralysed.length ? sw(COL.lost, 'felçli') + ' ' : ''}${c.system === 'nerve' || c.folge.kept?.length ? sw(COL.kept, 'aynı sinir, sağlam') : ''}`
-      : `${sw(COL.artery, 'tıkanan arter')} ${sw(COL.terr, 'etkilenen alan')}`;
-    const where = c.system === 'cranial' ? `<span lang="la">${(c.struktur.cn || []).map(k => 'N. ' + k).join(', ')} · ${esc(cranialName(c))}</span>`
+    const you = p.loc?.pt ? ` ${sw(p.loc.ok ? COL.hit : COL.miss, 'senin tıklaman')}` : '';
+    const legend = c.system === 'spinal' ? `${sw(COL.mark, 'lezyon')} ${sw(COL.lost, 'işlevi kesilen yol')}${you}`
+      : c.system !== 'brain'
+      ? `${c.system === 'nerve' || c.system === 'cranial' || c.struktur.n?.length ? sw(COL.nerve, 'sinir') + ' ' : ''}${sw(COL.mark, 'lezyon')} ${c.folge.paralysed.length ? sw(COL.lost, 'felçli') + ' ' : ''}${c.system === 'nerve' || c.folge.kept?.length ? sw(COL.kept, 'aynı sinir, sağlam') : ''}${c.struktur.v?.length ? ' ' + sw(COL.artery, 'damar') : ''}${you}`
+      : `${sw(COL.artery, 'tıkanan arter')} ${sw(COL.terr, 'etkilenen alan')}${you}`;
+    const ps = c.system === 'passage' ? passOf(c) : null;
+    const where = c.system === 'spinal' ? `<span lang="la">${esc(nameOf(c.struktur.level || ''))}${c.struktur.level2 ? ' – ' + esc(nameOf(c.struktur.level2)) : ''}</span>`
+      : ps ? `<span lang="la">${esc(ps.la)}</span> · <span lang="la">${esc(ps.contents.find(x => x.key === c.struktur.content)?.la || '')}</span>`
+      : c.system === 'plexus' ? `<span lang="la">${esc(nameOf(c.struktur.lesion?.[0] || c.struktur.n[0]))}</span>`
+      : c.system === 'cranial' ? `<span lang="la">${(c.struktur.cn || []).map(k => 'N. ' + k).join(', ')} · ${esc(cranialName(c))}</span>`
       : c.system === 'nerve' ? (() => { const s = siteOf(c), nv = nerveOf(c); return `<span lang="la">${esc(nv?.la || '')}</span>${s ? ` · <span lang="de">${esc(s.de || s.la || '')}</span>` : ''}`; })()
       : `<span lang="la">${esc(artName(c))}</span>`;
-    const affected = uniq(c.system !== 'brain' ? c.folge.paralysed.filter(n => !/tendon/i.test(n)) : c.folge.territory).map(nameOf);
-    const reveal = p.shown ? `
+    const SIDE = { l: 'sol', r: 'sağ', both: 'iki taraf' }, PART = { below: 'seviyenin altı', above: 'seviyenin üstü', level: 'seviyede', range: 'aralıkta', all: 'boydan boya' };
+    const affected = uniq(c.system === 'brain' ? c.folge.territory : c.folge.paralysed.filter(n => !/tendon/i.test(n))).map(nameOf);
+    const tractsHTML = c.system === 'spinal' && (c.struktur.tracts || []).length ? `<details class="clinic" open><summary>Kesilen yollar</summary><p class="htext small">${c.struktur.tracts.map(t => `<span lang="la">${esc(nameOf(t.n))}</span> (${SIDE[t.side]}, ${PART[t.part]})`).join('<br>')}</p></details>` : '';
+    const st = S.get(c.key);
+    const revealHTML = p.shown ? `
       <div class="lesion">
         <h2>Lezyon</h2>
         <p class="htext">${where}</p>
@@ -284,40 +573,76 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
       </div>
       <details class="clinic" open><summary>Mechanismus</summary><p lang="de">${esc(c.mechanismus_de)}</p><p class="htext small dim">${esc(c.mechanismus_tr)}</p></details>
       <details class="clinic" open><summary>Ausfälle</summary>${c.folge.deficits_de.map((d, j) => `<p><b lang="de">${esc(d)}</b><br><small>${esc(c.folge.deficits_tr[j] || '')}</small></p>`).join('')}</details>
-      ${affected.length ? `<details class="clinic"><summary>${c.system !== 'brain' ? 'Felçli kaslar' : 'Etkilenen yapılar'} (${affected.length})</summary><p lang="la">${affected.map(esc).join(', ')}</p></details>` : '<p class="htext small">Kas felci yok: yalnız duyu kaybı.</p>'}
+      ${affected.length ? `<details class="clinic"><summary>${c.system !== 'brain' ? 'Felçli kaslar' : 'Etkilenen yapılar'} (${affected.length})</summary><p lang="la">${affected.map(esc).join(', ')}</p></details>` : c.system === 'nerve' || c.system === 'cranial' ? '<p class="htext small">Kas felci yok: yalnız duyu kaybı.</p>' : ''}
+      ${tractsHTML}
       ${MODEL_NOTE[c.key] || c.model_note_tr ? `<div class="tip">${esc(MODEL_NOTE[c.key] || c.model_note_tr)}</div>` : ''}
-      <div class="btns">${c.system === 'cranial' ? `<button data-pg="cn" title="Bu siniri Beyin modunda, Sinirler bölümünde aç">Beyin modunda aç</button>` : c.system === 'nerve' ? `<button data-pg="loco" title="Bu siniri bütün lezyon yerleriyle Hareket modunda aç">Hareket modunda aç</button>` : `<button data-pg="brain" title="Beyin arterlerini ve beslenme alanlarını Beyin modunda aç">Beyin modunda aç</button>`}</div>`
-      : `<div class="btns"><button data-pa="show" title="Soruyu cevaplamadan lezyonu 3B görünümde göster">Tabloyu şimdi göster</button></div>`;
-    return `
-      <div class="chips"><span class="chip loco">Patoloji vakaları</span><span class="chip dim">pilot</span></div>
-      <div class="field"><select data-psel="case" aria-label="Vaka">${groups.map(([k, t]) => `<optgroup label="${t}">${D.cases.map((x, j) => grpOf(x) === k ? `<option value="${j}"${j === p.i ? ' selected' : ''}>${j + 1}. ${esc(x.title_de)}${p.score[x.key] === true ? ' ✓' : p.score[x.key] === false ? ' ✗' : ''}</option>` : '').join('')}</optgroup>`).join('')}</select></div>
-      <div class="btns"><button data-pa="prev" title="Önceki vaka">◀</button><span class="htext small dim">${p.i + 1} / ${D.cases.length}${done.length ? ` · ${right}/${done.length} doğru` : ''}</span><button data-pa="next" title="Sonraki vaka">▶</button></div>
+      ${st ? `<p class="htext small dim">Kayıt: ${st.r} doğru, ${st.w} yanlış${st.lr + st.lw ? ` · 3B ${st.lr}/${st.lr + st.lw}` : ''} · sonraki tekrar ${day(st.d)}</p>` : ''}
+      <div class="btns">${ps ? `<button data-pg="pass" title="Bu geçidi duvarları ve içindekilerle Hareket modunda aç">Geçidi Hareket modunda aç</button>` : c.system === 'plexus' || c.system === 'spinal' ? '' : c.system === 'cranial' ? `<button data-pg="cn" title="Bu siniri Beyin modunda, Sinirler bölümünde aç">Beyin modunda aç</button>` : c.system === 'nerve' ? `<button data-pg="loco" title="Bu siniri bütün lezyon yerleriyle Hareket modunda aç">Hareket modunda aç</button>` : `<button data-pg="brain" title="Beyin arterlerini ve beslenme alanlarını Beyin modunda aç">Beyin modunda aç</button>`}
+        <a class="btnlink" href="${issueURL(c)}" target="_blank" rel="noopener" title="Bu vakadaki bir hatayı herkese açık GitHub deposunda bildir (GitHub hesabı gerekir)">Hata bildir</a></div>`
+      : testat ? '' : `<div class="btns"><button data-pa="show" title="${answered ? '3B görevini atlayıp tabloyu göster' : 'Soruyu cevaplamadan lezyonu 3B görünümde göster (sonuç kaydedilmez)'}">Tabloyu şimdi göster</button></div>`;
+    // üst gezinme: Vakalar listesi, Tekrar ya da Testat sırası
+    let nav;
+    if (testat) {
+      const left = q.limit - (Date.now() - q.t0), last = q.i === q.keys.length - 1, doneHere = !!q.res[c.key];
+      nav = `<div class="btns"><span class="htext small"><b>Testat ${q.i + 1}/${q.keys.length}</b> · ⏱ <b id="pa-timer">${mmss(left)}</b></span><button data-pt="stop" title="Testatı şimdi bitir ve sonucu göster">Bitir</button></div>`;
+      nav += doneHere ? `<div class="btns"><button data-pa="next" class="primary">${last ? 'Testatı bitir' : 'Sonraki vaka ▶'}</button></div>` : '';
+    } else if (q?.kind === 'review') {
+      const doneN = Object.keys(q.res).length;
+      nav = `<div class="btns"><button data-pa="prev" title="Önceki">◀</button><span class="htext small"><b>Tekrar ${q.i + 1}/${q.keys.length}</b>${doneN ? ` · ${doneN} cevaplandı` : ''}</span><button data-pa="next" title="Sonraki">▶</button><button data-pt="endreview" title="Tekrardan çık">Bırak</button></div>`;
+      if (q.res[c.key] && q.i === q.keys.length - 1) nav += '<p class="htext small ok">Bugünkü tekrar bitti.</p>';
+    } else {
+      const s = S.summary(allKeys());
+      nav = `<div class="field"><select data-psel="case" aria-label="Vaka">${GROUPS.map(([k, t]) => `<optgroup label="${t}">${D.cases.map((x, j) => grpOf(x) === k ? `<option value="${j}"${j === p.i ? ' selected' : ''}>${j + 1}. ${esc(x.title_de)}${S.status(x.key) === 'ok' ? ' ✓' : S.status(x.key) === 'bad' ? ' ✗' : ''}</option>` : '').join('')}</optgroup>`).join('')}</select></div>
+      <div class="btns"><button data-pa="prev" title="Önceki vaka">◀</button><span class="htext small dim">${p.i + 1} / ${D.cases.length}${s.seen ? ` · çözülen ${s.seen} · doğru ${s.ok}` : ''}</span><button data-pa="next" title="Sonraki vaka">▶</button></div>`;
+    }
+    return head + nav + `
       <h1 class="name" lang="de">${esc(c.title_de)}</h1>
       <p lang="de" class="htext">${esc(c.befund_de)}</p>
       <details class="clinic"><summary>Türkçe</summary><p class="htext small">${esc(c.befund_tr)}</p></details>
       <p class="htext qtext" lang="${lg}"><b>${esc(f['q_' + lg])}</b></p>
       ${optsHTML}
-      ${answered ? `<div class="qres ${p.pick === 0 ? 'ok' : 'bad'}">${p.pick === 0 ? (lg === 'de' ? 'Richtig' : 'Doğru') : (lg === 'de' ? 'Falsch' : 'Yanlış')}</div>
+      ${reveal ? `<div class="qres ${p.pick === 0 ? 'ok' : 'bad'}">${p.pick === 0 ? (lg === 'de' ? 'Richtig' : 'Doğru') : (lg === 'de' ? 'Falsch' : 'Yanlış')}</div>
         <p class="htext" lang="${lg}">${esc(f['explain_' + lg])}</p>
         <details class="clinic"><summary>${other === 'tr' ? 'Türkçe' : 'Deutsch'}</summary><p class="htext small" lang="${other}"><b>${esc(f['q_' + other])}</b></p><p class="htext small" lang="${other}">${esc(f['explain_' + other])}</p></details>` : ''}
-      ${reveal}
-      <p class="htext small dim">Vakalar yapay zekâyla yazıldı ve kaynaklarla denetlendi; bir hekim ya da anatomist bakmadı.</p>
-      <div class="btns"><button data-pa="exit" title="Patoloji modundan çık (Esc)">Moddan çık</button></div>`;
+      ${locHTML(c, lg, testat)}
+      ${revealHTML}` + foot;
   }
   function click(e) {
-    const t = e.target.closest('[data-pa],[data-po],[data-pg]'); if (!t) return;
+    const t = e.target.closest('[data-pa],[data-po],[data-pg],[data-pm],[data-pt]'); if (!t) return;
     const d = t.dataset;
     if (d.po !== undefined) {
-      if (p.pick !== null) return;
-      p.pick = +d.po; p.score[cur().key] = p.pick === 0;
-      const was = p.shown; p.shown = true;
-      if (!was) { apply(); refresh(); frame(); } else refresh();
+      if (p.pick !== null || p.shown) return;
+      p.pick = +d.po;
+      if (hasLoc(cur())) { refresh(); return; }   // önce 3B görevi
+      finishCase(); return;
+    }
+    if (d.pm) {
+      if (p.q?.kind === 'testat' && !p.q.done && d.pm !== 'testat') endTestat();
+      p.q = null; p.mode = d.pm; clickMark.clear();
+      if (d.pm === 'browse') open(p.i); else refresh();
       return;
     }
-    if (d.pa === 'show') { p.shown = true; apply(); refresh(); frame(); return; }
-    if (d.pa === 'prev') { open(p.i - 1); return; }
-    if (d.pa === 'next') { open(p.i + 1); return; }
-    if (d.pa === 'exit') { state.isolate = null; refresh(); return; }
+    if (d.pt === 'start' || d.pt === 'again') { p.mode = 'testat'; startTestat(); return; }
+    if (d.pt === 'stop') { endTestat(); refresh(); return; }
+    if (d.pt === 'review') { startReview(); return; }
+    if (d.pt === 'endreview') { p.q = null; p.mode = 'browse'; refresh(); return; }
+    if (d.pt === 'open') {
+      const last = p.q, r = last?.res?.[d.k];
+      p.q = null; p.mode = 'browse'; openKey(d.k, false);
+      if (r) {   // Testat cevabıyla aç: doğru şık ve tablo görünür
+        p.pick = r.pick ?? null; p.loc = 'skip'; p.shown = true;
+      }
+      apply(); refresh(); frame(); return;
+    }
+    if (d.pa === 'skip') { if (p.pick !== null && p.loc === null) { p.loc = 'skip'; finishCase(); } return; }
+    if (d.pa === 'show') {
+      if (p.pick !== null && p.loc === null) { p.loc = 'skip'; finishCase(); return; }
+      p.shown = true; apply(); refresh(); frame(); return;
+    }
+    if (d.pa === 'prev') { step(-1); return; }
+    if (d.pa === 'next') { step(1); return; }
+    if (d.pa === 'exit') { if (p.q?.kind === 'testat' && !p.q.done) endTestat(); state.isolate = null; refresh(); return; }
+    if (d.pg === 'pass') { actions?.locoMode?.('passages:' + cur().struktur.passage); return; }
     if (d.pg === 'loco') { const nv = nerveOf(cur()); actions?.locoMode?.('nerves' + (nv ? ':' + nv.key : '')); return; }
     if (d.pg === 'cn') { actions?.brainMode?.(`nerves:exit:${(cur().struktur.cn || [])[0] || ''}`); return; }
     if (d.pg === 'brain') { actions?.brainMode?.(cur().struktur.artery === 'asa' ? 'arteries:basal' : `arteries:${VIEW[cur().struktur.artery] || 'basal'}`); }
@@ -325,11 +650,12 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
   document.querySelector('#info')?.addEventListener('change', e => {
     if (!active) return;
     const t = e.target.closest('select[data-psel]'); if (!t) return;
+    if (t.dataset.psel === 'tf') { p.tf = t.value; return; }
     open(+t.value);
   });
 
   return {
-    enter, sync, highlight, onPick, panelHTML, click,
+    enter, sync, highlight, onPick, pickAt, panelHTML, click,
     isActive: () => active, hideTips: () => active && !p.shown,
     cancelPending: () => { if (!active) enterSeq++; },
     spec: () => (D ? cur().key : ''),

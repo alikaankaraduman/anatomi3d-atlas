@@ -50,6 +50,38 @@ for (const c of src.cases) {
     }
     if (!Array.isArray(c.folge?.paralysed)) err(c, 'folge.paralysed dizi değil');
     for (const k of ['paralysed', 'kept']) for (const n of c.folge?.[k] || []) if (!muscles.has(n)) err(c, `${k}: kas değil ya da modelde yok: ${n}`);
+  } else if (c.system === 'plexus' || c.system === 'passage') {
+    // pleksus / kök vakası: sarı parçalar n, kırmızı lesion, damarlar v, nokta at {on, near} (cranial-points.json);
+    // geçit vakası: struktur.passage locomotor.json passages.list anahtarı, struktur.content o geçidin içeriği (nokta geo'dan)
+    need(c, c.struktur?.n, 'struktur.n'); need(c, c.struktur?.lesion, 'struktur.lesion'); need(c, c.struktur?.v, 'struktur.v');
+    if (c.system === 'plexus') {
+      if (!(c.struktur?.n || []).length) err(c, 'struktur.n boş');
+      if (!c.struktur?.at) err(c, 'struktur.at yok'); else {
+        need(c, [c.struktur.at.on, c.struktur.at.near], 'struktur.at');
+        if (points[c.key]) c.struktur.p = points[c.key]; else warn.push(`${c.key}: lezyon noktası henüz hesaplanmadı (cranial-points.json)`);
+      }
+    } else {
+      const ps = loco.passages.list.find(x => x.key === c.struktur?.passage);
+      if (!ps) err(c, `geçit yok: ${c.struktur?.passage}`);
+      else if (!ps.contents.some(x => x.key === c.struktur.content)) err(c, `geçidin içeriği yok: ${c.struktur.content}`);
+      else if (!loco.geo?.passages?.[ps.key]?.contents?.[c.struktur.content]?.p) err(c, `geo noktası yok: ${ps.key}.${c.struktur.content}`);
+    }
+    if (!Array.isArray(c.folge?.paralysed)) err(c, 'folge.paralysed dizi değil');
+    for (const k of ['paralysed', 'kept']) for (const n of c.folge?.[k] || []) if (!muscles.has(n)) err(c, `${k}: kas değil ya da modelde yok: ${n}`);
+  } else if (c.system === 'spinal') {
+    // omurilik vakası: level (level2) seviye parçası; lesion (kırmızı) ve tracts (mor) {n, side l|r|both, part below|above|level|range|all}
+    const st = c.struktur || {};
+    need(c, [st.level, st.level2].filter(Boolean), 'level');
+    for (const k of ['lesion', 'tracts']) for (const t of st[k] || []) {
+      need(c, [t.n], k);
+      if (!['l', 'r', 'both'].includes(t.side)) err(c, `${k}: taraf l|r|both olmalı: ${t.n}`);
+      if (!['below', 'above', 'level', 'range', 'all'].includes(t.part)) err(c, `${k}: part geçersiz: ${t.n}`);
+      if (t.part !== 'all' && !st.level) err(c, `${k}: ${t.part} için struktur.level gerekli`);
+      if (t.part === 'range' && !st.level2) err(c, `${k}: range için struktur.level2 gerekli`);
+    }
+    if (!(st.lesion || []).length && !(st.tracts || []).length) err(c, 'lesion ve tracts boş');
+    if (!Array.isArray(c.folge?.paralysed)) err(c, 'folge.paralysed dizi değil');
+    for (const k of ['paralysed', 'kept']) for (const n of c.folge?.[k] || []) if (!muscles.has(n)) err(c, `${k}: kas değil ya da modelde yok: ${n}`);
   } else err(c, `bilinmeyen sistem: ${c.system}`);
   const f = c.frage || {};
   if (!f.q_de || !f.q_tr || !f.explain_de || !f.explain_tr) err(c, 'soru metinleri eksik');
@@ -61,9 +93,10 @@ if (new Set(keys).size !== keys.length) errs.push('yinelenen vaka anahtarı');
 
 if (warn.length) console.warn(warn.join('\n'));
 if (errs.length) { console.error(errs.join('\n')); console.error(`${errs.length} hata; ${OUT} yazılmadı`); process.exit(1); }
-// sıra: kol sinirleri, bacak sinirleri, kranial sinirler, beyin (panelde ◀ ▶ bu sırayla gezer); grup içinde dosyadaki sıra korunur
-const rank = c => (c.system === 'brain' ? 3 : c.system === 'cranial' ? 2 : loco.nerves.list.find(n => n.key === c.struktur.site.split('@')[0])?.region === 'leg' ? 1 : 0);
+// sıra: kol sinirleri, bacak sinirleri, pleksus ve kökler, geçitler, omurilik, kranial sinirler, beyin (panelde ◀ ▶ bu sırayla gezer); grup içinde dosyadaki sıra korunur
+const RANK = { plexus: 2, passage: 3, spinal: 4, cranial: 5, brain: 6 };
+const rank = c => RANK[c.system] ?? (loco.nerves.list.find(n => n.key === c.struktur.site.split('@')[0])?.region === 'leg' ? 1 : 0);
 src.cases = src.cases.map((c, i) => [rank(c), i, c]).sort((x, y) => x[0] - y[0] || x[1] - y[1]).map(x => x[2]);
 const out = { v: src.v, date: src.date, title_de: src.title_de, note: src.note, cases: src.cases };
 fs.writeFileSync(OUT, JSON.stringify(out));
-console.log(`${OUT}: ${src.cases.length} vaka (${src.cases.filter(c => c.system === 'nerve').length} sinir, ${src.cases.filter(c => c.system === 'cranial').length} kranial, ${src.cases.filter(c => c.system === 'brain').length} beyin), ${(fs.statSync(OUT).size / 1024).toFixed(1)} KB`);
+console.log(`${OUT}: ${src.cases.length} vaka (${Object.entries(src.cases.reduce((a, c) => (a[c.system] = (a[c.system] || 0) + 1, a), {})).map(([k, n]) => n + ' ' + k).join(', ')}), ${(fs.statSync(OUT).size / 1024).toFixed(1)} KB`);

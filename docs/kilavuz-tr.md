@@ -87,14 +87,22 @@ kemiğinin arka yüzündeki Gluteus maximus origosu arkadan).
 Derindeki bir yapıya ulaşmak için üstündekini seçip `H` ile (ya da bilgi kartındaki **Gizle** ile) gizleyin;
 *Gizlenenleri göster* hepsini geri getirir.
 
-**Patoloji vakaları** (Araçlar › Çalışma modları › **Patoloji**; 53 vaka): 28 periferik sinir lezyonu (17 kol,
-11 bacak; Hareket modundaki her lezyon yeri için bir vaka), 12 kranial sinir lezyonu (II–XII; baş-boyun görünümü,
-sol taraf) ve 13 arter tıkanması (göz vakası orbitada, Percheron iki taraflı). Her vaka bir klinik tablo (Almanca; Türkçesi "Türkçe" altında) ve tek bir soruyla açılır; soru test
-dilinde (DE | TR) sorulur. Cevap verince açıklama ve 3B tablo açılır: sinir vakasında sinir sarı, lezyon yeri kırmızı
-nokta, felçli kaslar mor, aynı sinirin sağlam kalan kasları turuncu; beyin vakasında tıkanan arter kırmızı, etkilenen
-alan turuncu. **Tabloyu şimdi göster** cevaplamadan açar. Altta Mechanismus, Ausfälle, felçli kaslar ya da etkilenen
-yapılar ve modelin o vakada gösteremedikleri yazar; **Hareket modunda aç** / **Beyin modunda aç** konuyu o modda açar.
-◀ ▶ ya da liste ile vakalar arasında geçilir. Vakaları yapay zekâ yazdı ve kaynaklarla denetledi; bir hekim bakmadı.
+**Patoloji vakaları** (Araçlar › Çalışma modları › **Patoloji**; 75 vaka): 28 periferik sinir lezyonu (17 kol,
+11 bacak; Hareket modundaki her lezyon yeri için bir vaka), 5 pleksus ve kök lezyonu, 8 geçit vakası (sıkışma, fıtık,
+tendon), 6 omurilik ve kauda vakası, 12 kranial sinir lezyonu (II–XII; baş-boyun görünümü, sol taraf) ve 16 arter
+vakası (göz vakası orbitada, Percheron iki taraflı). Her vaka bir klinik tablo (Almanca; Türkçesi "Türkçe" altında) ve
+tek bir soruyla açılır; soru test dilinde (DE | TR) sorulur. Cevaptan sonra **3B görevi** gelir: modelde lezyon yerine
+(beyin vakasında etkilenen bölgeye) tıklarsın; tek deneme, **Atla** ile geçilir. Sonra açıklama ve 3B tablo açılır:
+sinir sarı, lezyon yeri kırmızı nokta, senin tıklaman yeşil (doğru) ya da mavi (yanlış), felçli kaslar mor, aynı sinirin
+sağlam kalan kasları turuncu; omurilikte işlevi kesilen yollar mor; beyin vakasında tıkanan arter kırmızı, etkilenen
+alan turuncu. **Tabloyu şimdi göster** cevaplamadan açar (sonuç kaydedilmez). Altta Mechanismus, Ausfälle, felçli
+kaslar ya da etkilenen yapılar, modelin gösteremedikleri ve senin bu vakadaki kaydın yazar; **Hata bildir** herkese açık
+GitHub deposunda hazır doldurulmuş bir hata kaydı açar (GitHub hesabı gerekir).
+Üstteki sekmeler: **Vakalar** (liste; çözdüklerinde ✓ / ✗), **Tekrar** (aralıklı tekrar: yanlış cevaplanan vaka ertesi
+gün, doğrular sırayla 3, 7, 16, 35 ve 90 gün sonra yeniden sorulur; sekmede bugün tekrar edilecek vaka sayısı) ve
+**Testat** (seçtiğin konudan 10 rastgele vaka, vaka başına 90 saniye; cevaplar ve açıklamalar sonda, sonuç tablosunda
+her vaka **Aç** ile açılır; son beş Testat listelenir). Sonuçlar kullanıcı profiline kaydedilir. Vakaları yapay zekâ
+yazdı ve kaynaklarla denetledi; bir hekim bakmadı.
 
 **Kas katmanı** (Araçlar › Kas katmanı; kas modunda boş bilgi kartında ve her kasın kartında da): **Üst katmanı
 kaldır** dıştaki kas katmanını kaldırır, altındaki derin kaslar görünür ve tıklanabilir olur (ör. iki adımda
