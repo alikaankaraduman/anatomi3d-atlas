@@ -101,4 +101,16 @@ const rank = c => RANK[c.system] ?? (loco.nerves.list.find(n => n.key === c.stru
 src.cases = src.cases.map((c, i) => [rank(c), i, c]).sort((x, y) => x[0] - y[0] || x[1] - y[1]).map(x => x[2]);
 const out = { v: src.v, date: src.date, title_de: src.title_de, note: src.note, cases: src.cases };
 fs.writeFileSync(OUT, JSON.stringify(out));
+// Atlas bilgi kartı için küçük dizin (public/data/patho-index.json): model adı -> o yapının rol aldığı vakalar (sinir,
+// lezyon, damar, etkilenen alan, felçli kaslar; sinir vakasında sinirin bütün parçaları, geçitte etkilenen içerik)
+const IDX = 'public/data/patho-index.json', by = {};
+const put = (n, i) => { if (!n || !names.has(n)) return; (by[n] ||= []); if (!by[n].includes(i)) by[n].push(i); };
+src.cases.forEach((c, i) => {
+  const st = c.struktur || {};
+  for (const n of [...(st.n || []), ...(st.lesion || []).map(x => (typeof x === 'string' ? x : x.n)), ...(st.v || []), ...(st.tracts || []).map(x => x.n), ...(c.folge?.territory || []), ...(c.folge?.paralysed || [])]) put(n, i);
+  if (c.system === 'nerve') for (const n of loco.nerves.list.find(x => x.key === (st.site || '').split('@')[0])?.n || []) put(n, i);
+  if (c.system === 'passage') for (const n of loco.passages.list.find(x => x.key === st.passage)?.contents.find(x => x.key === st.content)?.n || []) put(n, i);
+});
+fs.writeFileSync(IDX, JSON.stringify({ v: 1, cases: src.cases.map(c => [c.key, c.title_de]), by }));
+console.log(`${IDX}: ${Object.keys(by).length} yapı, ${(fs.statSync(IDX).size / 1024).toFixed(1)} KB`);
 console.log(`${OUT}: ${src.cases.length} vaka (${Object.entries(src.cases.reduce((a, c) => (a[c.system] = (a[c.system] || 0) + 1, a), {})).map(([k, n]) => n + ' ' + k).join(', ')}), ${(fs.statSync(OUT).size / 1024).toFixed(1)} KB`);

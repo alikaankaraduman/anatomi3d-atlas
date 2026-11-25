@@ -102,7 +102,8 @@ GitHub deposunda hazır doldurulmuş bir hata kaydı açar (GitHub hesabı gerek
 Üstteki sekmeler: **Vakalar** (liste; çözdüklerinde ✓ / ✗), **Tekrar** (konu başına çözülen / doğru / yanlış tablosu, **Yanlışlarımı çöz** düğmesi; aralıklı tekrar: yanlış cevaplanan vaka ertesi
 gün, doğrular sırayla 3, 7, 16, 35 ve 90 gün sonra yeniden sorulur; sekmede bugün tekrar edilecek vaka sayısı) ve
 **Testat** (seçtiğin konudan 10 rastgele vaka, vaka başına 90 saniye; cevaplar ve açıklamalar sonda, sonuç tablosunda
-her vaka **Aç** ile açılır; son beş Testat listelenir). Sonuçlar kullanıcı profiline kaydedilir. Vakaları yapay zekâ
+her vaka **Aç** ile açılır; son beş Testat listelenir). Atlasta bir yapı seçince bilgi kartında **Patoloji vakaları**
+alanı o yapının rol aldığı vakaları (lezyonlu sinir, felçli kas, etkilenen alan) listeler; tıklayınca vaka açılır. Sonuçlar kullanıcı profiline kaydedilir. Vakaları yapay zekâ
 yazdı ve kaynaklarla denetledi; bir hekim bakmadı.
 
 **Kas katmanı** (Araçlar › Kas katmanı; kas modunda boş bilgi kartında ve her kasın kartında da): **Üst katmanı

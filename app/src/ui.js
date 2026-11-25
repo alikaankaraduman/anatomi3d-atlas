@@ -332,6 +332,14 @@ export function createUI({ state, model, actions }) {
     return `<div class="field"><div class="k">Aanki</div><div class="crumbs">${shown.map(t => `<button class="crumb topic" data-t="${t.id}" title="${esc(`${t.place}\n${t.title}`)}">${esc(topicChip(t))}</button>`).join('')}${ts.length > shown.length ? `<span class="more">+${ts.length - shown.length}</span>` : ''}</div></div>`;
   };
 
+  // Yapı kartında: bu yapının rol aldığı patoloji vakaları (sinir, lezyon yeri, felçli kas, etkilenen alan); tıklanınca vaka açılır
+  const pathoField = r => {
+    const cs = actions.pathoFor?.(r.n) || [];
+    if (!cs.length) return '';
+    const shown = cs.slice(0, 8);
+    return `<div class="field"><div class="k">Patoloji vakaları</div><div class="crumbs">${shown.map(([k, t]) => `<button class="crumb pcase" data-k="${esc(k)}" title="Bu vakayı Patoloji modunda aç">${esc(t)}</button>`).join('')}${cs.length > shown.length ? `<span class="more">+${cs.length - shown.length}</span>` : ''}</div></div>`;
+  };
+
   // ---------- bilgi paneli ----------
   const pathHTML = gi => {
     const p = gi >= 0 ? model.groupPath(gi) : [];
@@ -435,6 +443,7 @@ export function createUI({ state, model, actions }) {
         ${muscleField(r)}
         ${peelField(r)}
         ${cranialBtn(cranialOf(r))}
+        ${pathoField(r)}
         ${aankiField(r)}
         ${actionsHTML(twin)}`;
     } else if (p.type === 'group') {
@@ -463,6 +472,7 @@ export function createUI({ state, model, actions }) {
   el.info.addEventListener('click', e => {
     if (state.primary && panels[state.primary.type]) return panels[state.primary.type].click(e);
     const topic = e.target.closest('.crumb.topic'); if (topic) return actions.selectTopic(topic.dataset.t);
+    const pcase = e.target.closest('.crumb.pcase'); if (pcase) return actions.pathoMode(pcase.dataset.k);   // yapının patoloji vakası
     const crumb = e.target.closest('.crumb'); if (crumb) return actions.selectGroup(+crumb.dataset.g, { focus: true });
     const member = e.target.closest('.member'); if (member) return actions.selectItem(member.dataset.id, { focus: true });
     const act = e.target.closest('button[data-act]')?.dataset.act;

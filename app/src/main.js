@@ -61,6 +61,8 @@ let brain = null;     // beyin çalışma modu (brain.js)
 let move = null;      // kol hareketi modu (motion.js)
 let loco = null;      // hareket sistemi çalışma modu (locomotor.js)
 let patho = null;     // patoloji vakaları (patho.js)
+let pathoIdx = null;  // patho-index.json: model adı -> vakalar (bilgi kartı)
+fetch('data/patho-index.json').then(r => (r.ok ? r.json() : null)).then(d => { pathoIdx = d; try { if (state.primary) refresh(); } catch { /* arayüz henüz kurulmadı: ilk çizim dizini kullanır */ } }).catch(() => {});
 let quiz = null;      // Aanki konu testi (quiz.js)
 let sect = null;      // kesit atlası ve kesit testi (sections.js)
 let exam = null;      // deneme sınavı (exam.js): bütün bilgi sorusu bankalarından süreli, karışık test
@@ -459,6 +461,8 @@ const actions = {
   brainMode(spec) { cancelDeferred(); setPanelOpen(false); brain.enter(spec); },
   locoMode(spec) { cancelDeferred(); setPanelOpen(false); loco.enter(spec); },
   pathoMode(spec) { cancelDeferred(); setPanelOpen(false); patho.enter(spec); },
+  // atlas bilgi kartı: yapının rol aldığı patoloji vakaları ([anahtar, başlık]; dizin açılışta bir kez yüklenir)
+  pathoFor(n) { const ix = pathoIdx?.by?.[n] || []; return ix.map(i => pathoIdx.cases[i]).filter(Boolean); },
   moveMode(spec) { cancelDeferred(); setPanelOpen(false); move.enter(spec); },
   // çalışma turu: spec 'sekme[:madde]' ya da 'quiz[:sahne]'
   tour(key, spec) { if (!tours[key]) return; cancelDeferred(); setPanelOpen(false); tours[key].enter(spec); },
