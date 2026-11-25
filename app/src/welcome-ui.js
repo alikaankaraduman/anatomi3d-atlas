@@ -460,6 +460,8 @@ export function setupWelcome({ notify, onHash } = {}) {
     } catch { /* bozuk önbellek */ }
     return null;
   }
+  // ISO zaman damgası -> cihazın yerel günü (YYYY-MM-DD): gece yarısından sonra yazılan mesaj dünün tarihiyle görünmesin
+  const localDay = iso => { const t = new Date(iso); if (isNaN(t)) return ''; const p = n => String(n).padStart(2, '0'); return t.getFullYear() + '-' + p(t.getMonth() + 1) + '-' + p(t.getDate()); };
   async function startBanner(d) {
     if (!d || (!d.since && !d.feed)) return;
     // açılışta açık bir modal pencere (ör. kullanıcı şifresi) varsa şerit onun altında tıklanamaz kalırdı: kapanınca göster
@@ -484,7 +486,7 @@ export function setupWelcome({ notify, onHash } = {}) {
     const fill = m => {
       if (!m?.msg || !b.isConnected) return;
       text.textContent = m.msg; text.hidden = false;
-      const who = [d.from || '', m.at ? W.dateText(m.at.slice(0, 10)) : ''].filter(Boolean).join(' · ');
+      const who = [d.from || '', m.at ? W.dateText(localDay(m.at)) : ''].filter(Boolean).join(' · ');
       if (who) { sign.textContent = '— ' + who; sign.hidden = false; }
     };
     fill(msg);
