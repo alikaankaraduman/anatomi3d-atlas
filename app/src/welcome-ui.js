@@ -364,6 +364,20 @@ export function setupWelcome({ notify, onHash } = {}) {
     openCard('card');
   }
   async function fromHash(hash, sync = true) {
+    // kısa bağlantı (#k=<gist>.<anahtar>): imzalı metin şifreli Gist'ten alınır, sonra uzun bağlantıyla aynı yol
+    const short = W.payloadFromHash(hash) == null ? W.shortFromHash(hash) : null;
+    if (short != null) {
+      if (keep === 'k=' + short && (fresh || pending || stored)) return;
+      const my = ++seq;
+      const s = W.splitShort(short) && W.cryptoReady() ? await W.resolveShort(short) : null;
+      if (my !== seq) return;
+      const r = s ? await W.verifyLink(s) : { ok: false };
+      if (my !== seq) return;
+      if (!r.ok) { notify?.(W.INVALID); setKeep('', sync); return; }
+      show(r, 'hash');
+      setKeep(keepFragment() || fresh || pending ? 'k=' + short : '', sync);
+      return;
+    }
     const signed = W.payloadFromHash(hash);
     if (signed == null) { seq++; if (keep) setKeep('', sync); return; }
     // adresin yeniden yazılması (syncHash) aynı bağlantıyı yeniden açmasın; ama kapatılmış, kabul edilmemiş bir not
@@ -389,7 +403,9 @@ export function setupWelcome({ notify, onHash } = {}) {
     let busy = false;
     const apply = async () => {
       if (busy) return;
-      const signed = W.payloadFromText(input.value);
+      const short = W.shortFromText(input.value);
+      let signed = short ? null : W.payloadFromText(input.value);
+      if (short) { busy = true; try { signed = await W.resolveShort(short); } finally { busy = false; } if (!signed) { say(W.INVALID); input.focus(); return; } }
       if (!signed) { say('Bağlantının tamamını yapıştır (içinde "#g=" olan adres).'); input.focus(); return; }
       busy = true;
       try {

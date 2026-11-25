@@ -257,6 +257,35 @@ const rejected = async (signed, msg, key) => { const v = await vk(signed, key); 
   ok((await W.openFeed(await W.sealFeed('', fk), fk)).msg === '', 'boş mesaj (yalnız sayaç)');
   ok(W.feedFileFrom({ files: { 'm.json': { content: sealed, truncated: false } } }) === sealed && W.feedFileFrom({ files: {} }) === null && W.feedFileFrom({ files: { 'm.json': { content: 'x', truncated: true } } }) === null, 'feedFileFrom');
 }
+// kısa bağlantı (#k=<gist>.<anahtar>): şifreli Gist'ten imzalı metin; sahte fetch ile
+{
+  const { signed } = await S.makeLink('https://example.org/', { to: 'Deneme Kişi', msg: 'Kısa bağlantı denemesi.', ask: '1' }, K.priv);
+  const key = W.toB64url(globalThis.crypto.getRandomValues(new Uint8Array(16)));
+  const id = 'b'.repeat(32), short = id + '.' + key;
+  const file = await W.sealShort(signed, key);
+  const fake = (status, body, opts = {}) => async (url, init) => {
+    if (opts.throws) throw new TypeError('Failed to fetch');
+    ok(url === 'https://api.github.com/gists/' + id && init?.headers?.Accept, 'kısa bağlantı doğru Gist adresini ister');
+    return { ok: status === 200, status, json: async () => body };
+  };
+  const good = await W.resolveShort(short, fake(200, { files: { [W.SHORT_FILE]: { content: file, truncated: false } } }));
+  ok(good === signed && (await W.verifyLink(good, K.pub)).ok, 'kısa bağlantı imzalı metne çözülür ve imza denetlenir');
+  ok(short.length === 55 && ('https://alikaankaraduman.github.io/anatomi3d-atlas/#k=' + short).length < 115, 'kısa bağlantı ~110 karakter');
+  const wrongKey = W.toB64url(globalThis.crypto.getRandomValues(new Uint8Array(16)));
+  ok(await W.resolveShort(id + '.' + wrongKey, fake(200, { files: { [W.SHORT_FILE]: { content: file } } })) === null, 'yanlış anahtar: null');
+  ok(await W.resolveShort(short, fake(404, { message: 'Not Found' })) === null, 'Gist yok (404): null');
+  ok(await W.resolveShort(short, fake(200, { files: { [W.SHORT_FILE]: { content: '{bozuk' } } })) === null, 'bozuk içerik: null');
+  ok(await W.resolveShort(short, fake(200, { files: {} })) === null, 'dosya yok: null');
+  ok(await W.resolveShort(short, fake(200, { files: { [W.SHORT_FILE]: { content: file, truncated: true } } })) === null, 'kesik dosya: null');
+  ok(await W.resolveShort(short, fake(0, null, { throws: true })) === null, 'çevrimdışı: null');
+  const j = JSON.parse(file); j.ct = (j.ct[0] === 'A' ? 'B' : 'A') + j.ct.slice(1);
+  ok(await W.resolveShort(short, fake(200, { files: { [W.SHORT_FILE]: { content: JSON.stringify(j) } } })) === null, 'değiştirilmiş şifreli metin: null');
+  const notSigned = await W.sealShort('düz metin', key);
+  ok(await W.resolveShort(short, fake(200, { files: { [W.SHORT_FILE]: { content: notSigned } } })) === null, 'imzalı biçimde olmayan içerik: null');
+  ok(W.splitShort(short) && !W.splitShort(id + '.' + key.slice(1)) && !W.splitShort('XYZ.' + key) && !W.splitShort(short + '.x'), 'splitShort biçimi');
+  ok(W.shortFromHash('#m=x&k=' + short) === short && W.shortFromText('https://example.org/#k=' + short) === short && W.shortFromText('k=' + short) === short && W.shortFromText(short) === short && W.shortFromText('#g=abc.def') === null, 'kısa bağlantı adres ve yapıştırmadan okunur');
+  ok(W.hashWithout('k=' + short + '&m=brain') === 'm=brain' && W.hashWithout('g=a.b&k=' + short) === '', 'hashWithout g= ve k= atar');
+}
 // crypto.subtle yok (güvensiz bağlam): bağlantılar yok sayılır
 {
   const desc = Object.getOwnPropertyDescriptor(globalThis, 'crypto');

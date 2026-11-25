@@ -219,7 +219,7 @@ export function payloadFromHash(hash) {
 }
 // Adres parçasından g'yi atar, öteki parçaları olduğu gibi bırakır (kodlamalarına dokunmadan)
 export function hashWithout(hash) {
-  return String(hash ?? '').replace(/^#/, '').split('&').filter(p => p && !p.startsWith('g=')).join('&');
+  return String(hash ?? '').replace(/^#/, '').split('&').filter(p => p && !p.startsWith('g=') && !p.startsWith('k=')).join('&');
 }
 // Yapıştırılan metinden parça: tam adres, "#g=...", "g=..." ya da yalnız "<yük>.<imza>" metni
 export function payloadFromText(text) {
@@ -298,7 +298,7 @@ export const FEED_MSG_MAX = 600;
 export const feedUrl = id => `https://api.github.com/gists/${id}`;
 const aesKey = (subtle, fk, use) => {
   const raw = fromB64url(fk);
-  if (!raw || raw.length !== 32) throw new Error('fk');
+  if (!raw || (raw.length !== 32 && raw.length !== 16)) throw new Error('fk');
   return subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, [use]);
 };
 // Yazan taraf (sahibinin paneli, Node): { msg, at } -> FEED_FILE içeriği (metin)
@@ -331,4 +331,62 @@ export async function openFeed(fileText, fk) {
 export function feedFileFrom(gist) {
   const f = gist?.files?.[FEED_FILE];
   return f && !f.truncated && typeof f.content === 'string' ? f.content : null;
+}
+
+// ---------- kısa bağlantı ----------
+// Kısa biçim: site adresi + #k=<gist kimliği>.<anahtar>. Gizli bir GitHub Gist'teki SHORT_FILE dosyası, imzalı bağlantı
+// metnini ("<yük>.<imza>") AES-128-GCM ile şifreli taşır: { v: 1, iv, ct } (base64url). Anahtar (16 bayt, 22 karakter)
+// yalnız kısa bağlantının içindedir. Çözülen metin uzun bağlantıyla aynı yoldan (verifyLink) denetlenir: kısa bağlantı
+// imzanın yerine geçmez, yalnız onu taşır. Ağ yoksa, Gist yoksa, anahtar yanlışsa ya da içerik bozuksa null.
+export const SHORT_FILE = 'w.enc';
+const SHORT_RE = /^([0-9a-f]{20,40})\.([A-Za-z0-9_-]{22})$/;
+export function splitShort(s) {
+  const m = SHORT_RE.exec(typeof s === 'string' ? s : '');
+  return m ? { id: m[1], key: m[2] } : null;
+}
+export function shortFromHash(hash) {
+  for (const p of String(hash ?? '').replace(/^#/, '').split('&')) if (p.startsWith('k=')) return p.slice(2);
+  return null;
+}
+// Yapıştırılan metinden kısa bağlantı parçası ("<id>.<anahtar>") ya da null
+export function shortFromText(text) {
+  const s = String(text ?? '').trim().replace(/\s+/g, '');
+  const i = s.indexOf('#');
+  const v = i >= 0 ? shortFromHash(s.slice(i)) : s.startsWith('k=') ? s.slice(2).split('&')[0] : s;
+  return splitShort(v) ? v : null;
+}
+// Yazan taraf (sahibinin aracı, Node): imzalı metin -> SHORT_FILE içeriği
+export async function sealShort(signed, key) {
+  const subtle = globalThis.crypto.subtle;
+  const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await subtle.encrypt({ name: 'AES-GCM', iv }, await aesKey(subtle, key, 'encrypt'), new TextEncoder().encode(signed)));
+  return JSON.stringify({ v: 1, iv: toB64url(iv), ct: toB64url(ct) });
+}
+export async function openShort(fileText, key) {
+  try {
+    const subtle = globalThis.crypto?.subtle;
+    if (!subtle || typeof fileText !== 'string' || fileText.length > 20000) return null;
+    const o = JSON.parse(fileText);
+    if (!o || o.v !== 1) return null;
+    const iv = fromB64url(o.iv), ct = fromB64url(o.ct);
+    if (!iv || iv.length !== 12 || !ct) return null;
+    const plain = new TextDecoder('utf-8', { fatal: true }).decode(await subtle.decrypt({ name: 'AES-GCM', iv }, await aesKey(subtle, key, 'decrypt'), ct));
+    return splitSigned(plain) ? plain : null;
+  } catch { return null; }
+}
+// Kısa bağlantıyı imzalı metne çevirir (fetchFn: sınamalar için). Hiçbir zaman hata fırlatmaz.
+export async function resolveShort(short, fetchFn = globalThis.fetch, timeoutMs = 8000) {
+  const s = splitShort(short);
+  if (!s || typeof fetchFn !== 'function') return null;
+  let text = null;
+  try {
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+    const t = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : 0;
+    const res = await fetchFn(feedUrl(s.id), { headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store', signal: ctl?.signal });
+    clearTimeout(t);
+    if (!res?.ok) return null;
+    const f = (await res.json())?.files?.[SHORT_FILE];
+    text = f && !f.truncated && typeof f.content === 'string' ? f.content : null;
+  } catch { return null; }
+  return text ? openShort(text, s.key) : null;
 }
