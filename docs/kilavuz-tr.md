@@ -313,8 +313,8 @@ yere gönderilmez. 5 yanlış denemeden sonra 30 sn beklenir. Unutulan şifre ku
 Uygulamayla hiçbir kullanıcı gelmez. **İlerlemeyi sıfırla** yalnız açık kullanıcının (ya da Misafir'in) ilerlemesini siler.
 
 **Deneme sınavı** (Araçlar'da "Deneme sınavı" düğmesi ya da `#m=exam` bağlantısı): bütün çalışma modlarının bilgi
-sorularından (beyin, hareket sistemi, kaslar, kalp, Situs, göğüs, ürogenital, baş-boyun, ekstremite damarları, lenf sistemi ve kesit
-anatomisi; 11 konu, toplam 1137 soru)
+sorularından (beyin, hareket sistemi, kaslar, kalp, Situs, göğüs, ürogenital, baş-boyun, ekstremite damarları, lenf sistemi, kesit
+anatomisi ve topografik patoloji; 12 konu; patoloji konusunda her soru vakanın klinik tablosu ve sorusudur, 75 soru)
 karışık, süreli bir test. Başlarken konuları seç (hepsi seçili gelir; "Tümü / Hiçbiri"), soru sayısını (10, 20, 40, 60),
 soru başına süreyi (süresiz, 45, 60, 90 sn; tek toplam geri sayım), soru kaynağını (tüm sorular ya da yalnız yanlışların ve
 hiç sorulmamış sorular, önce yanlışlar) ve modu seç: **Sınav** modunda sonuçlar sonda gösterilir ve cevap bitene kadar

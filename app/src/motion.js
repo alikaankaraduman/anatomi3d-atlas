@@ -642,8 +642,9 @@ function createLimb(L, { stage, model, state, refresh, defer, viewLayers, endStu
     }
     endStudy?.('move');
     build(); buildSkins();
-    tools.cut.save(); tools.cut.set({ axis: '' }); tools.setExplode(0);
-    active = true; root.visible = true; anim = null; away = false; mv = null; picked = null;
+    if (!active) tools.cut.save();   // mod zaten açıkken yeniden girişte kullanıcının kesiti üzerine yazılmasın
+    tools.cut.set({ axis: '' }); tools.setExplode(0);
+    active = true; root.visible = true; anim = null; away = null; mv = null; picked = null;   // away null: çok segmentli parçalar ilk pozda yeniden yerleşir
     state.selected = new Set(); state.primary = { type: 'move' };
     viewLayers({ bone: 'show', joint: 'show' });
     const ids = new Set(moved.map(r => r.id));

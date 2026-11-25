@@ -131,7 +131,7 @@ const STR = {
     'ex.back': 'Zurück zum Ergebnis',
     'subj.brain': 'Gehirn und Nervensystem', 'subj.loco': 'Bewegungsapparat', 'subj.muscles': 'Muskeln', 'subj.heart': 'Herz',
     'subj.situs': 'Bauchsitus', 'subj.thorax': 'Thorax und Atmung', 'subj.uro': 'Urogenitalsystem und Becken', 'subj.head': 'Kopf und Hals',
-    'subj.vessels': 'Gefäße der Extremitäten', 'subj.lymph': 'Lymphsystem', 'subj.sect': 'Schnittanatomie',
+    'subj.vessels': 'Gefäße der Extremitäten', 'subj.lymph': 'Lymphsystem', 'subj.sect': 'Schnittanatomie', 'subj.patho': 'Topographische Pathologie',
     // veride title_de'si olmayan tur sekmeleri (sınavın alt konusu, sahne düğmesinin title'ı)
     'tab.liver': 'Leber, Gallenwege und Pankreas',
     // genel tekrar ve sınavdaki "In 3D zeigen" bildirimleri
@@ -226,7 +226,7 @@ const STR = {
     'ex.back': 'Sonuca dön',
     'subj.brain': 'Beyin ve sinir sistemi', 'subj.loco': 'Hareket sistemi', 'subj.muscles': 'Kaslar', 'subj.heart': 'Kalp',
     'subj.situs': 'Karın - Situs', 'subj.thorax': 'Göğüs ve solunum', 'subj.uro': 'Ürogenital ve pelvis', 'subj.head': 'Baş-boyun',
-    'subj.vessels': 'Ekstremite damarları', 'subj.lymph': 'Lenf sistemi', 'subj.sect': 'Kesit anatomisi',
+    'subj.vessels': 'Ekstremite damarları', 'subj.lymph': 'Lenf sistemi', 'subj.sect': 'Kesit anatomisi', 'subj.patho': 'Topografik patoloji',
     'tab.liver': 'Karaciğer, safra yolları, pankreas',
     'note.noParts': 'Bu sorunun yapıları modelde yok',
     'note.moreSect': n => `Kesit testinde ${n} yanlış daha var: onlar için Yanlışlarım'a bir daha bas`,
@@ -306,6 +306,8 @@ export function factText(f) {
   if (!f) return { q: '', options: [], explain: '', de: false };
   if (lang !== 'de') return tr(f);
   if (str(f.qde)) return { q: f.qde, options: f.options, explain: f.explain || '', de: true };
+  // kaynağı zaten iki dilli soru (patoloji vakaları): Almanca metin sorunun kendisinde, şık sayısı aynı olmalı
+  if (isObj(f.de) && str(f.de.q) && Array.isArray(f.de.options) && f.de.options.length === f.options.length && f.de.options.every(str)) return { q: f.de.q, options: f.de.options, explain: f.de.explain || '', de: true };
   if (!de) { loadDe(); return tr(f); }
   const id = idOf(f), v = de.items[id + '~' + sigOf(f)];
   const e = validEntry(v, f) ? v : de.items[id];

@@ -84,7 +84,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
       k_n: tint(COL.nerve, 0.05, 0.45), k_a: tint(0xe0473f, 0.06, 0.45), k_v: tint(0x3f7fe0, 0.06, 0.45), k_t: tint(0xd9a066, 0.06, 0.45), k_l: tint(0x4fc46a, 0.05, 0.4), k_o: tint(0xd8d8e0, 0.05, 0.4),
       s_n: solid(COL.nerve, 0.35), s_a: solid(COL.artery, 0.3), s_v: solid(0x3f7fe0, 0.3), s_t: solid(0xd9a066, 0.25), s_l: solid(0x4fc46a, 0.25), s_o: solid(0xd8d8e0, 0.2), lostT: tint(COL.lost, 0.4, 0.9), keptT: tint(COL.kept, 0.35, 0.85), cnCtx: noPick(tint(0xe8dca0, 0.03, 0.3)),
       mark: new THREE.MeshBasicMaterial({ color: COL.mark, depthTest: false, transparent: true }),
-      hit: new THREE.MeshBasicMaterial({ color: COL.hit, depthTest: false, transparent: true }), miss: new THREE.MeshBasicMaterial({ color: COL.miss, depthTest: false, transparent: true }),
+      hit: new THREE.MeshBasicMaterial({ color: COL.hit, depthTest: false, transparent: true }), neutral: new THREE.MeshBasicMaterial({ color: 0xe8e8f0, depthTest: false, transparent: true }), miss: new THREE.MeshBasicMaterial({ color: COL.miss, depthTest: false, transparent: true }),
     };
     built = true;
   }
@@ -319,9 +319,10 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
       if (g?.box) { box = new THREE.Box3(V3(g.box.min), V3(g.box.max)); if (g.dir) dir = V3(g.dir); } else box = boxOf(lrecs(c.struktur.n));
       const pt = pointOf(c); if (pt) box.expandByPoint(pt);
     } else if (c.system === 'spinal') {
-      const pt = spinalPoint(c), cord = grp(SPINE);
-      box = boxOf(cord);
-      if (pt) box = new THREE.Box3(pt.clone().add(new THREE.Vector3(-6, -14, -6)), pt.clone().add(new THREE.Vector3(6, 14, 6)));
+      // gösterilmeden önce bütün omurilik ve kauda (yükseklik 3B görevinin sorusu), sonra seviyeye yakın
+      const pt = spinalPoint(c);
+      box = boxOf([...grp(SPINE), ...recs(['Cauda equina'])]);
+      if (pt && p.shown) box = new THREE.Box3(pt.clone().add(new THREE.Vector3(-6, -14, -6)), pt.clone().add(new THREE.Vector3(6, 14, 6)));
       dir = new THREE.Vector3(1, 0.12, -0.55);
     } else if (c.system === 'cranial') {
       const st = c.struktur;
@@ -336,6 +337,13 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
       if (c.struktur.artery === 'asa') box = boxOf(lrecs(c.struktur.n).length ? lrecs(c.struktur.n) : groupRecs('Spinal cord'));
       dir = view === 'orbit' ? new THREE.Vector3(0.55, 0.2, 1) : view === 'lateral' ? new THREE.Vector3(1, 0.2, 0.1) : view === 'medial' ? new THREE.Vector3(-1, 0.15, 0.08) : new THREE.Vector3(0.7, -0.05, 1);
     }
+    // nokta vakalarında gösterilmeden önce kutu, vaka anahtarından türeyen sabit bir kaymayla çerçevelenir: lezyon noktası
+    // (ör. geçidin merkezi) ekranın tam ortasına düşüp 3B görevinin cevabını vermesin
+    if (box && !box.isEmpty() && !p.shown && c.system !== 'brain' && c.system !== 'spinal') {
+      const sz = box.getSize(new THREE.Vector3()), hsh = [...c.key].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
+      const fx = ((hsh % 1000) / 1000 - 0.5) * 0.5, fy = (((hsh >>> 10) % 1000) / 1000 - 0.5) * 0.5;
+      box.translate(new THREE.Vector3(sz.x * fx + Math.sign(fx || 1) * 1.5, sz.y * fy + Math.sign(fy || 1) * 1.5, 0));
+    }
     if (box && !box.isEmpty()) stage.frameBox(box, dir);
   }
 
@@ -346,7 +354,11 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     build();
     endStudy?.('patho');
     const k = String(spec || ''), i = D.cases.findIndex(c => c.key === k);
-    if (i >= 0) open(i, false); else if (!p.order) open(p.i, false);
+    if (i >= 0) {   // bağlantıyla açılan vaka: süren Testat bitirilir, sıra kapanır, Vakalar sekmesi
+      if (p.q?.kind === 'testat' && !p.q.done) endTestat();
+      if (p.q || p.mode !== 'browse') { p.q = null; p.mode = 'browse'; }
+      open(i, false);
+    } else if (!p.order) open(p.i, false);
     active = true; p.sex = state.sex; root.visible = true; wasExploded = null;
     state.selected = new Set(); state.primary = { type: 'patho' };
     viewLayers({ bone: 'show', muscle: 'show', nerve: 'show', vessel: 'show', joint: 'show', organ: 'show' });
@@ -360,6 +372,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
   }
   const openKey = (key, redraw = true) => { const i = D.cases.findIndex(c => c.key === key); if (i >= 0) open(i, redraw); };
   function cleanup() {
+    if (p.q?.kind === 'testat' && !p.q.done) endTestat();   // Esc, Geri ya da başka mod: Testat sonucu yazılır
     active = false; enterSeq++;
     model.overrides.clear(); if (ownGhost && state.isoGhost === ownGhost) state.isoGhost = null;
     ownGhost = null; root.visible = false; marks.clear(); clickMark.clear(); labels.set([]);
@@ -392,7 +405,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
   const clickMark = new THREE.Group(); root.add(clickMark);
   function showClick(pt, ok) {
     clickMark.clear(); if (!pt) return;
-    const s = new THREE.Mesh(ballGeo, ok ? mats.hit : mats.miss); s.position.copy(pt); s.scale.setScalar(0.36); s.renderOrder = 7; clickMark.add(s);
+    const s = new THREE.Mesh(ballGeo, ok === null ? mats.neutral : ok ? mats.hit : mats.miss); s.position.copy(pt); s.scale.setScalar(0.36); s.renderOrder = 7; clickMark.add(s);
   }
   const locPending = () => active && D && p.pick !== null && !p.shown && p.loc === null && hasLoc(cur()) && !(p.q?.kind === 'testat' && p.q.done);
   function locClick(x, y) {
@@ -402,22 +415,27 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     const o = ray.ray.origin, d = ray.ray.direction;
     if (c.system === 'brain') {
       const side = sideOf(c), good = ids([...side(c.folge.territory), ...side(c.struktur.n)]);
-      const skip = scene?.skip || new Set(), hits = [];
-      let best = null, bd = Infinity, bp = null;
+      // ışının bütün isabetleri uzaklığa göre: saydam çizilen (gösterilmeden önce soluk) parçalar arkasını örtmez; ilk opak
+      // parçaya kadar etkilenen alana ya da artere değen isabet doğru sayılır
+      const skip = scene?.skip || new Set(), hits = [], all = [];
       for (const id of state.isolate || []) {
         if (skip.has(id)) continue;
         const r = model.items.get(id); if (!r?.mesh) continue;
         hits.length = 0; r.mesh.raycast(ray, hits);
-        for (const h of hits) if (h.distance < bd) { bd = h.distance; best = r; bp = h.point.clone(); }
+        for (const h of hits) all.push({ r, h });
       }
-      if (!best) { ui?.notify?.('Bir yapının üstüne tıkla'); return; }
-      p.loc = { ok: good.has(best.id), name: nameOf(best.n), pt: bp };
+      if (!all.length) { ui?.notify?.('Bir yapının üstüne tıkla'); return; }
+      all.sort((a, b) => a.h.distance - b.h.distance);
+      let hit = null;
+      for (const x of all) { if (good.has(x.r.id)) { hit = x; break; } if (!model.overrides.has(x.r.id)) break; }
+      const first = hit || all[0];
+      p.loc = { ok: !!hit, name: nameOf(first.r.n), pt: first.h.point.clone() };
     } else {
       const target = pointOf(c);
       const t = Math.max(0, target.clone().sub(o).dot(d)), q = o.clone().addScaledVector(d, t), dist = target.distanceTo(q), R = radiusOf(c);
       p.loc = { ok: dist <= R, d: dist, R, pt: q };
     }
-    showClick(p.loc.pt, p.loc.ok);
+    showClick(p.loc.pt, p.q?.kind === 'testat' ? null : p.loc.ok);
     finishCase();
   }
   // vaka bitti: sonuç kaydedilir; Testat dışında tablo açılır
@@ -425,7 +443,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     const c = cur(), mc = p.pick === 0, loc = p.loc && p.loc !== 'skip' ? p.loc.ok : null;
     S.answer(c.key, mc, loc);
     if (p.q?.kind === 'testat') { p.q.res[c.key] = { mc, loc, pick: p.pick }; refresh(); return; }
-    if (p.q?.kind === 'review') p.q.res[c.key] = { mc, loc };
+    if (p.q?.kind === 'review') p.q.res[c.key] = { mc, loc, pick: p.pick };
     p.shown = true; apply(); refresh();
   }
   function onPick(id, x, y) {
@@ -464,11 +482,17 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     const q = p.q;
     if (!q) { open(p.i + dir); return; }
     if (q.kind === 'testat' && dir > 0 && q.i === q.keys.length - 1) { endTestat(); refresh(); return; }
-    q.i = Math.max(0, Math.min(q.keys.length - 1, q.i + dir)); openKey(q.keys[q.i]);
+    if (q.kind === 'review' && dir > 0 && q.i === q.keys.length - 1) { p.q = null; p.mode = 'review'; clickMark.clear(); refresh(); return; }
+    q.i = Math.max(0, Math.min(q.keys.length - 1, q.i + dir));
+    const done = q.kind === 'review' ? q.res[q.keys[q.i]] : null;
+    openKey(q.keys[q.i], !done);
+    if (done) { p.pick = done.pick ?? null; p.loc = done.loc === null ? 'skip' : { ok: done.loc, restored: true }; p.shown = true; apply(); refresh(); frame(); }
   }
   function endTestat() {
     const q = p.q; if (!q || q.kind !== 'testat' || q.done) return;
     q.done = true; q.ms = Math.min(Date.now() - q.t0, q.limit);
+    const k = D.cases[p.i]?.key;
+    if (k && q.keys.includes(k) && !q.res[k] && p.pick !== null) { q.res[k] = { mc: p.pick === 0, loc: null, pick: p.pick }; S.answer(k, p.pick === 0, null); }
     const r = Object.values(q.res);
     S.testat({ t: q.t0, n: q.keys.length, ok: r.filter(x => x.mc).length, loc: r.filter(x => x.loc === true).length, locN: r.filter(x => x.loc !== null).length, ms: q.ms, keys: q.keys });
     clickMark.clear();
@@ -497,11 +521,14 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
   function locHTML(c, lg, testat) {
     if (!hasLoc(c) || p.pick === null) return '';
     const what = c.system === 'brain' ? ['Welches Areal ist betroffen? Klicke im 3D-Modell darauf.', 'Hangi bölge etkilendi? 3B modelde o bölgeye tıkla.']
+      : c.system === 'spinal' ? ['In welcher Höhe liegt die Läsion? Klicke am Rückenmark (bzw. an der Cauda) auf diese Höhe.', 'Lezyon hangi yükseklikte? 3B modelde omurilikte (ya da kaudada) o hizaya tıkla.']
+      : c.system === 'passage' && !c.struktur.n?.length ? ['Wo liegt die Läsion? Klicke im 3D-Modell auf die betroffene Stelle.', 'Lezyon nerede? 3B modelde etkilenen yere tıkla.']
       : ['Wo liegt die Läsion? Klicke im 3D-Modell auf die Stelle am gelben Nerv.', 'Lezyon nerede? 3B modelde sarı sinirin üzerinde lezyon yerine tıkla.'];
     if (p.loc === null && !p.shown) return `<div class="lesion locask"><h2>3B görevi</h2><p lang="de"><b>${what[0]}</b></p><p class="htext small dim">${what[1]}</p><div class="btns"><button data-pa="skip" title="3B görevini atla">Atla</button></div></div>`;
     if (!p.loc || p.loc === 'skip') return '';
     if (testat) return '<p class="htext small dim">3B cevabın kaydedildi.</p>';
     const l = p.loc, ok = l.ok;
+    if (l.restored) return `<div class="qres ${ok ? 'ok' : 'bad'}">3B: ${ok ? 'Doğru' : 'Yanlış'} (kayıtlı cevap)</div>`;
     const txt = c.system === 'brain'
       ? (ok ? `Doğru: tıkladığın yer (${esc(l.name)}) etkilenen alanda.` : `Yanlış: tıkladığın yer (${esc(l.name)}) etkilenmiyor; etkilenen alan turuncu.`)
       : (ok ? `Doğru: lezyon yerine ${l.d.toFixed(1).replace('.', ',')} cm.` : `Yanlış: lezyon yeri ${l.d.toFixed(1).replace('.', ',')} cm ötede (kırmızı nokta; ${l.R.toFixed(1).replace('.', ',')} cm içi doğru sayılır).`);
@@ -593,6 +620,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     } else {
       const s = S.summary(allKeys());
       nav = `<div class="field"><select data-psel="case" aria-label="Vaka">${GROUPS.map(([k, t]) => `<optgroup label="${t}">${D.cases.map((x, j) => grpOf(x) === k ? `<option value="${j}"${j === p.i ? ' selected' : ''}>${j + 1}. ${esc(x.title_de)}${S.status(x.key) === 'ok' ? ' ✓' : S.status(x.key) === 'bad' ? ' ✗' : ''}</option>` : '').join('')}</optgroup>`).join('')}</select></div>
+      ${p.last ? '<div class="btns"><button data-pt="back" class="primary" title="Testat sonuç tablosuna dön">◀ Testat sonucuna dön</button></div>' : ''}
       <div class="btns"><button data-pa="prev" title="Önceki vaka">◀</button><span class="htext small dim">${p.i + 1} / ${D.cases.length}${s.seen ? ` · çözülen ${s.seen} · doğru ${s.ok}` : ''}</span><button data-pa="next" title="Sonraki vaka">▶</button></div>`;
     }
     return head + nav + `
@@ -613,25 +641,30 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     if (d.po !== undefined) {
       if (p.pick !== null || p.shown) return;
       p.pick = +d.po;
-      if (hasLoc(cur())) { refresh(); return; }   // önce 3B görevi
+      if (hasLoc(cur())) {   // önce 3B görevi; telefonda çekmece görev kutusuna kayar
+        refresh(); requestAnimationFrame(() => document.querySelector('#info .locask')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+        return;
+      }
       finishCase(); return;
     }
     if (d.pm) {
-      if (p.q?.kind === 'testat' && !p.q.done && d.pm !== 'testat') endTestat();
-      p.q = null; p.mode = d.pm; clickMark.clear();
+      if (p.q?.kind === 'testat' && !p.q.done) { if (d.pm === 'testat') return; endTestat(); }
+      p.q = null; p.last = null; p.mode = d.pm; clickMark.clear();
       if (d.pm === 'browse') open(p.i); else refresh();
       return;
     }
     if (d.pt === 'start' || d.pt === 'again') { p.mode = 'testat'; startTestat(); return; }
     if (d.pt === 'stop') { endTestat(); refresh(); return; }
     if (d.pt === 'review') { startReview(); return; }
+    if (d.pt === 'back') { if (p.last) { p.q = p.last; p.last = null; clickMark.clear(); refresh(); } return; }
     if (d.pt === 'endreview') { p.q = null; p.mode = 'browse'; refresh(); return; }
     if (d.pt === 'open') {
       const last = p.q, r = last?.res?.[d.k];
+      p.last = last?.kind === 'testat' && last.done ? last : null;
       p.q = null; p.mode = 'browse'; openKey(d.k, false);
-      if (r) {   // Testat cevabıyla aç: doğru şık ve tablo görünür
-        p.pick = r.pick ?? null; p.loc = 'skip'; p.shown = true;
-      }
+      if (r) {   // Testat cevabıyla aç: seçilen şık, 3B sonucu ve tablo görünür
+        p.pick = r.pick ?? null; p.loc = r.loc === null ? 'skip' : { ok: r.loc, restored: true }; p.shown = true;
+      } else p.shown = true;
       apply(); refresh(); frame(); return;
     }
     if (d.pa === 'skip') { if (p.pick !== null && p.loc === null) { p.loc = 'skip'; finishCase(); } return; }

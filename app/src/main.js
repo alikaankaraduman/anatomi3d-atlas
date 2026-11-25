@@ -10,6 +10,7 @@ import { createHeart } from './heart.js';
 import { createBrain } from './brain.js';
 import { createLoco } from './locomotor.js';
 import { createPatho } from './patho.js';
+import { resetAll as resetPatho } from './patho-store.js';
 import { createMotion } from './motion.js';
 import { createTour } from './tour.js';
 import { createSections } from './sections.js';
@@ -527,7 +528,7 @@ const actions = {
     stage.focusBox(model.boundsOf(recs));
   },
   // yalnız açık kullanıcının (ya da Misafir'in) ilerlemesi silinir (progress.js anahtarı kullanıcı başınadır)
-  resetProgress() { progress.reset(); ui.notify(`Test ilerlemesi sıfırlandı (${users.current()?.name || 'Misafir'})`); },
+  resetProgress() { progress.reset(); resetPatho(); ui.notify(`Test ilerlemesi sıfırlandı (${users.current()?.name || 'Misafir'})`); },
   hoverFromUI(id) { const r = id && model.items.get(id); setHover(r?.vis ? id : null); },
 };
 

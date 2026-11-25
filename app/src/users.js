@@ -27,7 +27,7 @@ export const NAME_MAX = 40;
 export const MAX_TRIES = 5;
 export const WAIT_MS = 30000;
 // Kullanıcı başına tutulan anahtarlar (yerel ve oturum depolaması)
-export const DATA_KEYS = ['anatomi3d.progress.v1', 'anatomi3d.exam.v1', 'anatomi3d.examHistory.v1'];
+export const DATA_KEYS = ['anatomi3d.progress.v1', 'anatomi3d.exam.v1', 'anatomi3d.examHistory.v1', 'anatomi3d.patho.v1'];   // 4.: patoloji vakaları (patho-store.js)
 export const SESSION_KEYS = ['anatomi3d.examRun.v1'];
 const HIST_MAX = 20;   // exam.js ile aynı
 export const IMPORT_MAX = 2 * 1024 * 1024;   // içe aktarılan metin en çok 2 MB
@@ -322,7 +322,7 @@ export function remove(id, typedName) {
 // Şifre, tuz ve özet DIŞA AKTARILMAZ
 export function exportData(id = active) {
   const reg = readReg(), u = id ? findUser(reg, id) : null;
-  const p = readJSON(userKey(DATA_KEYS[0], id)), e = readJSON(userKey(DATA_KEYS[1], id)), h = readJSON(userKey(DATA_KEYS[2], id));
+  const p = readJSON(userKey(DATA_KEYS[0], id)), e = readJSON(userKey(DATA_KEYS[1], id)), h = readJSON(userKey(DATA_KEYS[2], id)), pa = cleanPatho(readJSON(userKey(DATA_KEYS[3], id)), true);
   const progress = {};
   if (isObj(p)) for (const [k, v] of Object.entries(p)) if (validKey(k) && validRec(v)) progress[k] = v;
   return {
@@ -332,6 +332,7 @@ export function exportData(id = active) {
     progress,
     exam: cleanExam(e),
     history: Array.isArray(h) ? h.filter(validHist).slice(-HIST_MAX) : [],
+    ...(pa ? { patho: pa } : {}),
   };
 }
 
@@ -350,7 +351,30 @@ function cleanExam(e) {
   if (e.mode === 'exam' || e.mode === 'study') o.mode = e.mode;
   return o;
 }
-const TOP = new Set(['app', 'kind', 'v', 'name', 'exported', 'progress', 'exam', 'history']);
+const TOP = new Set(['app', 'kind', 'v', 'name', 'exported', 'progress', 'exam', 'history', 'patho']);
+// patoloji kaydı (patho-store.js biçimi): { c: { <vaka>: {b, d, r, w, lr, lw, t} }, x: [Testat sonuçları] }; lenient: geçersizi
+// atla (dışa aktarma), değilse geçersizde null (içe aktarma hata verir)
+const num = (v, max = 1e15) => Number.isFinite(v) && v >= 0 && v <= max;
+const validPCase = v => isObj(v) && Number.isInteger(v.b) && v.b >= 0 && v.b <= 5 && ['d', 'r', 'w', 'lr', 'lw', 't'].every(k => num(v[k]));
+const validPTest = x => isObj(x) && ['t', 'n', 'ok', 'loc', 'ms'].every(k => num(x[k])) && (x.locN == null || num(x.locN)) && Array.isArray(x.keys) && x.keys.length <= 50 && x.keys.every(k => typeof k === 'string' && k.length <= 100);
+function cleanPatho(pa, lenient = false) {
+  if (!isObj(pa) || !isObj(pa.c) || (pa.x != null && !Array.isArray(pa.x))) return null;
+  const c = {}, ks = Object.keys(pa.c);
+  if (ks.length > 5000) return null;
+  for (const k of ks) { if (validKey(k) && validPCase(pa.c[k])) { const v = pa.c[k]; c[k] = { b: v.b, d: v.d, r: v.r, w: v.w, lr: v.lr, lw: v.lw, t: v.t }; } else if (!lenient) return null; }
+  const x = [];
+  for (const e of (pa.x || []).slice(-20)) { if (validPTest(e)) x.push({ t: e.t, n: e.n, ok: e.ok, loc: e.loc, locN: e.locN ?? 0, ms: e.ms, keys: e.keys.slice() }); else if (!lenient) return null; }
+  return { c, x };
+}
+// birleştirme: vaka başına son cevabı daha yeni olan kayıt; Testat sonuçları tarihe göre tekrarsız, son 20'si
+export function mergePatho(cur, imp) {
+  const c0 = cleanPatho(cur, true) || { c: {}, x: [] }, out = { c: { ...c0.c }, x: [] };
+  for (const [k, v] of Object.entries(imp.c)) if (!out.c[k] || v.t > out.c[k].t) out.c[k] = v;
+  const seen = new Set();
+  for (const e of [...c0.x, ...imp.x].sort((a, b) => a.t - b.t)) if (!seen.has(e.t)) { seen.add(e.t); out.x.push(e); }
+  out.x = out.x.slice(-20);
+  return out;
+}
 const bad = msg => err('import', msg);
 // Metni denetle; geçerliyse temiz bir kopya döner, değilse Türkçe hata fırlatır
 export function parseImport(text) {
@@ -375,10 +399,13 @@ export function parseImport(text) {
   if (d.exam != null && !isObj(d.exam)) throw bad('Sınav ayarları geçersiz.');
   if (d.exam) for (const k of Object.keys(d.exam)) if (!['subj', 'n', 't', 'src', 'mode'].includes(k)) throw bad('Sınav ayarları geçersiz.');
   if (d.history != null && (!Array.isArray(d.history) || d.history.length > 200 || !d.history.every(validHist))) throw bad('Sınav geçmişi geçersiz.');
+  const patho = d.patho == null ? null : cleanPatho(d.patho);
+  if (d.patho != null && !patho) throw bad('Patoloji kaydı geçersiz.');
   return {
     name: cleanName(d.name).slice(0, NAME_MAX), exported: typeof d.exported === 'string' ? d.exported : null,
     progress, exam: cleanExam(d.exam),
     history: (d.history || []).map(x => ({ d: x.d, s: x.s.slice(), r: x.r, n: x.n, sec: x.sec, m: x.m })),
+    patho,
   };
 }
 
@@ -407,6 +434,7 @@ function writeData(id, imp, merge) {
   const e = merge ? readJSON(ke) : null;
   if (imp.exam && !isObj(e)) lsSet(ke, JSON.stringify(imp.exam));
   lsSet(kh, JSON.stringify(mergeHistory(merge ? readJSON(kh) : [], imp.history)));
+  if (imp.patho) { const kpa = userKey(DATA_KEYS[3], id); lsSet(kpa, JSON.stringify(merge ? mergePatho(readJSON(kpa), imp.patho) : imp.patho)); }
   return m.taken;
 }
 // İçe aktarılan profili yeni kullanıcı olarak ekle (ad ve şifre sorulur); yeni kullanıcı açık kullanıcı olur

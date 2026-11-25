@@ -34,6 +34,7 @@ const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
 // [soru, Türkçe alt konu (gruplama anahtarı), Almanca alt konu]; sonuçta konu çubuğunun altında gösterilir.
 const SUB_BRAIN = { csf: 'BOS', cn: 'Kraniyal sinirler', art: 'Arterler' };
 const SUB_LOCO = { nerve: 'Sinirler', passage: 'Geçitler', joint: 'Eklemler' };
+const PATHO_SUB = { nerve: ['Periferik sinirler', 'Periphere Nerven'], plexus: ['Pleksus ve kökler', 'Plexus und Wurzeln'], passage: ['Geçitler', 'Engstellen'], spinal: ['Omurilik', 'Rückenmark'], cranial: ['Kranial sinirler', 'Hirnnerven'], brain: ['Arterler', 'Arterien'] };
 const subOf = (map, cat) => [map[cat] || null, map[cat] ? Tin('de', 'cat.' + cat) || null : null];
 function baseBanks(tours) {
   return [
@@ -46,6 +47,10 @@ function baseBanks(tours) {
       key: t.key, title: t.exam, url: t.dataUrl,
       read: d => (d.tabs || []).flatMap(tab => (tab.quiz || []).map(f => [f, tab.title_tr || tab.key, tab.title_de || Tin('de', 'tab.' + tab.key) || tab.title_tr || tab.key])),
     })),
+    // patoloji vakaları (patho.json): klinik tablo + soru; iki dilli (Almanca metin sorunun de alanında, testlang factText)
+    { key: 'patho', title: 'Topografik patoloji', url: 'data/patho.json', optional: true,
+      read: d => (d.cases || []).filter(c => c.frage).map(c => [{ q: c.befund_tr + ' ' + c.frage.q_tr, options: c.frage.options_tr, explain: c.frage.explain_tr,
+        de: { q: c.befund_de + ' ' + c.frage.q_de, options: c.frage.options_de, explain: c.frage.explain_de } }, ...(PATHO_SUB[c.system] || [null, null])]) },
     // kesit atlası: ikiz pelvis seviyeleri (kadın / erkek) aynı soruları taşır; aynı metin bir kez alınır
     { key: 'sect', title: 'Kesit anatomisi', url: 'data/sections.json', optional: true,
       read: d => (d.regions || []).flatMap(r => (r.levels || []).flatMap(l => (l.facts || []).map(f => [f, r.title_tr || r.key, Tin('de', 'sreg.' + r.key) || r.title_tr || r.key]))) },
@@ -110,7 +115,7 @@ export function createExam({ tours = [], onShow, onToggle, onData } = {}) {
       .then(d => {
         failed.delete(b.key);
         if (!d) { data.set(b.key, { title: b.title, qs: [] }); return; }   // isteğe bağlı dosya yok
-        data.set(b.key, { title: b.title, qs: b.read(d).filter(([f]) => validQ(f)).map(([f, sub, subDe]) => ({ id: factId(f.q), q: f.q, options: f.options, explain: f.explain || '', show: Array.isArray(f.show) ? f.show : null, subj: b.key, sub, subDe: subDe || sub })) });
+        data.set(b.key, { title: b.title, qs: b.read(d).filter(([f]) => validQ(f)).map(([f, sub, subDe]) => ({ id: factId(f.q), q: f.q, options: f.options, explain: f.explain || '', show: Array.isArray(f.show) ? f.show : null, de: f.de || null, subj: b.key, sub, subDe: subDe || sub })) });
       })
       .catch(e => { console.warn('Sınav bankası yüklenemedi:', b.url, e); failed.set(b.key, b.title); })))
       .then(() => {
