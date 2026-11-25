@@ -146,7 +146,9 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     if (terr.length) list.push({ text: c.struktur.artery ? 'Infarkt' : 'Läsion', p: anchorOf(terr), cls: c.struktur.artery ? '' : 'on' });
     // 3B görevinde ışın sınamasına girmeyenler: derin bakışta saydam korteks, orbitada göz küresinin etkilenmeyen parçaları
     const tn = new Set(c.folge.territory), skip = new Set([...(view === 'deep' ? keep.filter(x => x.ctx).map(x => x.r.id) : []), ...eye.filter(r => !tn.has(r.n)).map(r => r.id)]);
-    return { iso: [...keep.map(x => x.r), ...cord, ...eye, ...terr, ...art], ghost: [], list, skip };
+    const keepIds = ids([...keep.map(x => x.r), ...cord, ...eye]), outside = side(c.folge.territory).filter(r => !keepIds.has(r.id));
+    if (!p.shown) for (const r of outside) ov.set(r.id, mats.ctxN);
+    return { iso: [...keep.map(x => x.r), ...cord, ...eye, ...outside, ...terr, ...art], ghost: [], list, skip };
   }
   // kranial sinir vakası: baş-boyun kasları, beyin sapı, kranial sinirler; gösterilince felçli ve sağlam kaslar
   function cranialScene(c) {
@@ -181,7 +183,9 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
   // pleksus ve geçit vakası: kol (pleksusta boyun kaslarıyla) ya da bacak; geçitte duvarlar ve içerikler locomotor.json'dan
   const PASS_LEG = new Set(['groin', 'thigh', 'hip', 'knee', 'foot']);
   const passOf = c => LO.passages.list.find(x => x.key === c.struktur.passage);
-  const regOf = c => (c.system === 'passage' && PASS_LEG.has(passOf(c)?.region) ? 'leg' : 'arm');
+  // bel pleksusu vakası: sarı sinirlerden biri Lumbosacral plexus grubundaysa bacak bölgesi
+  const lumbar = c => c.system === 'plexus' && lrecs(c.struktur.n).some(r => groupRecs('Lumbosacral plexus').includes(r));
+  const regOf = c => ((c.system === 'passage' && PASS_LEG.has(passOf(c)?.region)) || lumbar(c) ? 'leg' : 'arm');
   function pointOf(c) {
     if (c.system === 'nerve') { const g = LO.geo?.sites?.[c.struktur.site]; return g?.p ? V3(g.p) : null; }
     if (c.system === 'passage') { const g = LO.geo?.passages?.[c.struktur.passage]?.contents?.[c.struktur.content]; return g?.p ? V3(g.p) : null; }
@@ -192,12 +196,12 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
   function regionScene(c) {
     const st = c.struktur, reg = regOf(c), ps = c.system === 'passage' ? passOf(c) : null;
     const bones = grp(BONES[reg]).filter(r => r.sub !== 'attach' && L(r));
-    const all = grp([...MUSCLES[reg], ...(c.system === 'plexus' || ps?.region === 'neck' ? ['Muscles of neck'] : [])]).filter(r => r.sub === 'muscle' && L(r));
+    const all = grp([...MUSCLES[reg], ...((c.system === 'plexus' && reg === 'arm') || ps?.region === 'neck' ? ['Muscles of neck'] : [])]).filter(r => r.sub === 'muscle' && L(r));
     const nerve = lrecs(st.n), lesion = lrecs(st.lesion), ves = lrecs(st.v), lesionIds = ids(lesion);
     const ov = model.overrides, list = [];
     let extra = [];
     // bağlam: pleksusun bütün parçaları ya da geçidin duvarları ve içerikleri soluk
-    const plex = c.system === 'plexus' ? grp(['Brachial plexus']).filter(L) : [];
+    const plex = c.system === 'plexus' ? grp([reg === 'leg' ? 'Lumbar plexus' : 'Brachial plexus']).filter(L) : [];
     const walls = ps ? ps.bounds.flatMap(b => lrecs(b.n)) : [], cont = ps ? ps.contents.map(x => ({ k: x.kind, rs: lrecs(x.n) })) : [];
     for (const r of walls) ov.set(r.id, mats.wall);
     for (const x of cont) for (const r of x.rs) ov.set(r.id, r.sub === 'sheath' ? mats.ctxN : mats['k_' + x.k] || mats.cnCtx);
@@ -223,7 +227,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     }
     for (const r of ves) if (!lesionIds.has(r.id)) ov.set(r.id, mats.artery);
     for (const r of nerve) if (!lesionIds.has(r.id)) ov.set(r.id, mats.nerve);
-    if (!p.shown) for (const r of lesion) if (!nerve.includes(r)) ov.set(r.id, mats.nerve);   // gösterilmeden lezyon parçası sarı (ele vermesin)
+    if (!p.shown) for (const r of lesion) if (!nerve.includes(r) && r.s !== 'muscle') ov.set(r.id, mats.nerve);   // gösterilmeden lezyon parçası sarı (ele vermesin); kas lezyonu soluk kalır
     const ghost = grp(BONE_CTX[reg]).filter(r => r.sub !== 'attach' && L(r));
     return { iso: [...bones, ...all, ...plex, ...walls, ...cont.flatMap(x => x.rs), ...nerve, ...lesion, ...ves, ...extra], ghost, list };
   }
@@ -290,7 +294,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
   const cranialName = c => CN_LABEL[c.key] || (c.struktur.lesion?.length ? nameOf(c.struktur.lesion[0]) : nameOf(c.struktur.n[0]));
   // bakış vakada verilebilir (struktur.view: lateral | medial | deep | orbit); struktur.both: alan iki taraflı (ör. Percheron)
   const viewOf = c => c.struktur.view || VIEW[c.struktur.artery] || 'deep';
-  const sideOf = c => (c.struktur.both ? recs : lrecs);
+  const sideOf = c => (c.struktur.both ? n => recs(n || []) : lrecs);
   // arteri olmayan beyin vakası (tümör, MS, kanama: struktur.artery yok, n boş): lezyon alanı yalnız turuncu
   const artName = c => { const n = c.struktur.n?.[0]; if (!n) return nameOf(c.folge.territory[0]); const r = recs([n])[0]; return r ? (r.la || titleName(r)) : n; };
 
@@ -344,6 +348,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
       const sz = box.getSize(new THREE.Vector3()), hsh = [...c.key].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
       const fx = ((hsh % 1000) / 1000 - 0.5) * 0.5, fy = (((hsh >>> 10) % 1000) / 1000 - 0.5) * 0.5;
       box.translate(new THREE.Vector3(sz.x * fx + Math.sign(fx || 1) * 1.5, sz.y * fy + Math.sign(fy || 1) * 1.5, 0));
+      const lp = pointOf(c); if (lp) box.union(new THREE.Box3(lp.clone().subScalar(3), lp.clone().addScalar(3)));   // nokta kaymayla ekran kenarına / dışına çıkmasın (3 cm pay)
     }
     if (box && !box.isEmpty()) stage.frameBox(box, dir);
   }
@@ -356,6 +361,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     endStudy?.('patho');
     const k = String(spec || ''), i = D.cases.findIndex(c => c.key === k);
     if (i >= 0) {   // bağlantıyla açılan vaka: süren Testat bitirilir, sıra kapanır, Vakalar sekmesi
+      settle();
       if (p.q?.kind === 'testat' && !p.q.done) endTestat();
       if (p.q || p.mode !== 'browse') { p.q = null; p.mode = 'browse'; }
       open(i, false);
@@ -373,6 +379,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
   }
   const openKey = (key, redraw = true) => { const i = D.cases.findIndex(c => c.key === key); if (i >= 0) open(i, redraw); };
   function cleanup() {
+    settle();
     if (p.q?.kind === 'testat' && !p.q.done) endTestat();   // Esc, Geri ya da başka mod: Testat sonucu yazılır
     active = false; enterSeq++;
     model.overrides.clear(); if (ownGhost && state.isoGhost === ownGhost) state.isoGhost = null;
@@ -480,7 +487,15 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     p.q = { kind: 'testat', keys, i: 0, res: {}, t0: Date.now(), limit: keys.length * TESTAT_MS, done: false, ms: 0 };
     openKey(keys[0]);
   }
+  // şık seçilmiş, 3B görevi bekliyor, başka vakaya / sekmeye / moddan çıkılıyor: 3B atlanmış sayılıp kaydedilir
+  // (Testat'ta endTestat aynı kuralı uygular)
+  function settle() {
+    if (!D || p.pick === null || p.shown || p.loc !== null || p.q?.kind === 'testat') return;
+    const c = cur(), mc = p.pick === 0;
+    S.answer(c.key, mc, null); if (p.q) p.q.res[c.key] = { mc, loc: null, pick: p.pick }; p.loc = 'skip';
+  }
   function step(dir) {
+    settle();
     const q = p.q;
     if (!q) { open(p.i + dir); return; }
     if (q.kind === 'testat' && dir > 0 && q.i === q.keys.length - 1) { endTestat(); refresh(); return; }
@@ -656,6 +671,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
       finishCase(); return;
     }
     if (d.pm) {
+      settle();
       if (p.q?.kind === 'testat' && !p.q.done) { if (d.pm === 'testat') return; endTestat(); }
       p.q = null; p.last = null; p.mode = d.pm; clickMark.clear();
       if (d.pm === 'browse') open(p.i); else refresh();
@@ -693,7 +709,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     if (!active) return;
     const t = e.target.closest('select[data-psel]'); if (!t) return;
     if (t.dataset.psel === 'tf') { p.tf = t.value; return; }
-    open(+t.value);
+    settle(); open(+t.value);
   });
 
   return {

@@ -355,13 +355,13 @@ const TOP = new Set(['app', 'kind', 'v', 'name', 'exported', 'progress', 'exam',
 // patoloji kaydı (patho-store.js biçimi): { c: { <vaka>: {b, d, r, w, lr, lw, t} }, x: [Testat sonuçları] }; lenient: geçersizi
 // atla (dışa aktarma), değilse geçersizde null (içe aktarma hata verir)
 const num = (v, max = 1e15) => Number.isFinite(v) && v >= 0 && v <= max;
-const validPCase = v => isObj(v) && Number.isInteger(v.b) && v.b >= 0 && v.b <= 5 && ['d', 'r', 'w', 'lr', 'lw', 't'].every(k => num(v[k]));
+const validPCase = v => isObj(v) && Number.isInteger(v.b) && v.b >= 0 && v.b <= 5 && ['d', 'r', 'w', 'lr', 'lw', 't'].every(k => num(v[k])) && (v.k == null || v.k === 0 || v.k === 1);
 const validPTest = x => isObj(x) && ['t', 'n', 'ok', 'loc', 'ms'].every(k => num(x[k])) && (x.locN == null || num(x.locN)) && Array.isArray(x.keys) && x.keys.length <= 50 && x.keys.every(k => typeof k === 'string' && k.length <= 100);
 function cleanPatho(pa, lenient = false) {
   if (!isObj(pa) || !isObj(pa.c) || (pa.x != null && !Array.isArray(pa.x))) return null;
   const c = {}, ks = Object.keys(pa.c);
   if (ks.length > 5000) return null;
-  for (const k of ks) { if (validKey(k) && validPCase(pa.c[k])) { const v = pa.c[k]; c[k] = { b: v.b, d: v.d, r: v.r, w: v.w, lr: v.lr, lw: v.lw, t: v.t }; } else if (!lenient) return null; }
+  for (const k of ks) { if (validKey(k) && validPCase(pa.c[k])) { const v = pa.c[k]; c[k] = { b: v.b, d: v.d, r: v.r, w: v.w, lr: v.lr, lw: v.lw, t: v.t, ...(v.k != null ? { k: v.k } : {}) }; } else if (!lenient) return null; }
   const x = [];
   for (const e of (pa.x || []).slice(-20)) { if (validPTest(e)) x.push({ t: e.t, n: e.n, ok: e.ok, loc: e.loc, locN: e.locN ?? 0, ms: e.ms, keys: e.keys.slice() }); else if (!lenient) return null; }
   return { c, x };

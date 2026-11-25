@@ -19,7 +19,7 @@ function parse(raw) {
     const d = raw ? JSON.parse(raw) : {};
     if (!d || typeof d !== 'object' || Array.isArray(d)) return { c: {}, x: [] };
     const c = {}, x = Array.isArray(d.x) ? d.x.filter(e => e && Number.isFinite(e.t)).slice(-20) : [];
-    for (const [k, v] of Object.entries(d.c || {})) if (v && typeof v === 'object') c[k] = { b: Math.max(0, Math.min(5, num(v.b))), d: num(v.d), r: num(v.r), w: num(v.w), lr: num(v.lr), lw: num(v.lw), t: num(v.t) };
+    for (const [k, v] of Object.entries(d.c || {})) if (v && typeof v === 'object') c[k] = { b: Math.max(0, Math.min(5, num(v.b))), d: num(v.d), r: num(v.r), w: num(v.w), lr: num(v.lr), lw: num(v.lw), t: num(v.t), ...(v.k === 0 || v.k === 1 ? { k: v.k } : {}) };
     return { c, x };
   } catch { return null; }
 }
@@ -61,19 +61,19 @@ export function answer(key, mc, loc, now = Date.now()) {
     v.b = ok ? Math.min(5, v.b + 1) : 0;   // ilk cevap doğruysa kutu 1
     const t = new Date(now); t.setHours(0, 0, 0, 0); t.setDate(t.getDate() + INTERVAL[v.b]); v.d = t.getTime();
   }
-  v.t = now;
+  v.t = now; v.k = ok ? 1 : 0;   // son cevabın sonucu: erken doğru cevapta kutu değişmese de vaka 'doğru' sayılır
   dirty.add(key); save();
   recordProgress('p:' + key, ok);   // genel ilerleme (zayıf / bilinen) sayımları için de
   return v;
 }
 // tekrar zamanı gelmiş vakalar, en eski tarih önce
 export const due = (keys, now = Date.now()) => keys.filter(k => data.c[k] && data.c[k].d <= now).sort((a, b) => data.c[a].d - data.c[b].d);
-export const status = key => { const v = data.c[key]; return !v ? null : v.b > 0 ? 'ok' : 'bad'; };
+export const status = key => { const v = data.c[key]; return !v ? null : (v.k ?? (v.b > 0 ? 1 : 0)) ? 'ok' : 'bad'; };
 export function testat(entry) { data.x.push(entry); data.x = data.x.slice(-20); dirtyX = true; save(); }
 export const testats = () => data.x.slice();
 export function summary(keys, now = Date.now()) {
   let seen = 0, okN = 0, dueN = 0;
-  for (const k of keys) { const v = data.c[k]; if (!v) continue; seen++; if (v.b > 0) okN++; if (v.d <= now) dueN++; }
+  for (const k of keys) { const v = data.c[k]; if (!v) continue; seen++; if (status(k) === 'ok') okN++; if (v.d <= now) dueN++; }
   return { total: keys.length, seen, ok: okN, due: dueN };
 }
 export const nextDue = (keys, now = Date.now()) => { let m = Infinity; for (const k of keys) { const v = data.c[k]; if (v && v.d > now) m = Math.min(m, v.d); } return m; };
