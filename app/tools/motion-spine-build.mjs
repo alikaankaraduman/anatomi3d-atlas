@@ -1,6 +1,9 @@
-// Gövde ve baş-boyun hareketi verisi (küçük sürüm: kemikler ve tek segmentli eklem parçaları katı hareket eder, kaslar çizilmez).
+// Gövde ve baş-boyun hareketi verisi. Adım 1 (küçük sürüm): kemikler ve tek segmentli eklem parçaları katı hareket eder.
+// Adım 2 (2026-11-25): gövde ve boyun kaslarının deri ağırlıkları (public/models/motion-spine.bin, kol ve bacakla aynı 9 bayt /
+// köşe biçimi: 4 segment, 4 ağırlık / 255, t / 255) ve kas çizgileri (orta çizgi; dönmede yan ayırmak için lif çizgileri).
 // Sayılar ağlardan ölçülür; ders kitabı değerleri (segment ROM payları, sınırlar) src/motion-kin-spine.js içindedir.
-// Çalıştırma (app/ içinde): node tools/motion-spine-build.mjs [--dry]   (public/data/motion-spine.json yazar; --dry yazmaz)
+// Çalıştırma (app/ içinde): node tools/motion-spine-build.mjs [--dry]   (public/data/motion-spine.json ve public/models/motion-spine.bin
+// yazar; --dry yazmaz)
 // Koordinatlar: x sola, y yukarı, z öne; birim cm.
 //
 // Dönme merkezleri (bir hareket segmentinde üstteki omur alttakine göre bu nokta çevresinde döner):
@@ -21,13 +24,35 @@ import { MeshBVH } from 'three-mesh-bvh';
 import * as THREE from 'three';
 import fs from 'node:fs';
 import { loadScene } from './scene.mjs';
-import { sub, add, mul, dot, cross, len, norm, DEG, mean, f2, verts } from './motion-geom.mjs';
+import { sub, add, mul, dot, cross, len, norm, DEG, mean, f2, verts, pca } from './motion-geom.mjs';
 import * as K from '../src/motion-kin-spine.js';
 
 const fails = [];
 const say = (s = '') => console.log(s);
 const fail = s => { fails.push(s); say('  HATA: ' + s); };
-const { meta, parts } = await loadScene({ files: ['bones', 'femalepelvis', 'joints', 'femalejoints'], keep: it => (it.s === 'bone' && it.sub !== 'attach') || it.s === 'joint' });
+// Çizilen kaslar (adım 2) ve kas başına seçenekler: fib = dönme okuması için lif çizgileri (aşağıda), bulge: false = şişme yok
+// (yassı tabakalar: orta çizgi tabakanın dışında kalır). İki yan ayrı parçadır (anahtar ad + '.l' / '.r').
+const MUS = {
+  // autochthone Rückenmuskeln: M. erector spinae, transversospinale Gruppe, Mm. interspinales / intertransversarii, Splenius, Suboccipitales
+  'Iliocostalis lumborum muscle': {}, 'Iliocostalis thoracis muscle': {}, 'Iliocostalis colli muscle': {},
+  'Longissimus thoracis muscle': {}, 'Longissimus colli muscle': {}, 'Longissimus capitis muscle': {},
+  'Spinalis thoracis muscle': {}, 'Spinalis colli muscle': {}, 'Spinalis capitis muscle': {},
+  'Multifidus lumborum muscle': { fib: 'multifidus' }, 'Multifidus thoracis muscle': { fib: 'multifidus' }, 'Multifidus colli muscle': { fib: 'multifidus' },
+  'Rotatores': { fib: 'rotatores' }, 'Semispinalis thoracis muscle': { fib: 'semispinalis' }, 'Semispinalis colli muscle': { fib: 'semispinalis' },
+  'Interspinales lumborum muscles': {}, 'Interspinales thoracis muscles': {}, 'Interspinales colli muscles': {},
+  'Dorsal parts of lateral intertransversarii lumborum muscles': {}, 'Ventral parts of lateral intertransversarii lumborum muscles': {},
+  'Splenius capitis muscle': {}, 'Splenius colli muscle': {},
+  'Rectus posterior major capitis muscle': {}, 'Rectus posterior minor capitis muscle': {}, 'Obliquus superior capitis muscle': {}, 'Obliquus inferior capitis muscle': {},
+  // Hals und Nacken
+  'Sternocleidomastoid muscle': {}, 'Scalenus anterior muscle': {}, 'Scalenus medius muscle': {}, 'Scalenus posterior muscle': {},
+  'Longus colli muscle': {}, 'Longus capitis muscle': {}, 'Rectus anterior capitis muscle': {}, 'Rectus lateralis capitis muscle': {},
+  'Descending part of trapezius muscle': {}, 'Transverse part of trapezius muscle': { bulge: false }, 'Ascending part of trapezius muscle': { bulge: false }, 'Levator scapulae': {},
+  // Bauchwand, M. quadratus lumborum, M. iliopsoas (Iliacus und Leistenband liegen ganz im Becken: durağan)
+  'Rectus abdominis muscle': {}, 'Linea alba': { bulge: false }, 'Pyramidalis muscle': {},
+  'External abdominal oblique muscle': { fib: 'eo', bulge: false }, 'Internal abdominal oblique muscle': { fib: 'io', bulge: false }, 'Transversus abdominis muscle': { bulge: false },
+  'Inguinal ligament': { bulge: false }, 'Quadratus lumborum muscle': {}, 'Psoas major': {}, 'Iliacus muscle': {},
+};
+const { meta, parts } = await loadScene({ files: ['bones', 'femalepelvis', 'joints', 'femalejoints', 'muscles'], keep: it => (it.s === 'bone' && it.sub !== 'attach') || it.s === 'joint' || (it.s === 'muscle' && !it.x && MUS[it.n] !== undefined) });
 const G = meta.groups;
 const gpath = g => { const a = []; while (g >= 0) { a.unshift(G[g].n); g = G[g].p; } return a.join(' > '); };
 for (const p of parts) p.path = gpath(p.g);
@@ -146,6 +171,145 @@ const nMulti = jparts.filter(x => x.chain.length > 1).length, nStill = jparts.fi
 say(`  eklem parçaları: ${jparts.length}; tek segmentli (hareketli) ${jparts.length - nMulti - nStill}, yalnız pelvis (durağan) ${nStill}, çok segmentli ${nMulti}`);
 for (const n of ['Intervertebral disc C4-C5', 'Anterior longitudinal ligament', 'Articular capsule of temporomandibular joint', 'Radiate ligament of head of rib', 'Articular capsule of sternoclavicular joint', 'Iliolumbar ligament']) { const j = jparts.find(x => x.n === n); say(`    ${n}: ${j ? j.chain.join('+') : 'yok'}`); }
 
+// ---------- deri ağırlıkları (adım 2: gövde ve boyun kasları) ----------
+// Her köşeye sürekli bir "düzey" L verilir (segment sırası: pelvis 0, L5 1 ... T1 17, C7 18 ... C1 24, baş 25). L, köşenin her
+// segmentin kemiklerine (omur + kaburgaları + kıkırdakları; T4: sternum, omuz kuşağı ve kollar; C5: hyoid ve gırtlak; baş:
+// kafatası; pelvis: sacrum, kalça kemikleri, bacaklar) uzaklığıyla ağırlıklı ortalamadır: w = yumuşak kesme(d - dmin) / (d^2 + 0,01),
+// 0,15 cm'den yakın kemik katı bağlar (yumuşak kesme: dmin + 2 cm'den sonra azalır, dmin + 5 cm'de sıfır). Ağırlık iki komşu
+// segment arasında: floor(L) ve floor(L) + 1, kesir doğrudan (SMOOTH_MIX 0; 1 = smoothstep). Böylece omurga boyunca uzanan bir kas
+// her yükseklikte o düzeydeki omurla gider ve iki komşu omur arasında yumuşak geçer; kaburgaya, kafatasına, sternuma ya da pelvise
+// değen uç kendi kemiğinin segmentinde kalır (kaburgalar kendi omurunda, pelvis durağan); kemikten uzak karın duvarı ortası kaburga,
+// omur ve pelvisin arasındaki düzeyi alır. Seçim ekransız ölçüyle (tools/_qawork/motion-spine-hide.mjs, 20 duruş): smoothstep 5,
+// doğrusal 3 gizlenen kas (yapılandırmasız 28 / 23); katı bağsız sürekli ağırlıklar (1 / (d^2 + 0,0025) ya da + 0,01) 6-11, katı
+// sınır 0,3 cm 11, kesme 1-3 / 3-8 cm 5. Denemek için: SP_MIX, SP_EPS, SP_RIGID, SP_T0, SP_T1 ortam değişkenleri.
+const E = process.env, TAPER = [+(E.SP_T0 ?? 2), +(E.SP_T1 ?? 5)], RIGID = +(E.SP_RIGID ?? 0.15), EPS = +(E.SP_EPS ?? 0.01), SMOOTH_MIX = +(E.SP_MIX ?? 0);
+const segBones = SEG.map(k => bones.filter(b => b.seg === k && b.x !== 'f'));
+const SB = segBones.map(bs => {
+  let n = 0, m = 0; for (const b of bs) { n += b.P.length; m += b.I.length; }
+  const P = new Float32Array(n), I = new Uint32Array(m); let po = 0, io = 0;
+  for (const b of bs) { P.set(b.P, po); for (let j = 0; j < b.I.length; j++) I[io + j] = b.I[j] + po / 3; po += b.P.length; io += b.I.length; }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setIndex(new THREE.BufferAttribute(I, 1));
+  const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < P.length; i += 3) for (let a = 0; a < 3; a++) { mn[a] = Math.min(mn[a], P[i + a]); mx[a] = Math.max(mx[a], P[i + a]); }
+  return { bvh: n ? new MeshBVH(g) : null, mn, mx };
+});
+const _sp = new THREE.Vector3(), _st = {}, _d = new Float64Array(SEG.length), _lb = new Float64Array(SEG.length), _ord = SEG.map((k, i) => i);
+const smooth3 = x => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+// x -> sürekli düzey L
+function levelAt(x) {
+  for (let i = 0; i < SEG.length; i++) { const b = SB[i]; let s = 0; for (let a = 0; a < 3; a++) { const e = Math.max(b.mn[a] - x[a], 0, x[a] - b.mx[a]); s += e * e; } _lb[i] = b.bvh ? Math.sqrt(s) : Infinity; _d[i] = Infinity; }
+  _ord.sort((a, b) => _lb[a] - _lb[b]);
+  let dmin = Infinity;
+  for (const i of _ord) {
+    if (_lb[i] > dmin + TAPER[1]) break;
+    const r = SB[i].bvh.closestPointToPoint(_sp.set(x[0], x[1], x[2]), _st, 0, dmin + TAPER[1]);
+    if (r) { _d[i] = r.distance; if (r.distance < dmin) dmin = r.distance; }
+  }
+  let sw = 0, sl = 0;
+  for (let i = 0; i < SEG.length; i++) {
+    const d = _d[i]; if (!(d < Infinity)) continue;
+    const tp = 1 - smooth3((d - dmin - TAPER[0]) / (TAPER[1] - TAPER[0])); if (tp <= 0) continue;
+    const w = d < RIGID ? 1e6 : tp / (d * d + EPS); sw += w; sl += w * i;
+  }
+  return { L: sw > 0 ? sl / sw : 0, dmin };
+}
+// L -> [[segment sırası, ağırlık], ...] (en çok iki komşu segment)
+function weightsOfLevel(L) {
+  const lo = Math.min(SEG.length - 1, Math.max(0, Math.floor(L))), f = L - lo;
+  if (lo >= SEG.length - 1 || f < 1e-6) return [[lo, 1]];
+  const s = SMOOTH_MIX * smooth3(f) + (1 - SMOOTH_MIX) * f;
+  return s < 1e-6 ? [[lo, 1]] : s > 1 - 1e-6 ? [[lo + 1, 1]] : [[lo, 1 - s], [lo + 1, s]];
+}
+const wNamed = ws => ws.map(([i, w]) => [SEG[i], Math.round(w * 1000) / 1000]).filter(y => y[1] > 0);
+const fnv1a = bytes => { let h = 0x811c9dc5; for (let i = 0; i < bytes.length; i++) { h ^= bytes[i]; h = Math.imul(h, 0x01000193) >>> 0; } return h >>> 0; };
+const posSum = p => fnv1a(new Uint8Array(p.P.buffer, p.P.byteOffset, p.P.byteLength));
+function q4(ws, out, o) {   // en büyük 4 ağırlık -> toplamı 255 olan 4 bayt (bacakla aynı)
+  const e = ws.filter(x => x[1] > 0).sort((p, q) => q[1] - p[1]).slice(0, 4), s = e.reduce((t, x) => t + x[1], 0);
+  const q = e.map(([k, w]) => [k, Math.floor(w / s * 255), w / s * 255 % 1]); let rem = 255 - q.reduce((t, x) => t + x[1], 0);
+  for (const x of [...q].sort((p, r) => r[2] - p[2])) { if (rem <= 0) break; x[1]++; rem--; }
+  for (let j = 0; j < 4; j++) { out[o + j] = q[j] ? q[j][0] : 0; out[o + 4 + j] = q[j] ? q[j][1] : 0; }
+}
+// Omur işaretleri (lif çizgileri için): Proc. spinosus ucu (orta hatta en arkadaki köşe), lamina kökü (orta hatta kanalın
+// arkasındaki ilk köşeler), Proc. transversus uçları (en yandaki 5 köşenin ortası; x > 0 sol)
+const MARK = {};
+for (const k of SEG.slice(1, -1)) {
+  const b = vb(k); if (!b) continue;
+  const v = verts(b), c = centroid(b), mid = v.filter(x => Math.abs(x[0] - c[0]) < 0.5);
+  const sp = mid.reduce((a, x) => (x[2] < a[2] ? x : a), mid[0]);
+  const zs = mid.map(x => x[2]).sort((a, b) => b - a); let gap = 0, zb = zs[zs.length - 1];
+  for (let i = 1; i < zs.length; i++) if (zs[i - 1] - zs[i] > gap) { gap = zs[i - 1] - zs[i]; zb = zs[i]; }
+  const lam = mean(mid.filter(x => x[2] <= zb && x[2] > zb - 0.4));
+  const byX = [...v].sort((a, b) => b[0] - a[0]);
+  MARK[k] = { sp, lam, tp: { l: mean(byX.slice(0, 5)), r: mean(byX.slice(-5)) } };
+}
+// Lif çizgileri (boy okuması; bükme orta çizgiyle): dönmede iki yanı ayırmak için. Transversospinal kaslar Proc. transversus'tan
+// birkaç düzey yukarıdaki Proc. spinosus'a (Rotatores: lamina köküne, bir ve iki düzey; Multifidus: üç düzey; Semispinalis: beş
+// düzey) çekilir; okuma liflerin ortalamasıdır. Karın kasları: M. obliquus externus kaburgalardaki origodan aşağı-içe (45°) linea
+// alba'ya, M. obliquus internus crista iliaca'dan yukarı-içe (45°) linea alba'ya ve arka lifleri alt kaburgalara.
+const FIB = { rotatores: [[1, 'lam'], [2, 'lam']], multifidus: [[3, 'sp']], semispinalis: [[5, 'sp']] };
+function fibresOf(p, v, sideK) {
+  const kind = MUS[p.n].fib, ys = v.map(x => x[1]), y0 = Math.min(...ys), y1 = Math.max(...ys), out = [];
+  const pt = (x, w) => ({ p: x.map(q => Math.round(q * 1000) / 1000), w });
+  if (FIB[kind]) {
+    const inR = k => { const c = centroid(vb(k))[1]; return c >= y0 - 1 && c <= y1 + 1; };
+    for (let i = 1; i < SEG.length - 2; i++) for (const [st, to] of FIB[kind]) {
+      const a = SEG[i], b = SEG[i + st]; if (!MARK[a] || !MARK[b] || i + st > SEG.length - 2 || !inR(a) || !inR(b)) continue;
+      out.push([pt(MARK[a].tp[sideK], [[a, 1]]), pt(MARK[b][to], [[b, 1]])]);
+    }
+    return out;
+  }
+  // linea alba'ya yakın nokta (verilen yükseklikte, bu kasın en içteki köşesi)
+  const sx = sideK === 'l' ? 1 : -1;
+  const medialAt = y => { let best = null; for (const x of v) { if (Math.abs(x[1] - y) > 1.5 || x[2] < 0) continue; if (!best || sx * x[0] < sx * best[0]) best = x; } return best; };
+  const soft = x => pt(x, wNamed(weightsOfLevel(levelAt(x).L)));
+  const at45 = (o, dir) => { let best = null, be = Infinity; for (let y = o[1]; dir < 0 ? y > y0 : y < y1; y += dir * 0.5) { const m = medialAt(y); if (!m) continue; const e = Math.abs(Math.abs(y - o[1]) - Math.hypot(m[0] - o[0], m[2] - o[2])); if (e < be) { be = e; best = m; } } return best; };
+  if (kind === 'eo') {
+    for (const n of [6, 8, 10]) {
+      const rib = bones.find(b => b.n === ORD[n - 1][0].toUpperCase() + ORD[n - 1].slice(1) + ' rib' && b.sd === sideK && b.x !== 'f'); if (!rib) continue;
+      const c = v.filter(x => sx * x[0] > 4 && dist(rib, x) < 0.8); if (c.length < 5) continue;
+      const o = mean(c), m = at45(o, -1); if (m) out.push([pt(o, [['T' + n, 1]]), soft(m)]);
+    }
+  } else if (kind === 'io') {
+    const hip = bones.find(b => b.n === 'Hip bone' && b.sd === sideK && b.x !== 'f');
+    const c = v.filter(x => dist(hip, x) < 1.0 && sx * x[0] > 5).sort((a, b) => b[2] - a[2]);
+    for (const q of [[0, 0.33], [0.33, 0.66]]) { const s = c.slice(Math.floor(q[0] * c.length), Math.floor(q[1] * c.length)); if (s.length < 5) continue; const o = mean(s), m = at45(o, 1); if (m) out.push([pt(o, [['pelvis', 1]]), soft(m)]); }
+    // arka lifler: crista iliaca'nın arka bölümü -> 11. / 12. kaburganın alt kenarı
+    const ribs = bones.filter(b => /^(Eleventh|Twelfth) rib$/.test(b.n) && b.sd === sideK && b.x !== 'f');
+    const rc = v.filter(x => ribs.some(r => dist(r, x) < 1.0)), back = c.slice(Math.floor(0.66 * c.length));
+    if (rc.length >= 5 && back.length >= 5) { const r = mean(rc), seg = ribs.map(b => [b.seg, Math.min(...rc.map(x => dist(b, x)))]).sort((a, b) => a[1] - b[1])[0][0]; out.push([pt(mean(back), [['pelvis', 1]]), pt(r, [[seg, 1]])]); }
+  }
+  return out;
+}
+const musParts = parts.filter(p => p.s === 'muscle').sort((a, b) => a.n.localeCompare(b.n) || String(a.sd).localeCompare(String(b.sd)));
+for (const n of Object.keys(MUS)) { const k = musParts.filter(p => p.n === n).length; if (k !== (n === 'Linea alba' ? 1 : 2)) fail(`kas parçası sayısı beklenmiyor: ${n} (${k})`); }
+const skinParts = [], chunks = []; let offset = 0;
+for (const p of musParts) {
+  const v = verts(p), nv = v.length, f = pca(v);
+  let ax = f.axes[0].v; if (ax[1] < 0) ax = mul(ax, -1);
+  const S = v.map(x => dot(sub(x, f.c), ax)), s0 = Math.min(...S), s1 = Math.max(...S), span = Math.max(1e-6, s1 - s0);
+  const buf = new Uint8Array(9 * nv), Ls = new Float64Array(nv);
+  for (let i = 0; i < nv; i++) { const L = levelAt(v[i]).L; Ls[i] = L; q4(weightsOfLevel(L), buf, 9 * i); buf[9 * i + 8] = Math.round(255 * (S[i] - s0) / span); }
+  // orta çizgi: eksen boyunca 12 dilimin ağırlık merkezi (uçlar: uç %3 köşelerin merkezi); örnek ağırlıkları köşelerle aynı kuraldan
+  const order = S.map((s, i) => i).sort((i, j) => S[i] - S[j]), k3 = Math.max(3, Math.round(0.03 * nv));
+  const eA = mean(order.slice(0, k3).map(i => v[i])), eB = mean(order.slice(-k3).map(i => v[i])), line = [];
+  for (let j = 0; j < 12; j++) {
+    let q;
+    if (j === 0) q = eA; else if (j === 11) q = eB;
+    else { const lo = s0 + span * (j - 0.5) / 11, hi = s0 + span * (j + 0.5) / 11, sl = v.filter((x, i) => S[i] >= lo && S[i] < hi); q = sl.length ? mean(sl) : add(eA, mul(sub(eB, eA), j / 11)); }
+    line.push({ p: q.map(x => Math.round(x * 1000) / 1000), w: wNamed(weightsOfLevel(levelAt(q).L)) });
+  }
+  let L0 = 0; for (let j = 1; j < line.length; j++) L0 += len(sub(line[j].p, line[j - 1].p));
+  const sideK = p.sd || null, opt = MUS[p.n], rec = { n: p.n, sd: sideK, key: sideK ? p.n + '.' + sideK : p.n, id: p.id, kind: 'muscle', verts: nv, offset, sum: posSum(p), L0: Math.round(L0 * 1000) / 1000, line };
+  rec.chain = SEG.filter((k, i) => Ls.some(L => Math.floor(L) === i || Math.ceil(L) === i));
+  if (opt.bulge === false) rec.bulge = 0;
+  if (opt.fib) { rec.fib = fibresOf(p, v, sideK); if (rec.fib.length < 2) fail(`${rec.key}: lif çizgisi az (${rec.fib.length})`); }
+  skinParts.push(rec); chunks.push(buf); offset += buf.length;
+  const lmin = Math.min(...Ls), lmax = Math.max(...Ls);
+  if (!sideK || sideK === 'l') say(`    ${p.n}: ${nv} köşe, düzey ${f2(lmin)} (${SEG[Math.floor(lmin)]}) .. ${f2(lmax)} (${SEG[Math.min(SEG.length - 1, Math.ceil(lmax))]})${rec.fib ? `, ${rec.fib.length} lif` : ''}`);
+}
+const BIN = Buffer.concat(chunks.map(c => Buffer.from(c.buffer, c.byteOffset, c.byteLength)));
+say(`  kaslar: ${skinParts.length} parça, ${skinParts.reduce((t, p) => t + p.verts, 0)} köşe; .bin ${(BIN.length / 1024).toFixed(1)} KB`);
+
 // ---------- hareketler ve ders kitabı kasları ----------
 // Liste: muscles.json "f_de" (Funktion) satırlarından; her kasın satırında hareket adı geçmeli (aşağıda denetlenir).
 // Yan: beidseitig (iki yan birlikte), gleiche Seite (hareket yönündeki yan), Gegenseite (karşı yan).
@@ -194,14 +358,14 @@ const MOVES = [
 say(`  hareketler: ${MOVES.length}; ders kitabı kası ${MOVES.reduce((t, m) => t + m.textbook.length, 0)} satır (muscles.json Funktion satırıyla denetlendi)`);
 
 const outJ = {
-  v: 1, note: 'motion-spine-build.mjs ile üretildi (küçük sürüm: kemikler katı, kaslar çizilmez); elle değiştirmeyin',
+  v: 2, note: 'motion-spine-build.mjs ile üretildi (adım 2: kemikler katı, gövde ve boyun kasları deri ağırlıklarıyla); elle değiştirmeyin',
   segments: SEG.map((k, i) => ({ key: k, parent: i ? SEG[i - 1] : null, ids: i ? segIds[k] : [], label: i ? K.SHARE[k].label : null })),
   joints: { centre: provisional().joints.centre, axes: provisional().joints.axes, headPt: R4(headPt) },
   attach: { sternum: ATT.STERNUM, girdle: ATT.GIRDLE, larynx: ATT.LARYNX, ribs: 'Costa n -> Tn' },
   rest: Object.fromEntries(K.COORDS.map(k => [k, 0])),
-  skin: { file: null, parts: jparts },
+  skin: { file: 'models/motion-spine.bin', bytesPerVertex: 9, bytes: BIN.length, level: { taper: TAPER, rigid: RIGID, eps: EPS, smoothMix: SMOOTH_MIX }, parts: [...skinParts, ...jparts] },
   movements: MOVES,
 };
-if (!process.argv.includes('--dry') && !fails.length) { const s = JSON.stringify(outJ); fs.writeFileSync('public/data/motion-spine.json', s); say(`  yazıldı: public/data/motion-spine.json (${(s.length / 1024).toFixed(1)} KB)`); }
+if (!process.argv.includes('--dry') && !fails.length) { const s = JSON.stringify(outJ); fs.writeFileSync('public/data/motion-spine.json', s); fs.writeFileSync('public/models/motion-spine.bin', BIN); say('  yazıldı: public/models/motion-spine.bin (' + (BIN.length / 1024).toFixed(1) + ' KB)'); say(`  yazıldı: public/data/motion-spine.json (${(s.length / 1024).toFixed(1)} KB)`); }
 say(fails.length ? `\n${fails.length} hata` : '\nhata yok');
 process.exitCode = fails.length ? 1 : 0;

@@ -87,10 +87,11 @@ kemiğinin arka yüzündeki Gluteus maximus origosu arkadan).
 Derindeki bir yapıya ulaşmak için üstündekini seçip `H` ile (ya da bilgi kartındaki **Gizle** ile) gizleyin;
 *Gizlenenleri göster* hepsini geri getirir.
 
-**Patoloji vakaları** (Araçlar › Çalışma modları › **Patoloji**; 75 vaka): 28 periferik sinir lezyonu (17 kol,
+**Patoloji vakaları** (Araçlar › Çalışma modları › **Patoloji**; 84 vaka): 28 periferik sinir lezyonu (17 kol,
 11 bacak; Hareket modundaki her lezyon yeri için bir vaka), 5 pleksus ve kök lezyonu, 8 geçit vakası (sıkışma, fıtık,
-tendon), 6 omurilik ve kauda vakası, 12 kranial sinir lezyonu (II–XII; baş-boyun görünümü, sol taraf) ve 16 arter
-vakası (göz vakası orbitada, Percheron iki taraflı). Her vaka bir klinik tablo (Almanca; Türkçesi "Türkçe" altında) ve
+tendon), 6 omurilik ve kauda vakası, 14 kranial sinir lezyonu (II–XII; baş-boyun görünümü, sol taraf) ve 23 beyin
+vakası: arter tıkanmaları (göz vakası orbitada, Percheron ve Anton iki taraflı), beyin sapı sendromları (Weber,
+Benedikt, Parinaud, INO, Dejerine) ve görme yolu (Meyer halkası); damar dışı lezyonlarda alan turuncu "Läsion". Her vaka bir klinik tablo (Almanca; Türkçesi "Türkçe" altında) ve
 tek bir soruyla açılır; soru test dilinde (DE | TR) sorulur. Cevaptan sonra **3B görevi** gelir: modelde lezyon yerine
 (beyin vakasında etkilenen bölgeye) tıklarsın; tek deneme, **Atla** ile geçilir. Sonra açıklama ve 3B tablo açılır:
 sinir sarı, lezyon yeri kırmızı nokta, senin tıklaman yeşil (doğru) ya da mavi (yanlış), felçli kaslar mor, aynı sinirin
@@ -98,7 +99,7 @@ sağlam kalan kasları turuncu; omurilikte işlevi kesilen yollar mor; beyin vak
 alan turuncu. **Tabloyu şimdi göster** cevaplamadan açar (sonuç kaydedilmez). Altta Mechanismus, Ausfälle, felçli
 kaslar ya da etkilenen yapılar, modelin gösteremedikleri ve senin bu vakadaki kaydın yazar; **Hata bildir** herkese açık
 GitHub deposunda hazır doldurulmuş bir hata kaydı açar (GitHub hesabı gerekir).
-Üstteki sekmeler: **Vakalar** (liste; çözdüklerinde ✓ / ✗), **Tekrar** (aralıklı tekrar: yanlış cevaplanan vaka ertesi
+Üstteki sekmeler: **Vakalar** (liste; çözdüklerinde ✓ / ✗), **Tekrar** (konu başına çözülen / doğru / yanlış tablosu, **Yanlışlarımı çöz** düğmesi; aralıklı tekrar: yanlış cevaplanan vaka ertesi
 gün, doğrular sırayla 3, 7, 16, 35 ve 90 gün sonra yeniden sorulur; sekmede bugün tekrar edilecek vaka sayısı) ve
 **Testat** (seçtiğin konudan 10 rastgele vaka, vaka başına 90 saniye; cevaplar ve açıklamalar sonda, sonuç tablosunda
 her vaka **Aç** ile açılır; son beş Testat listelenir). Sonuçlar kullanıcı profiline kaydedilir. Vakaları yapay zekâ
@@ -180,12 +181,20 @@ Sol paneldeki **Araçlar** bölümü:
   dirsek fleksiyonunda anconeus) gizlenir; o an gizlenenler panelin sonunda adlarıyla yazılır. Bir kasa tıklayınca kas parlar, panelde adı, o anki boy
   değişimi ve kas kartı (Ursprung, Ansatz, Innervation, Funktion) görünür; aynı kasa yeniden tıklamak seçimi kaldırır. Bağlar ve kapsüller kol hareket edince gizlenir.
 - **Gövde hareketi modu** (Araçlar › Çalışma modları › Gövde hareketi; bağlantı `#m=move:spine` ya da
-  `#m=move:spine.<hareket>`, ör. `spine.cRot`): küçük sürüm. Boyun (HWS, baş eklemleri dahil), göğüs (BWS) ve bel (LWS)
+  `#m=move:spine.<hareket>`, ör. `spine.cRot`): Boyun (HWS, baş eklemleri dahil), göğüs (BWS) ve bel (LWS)
   omurgası için Flexion / Extension, Lateralflexion ve Rotation sürgüleri ve ▶ düğmeleri; her bölgenin açısı hareket
   segmentlerine ders kitabı tablosuna göre dağıtılır (ör. HWS rotasyonunun yaklaşık yarısı C1/C2'de, bel rotasyonu çok az).
   Turuncu top (baş) sürüklenince boyun öne / arkaya ve yana eğilir. Kaburgalar kendi omurlarıyla, sternum, omuz kuşağı ve
-  kollar göğüs kafesiyle birlikte döner; pelvis ve bacaklar sabittir. Panel açıları Neutral-Null olarak yazar ve seçilen
-  hareketin ana kaslarını (Latince, Almanca, hangi yandaki kas) listeler. Kaslar bu sürümde çizilmez; diskler ve uzun bağlar
+  kollar göğüs kafesiyle birlikte döner; pelvis ve bacaklar sabittir. Gövde ve boyun kasları (iki yan) birlikte bükülür:
+  sırt kasları (M. erector spinae, Mm. multifidi, rotatores, semispinales, interspinales, splenii, ense kasları), boyun
+  kasları (M. sternocleidomastoideus, Mm. scaleni, Mm. longus colli / capitis, M. trapezius, M. levator scapulae), karın
+  duvarı (M. rectus abdominis, Mm. obliqui, M. transversus abdominis, M. quadratus lumborum) ve M. psoas major. Kısalan kas
+  turuncuya, uzayan maviye döner. Panel açıları Neutral-Null olarak yazar, en çok kısalan ve uzayan kasları (yanıyla) ve
+  seçilen hareketin ders kitabındaki ana kaslarını listeler; her ana kasın modelde de kısalıp kısalmadığı yazılır
+  (gleiche Seite: sağa harekette sağdaki kas, Gegenseite: soldaki). Bir kasa tıklayınca adı, boy değişimi ve kas kartı
+  görünür. Ağı bozulan bir kas o duruşta gizlenir ve adı panelde yazılır (ders kitabı sınırlarındaki hareketlerde hiçbiri;
+  yalnız çok uç birleşik bir boyun duruşunda M. trapezius'un inen parçası). Geometrik bir modeldir: kaslar en yakın omura
+  göre bükülür, boy orta çizgiden (çok parçalı kaslarda lif çizgilerinden) okunur. Diskler ve uzun bağlar bükülmez,
   omurlar farklı hareket ettiği sürece gizlenir.
 - **Hareket sistemi modu** (Araçlar › Hareket sistemi modu; BWA ve eklem derslerinin Aanki kartında ve her kasın bilgi
   kartında da düğmesi var): kol ve bacak için görsel tekrar; sol kol ya da sol bacak gösterilir. **Sinir**: 19 periferik

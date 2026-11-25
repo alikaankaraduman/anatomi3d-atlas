@@ -32,7 +32,9 @@ for (const c of src.cases) {
     need(c, c.folge?.paralysed, 'paralysed');
     if (site && !same(site.lost || [], c.folge?.paralysed || [])) err(c, 'paralysed, lezyon yerinin lost listesiyle aynı değil');
   } else if (c.system === 'brain') {
-    if (!brain.arteries.list.some(a => a.key === c.struktur?.artery)) err(c, `arter yok: ${c.struktur?.artery}`);
+    // arter isteğe bağlı: tümör, MS, kanama gibi damar dışı merkezi lezyonda struktur.artery yok ve struktur.n boş
+    if (c.struktur?.artery != null && !brain.arteries.list.some(a => a.key === c.struktur.artery)) err(c, `arter yok: ${c.struktur.artery}`);
+    if (c.struktur?.artery == null && (c.struktur?.n || []).length) err(c, 'arteri olmayan vakada struktur.n boş olmalı');
     if (!c.folge?.territory?.length) err(c, 'folge.territory boş');
     if (c.struktur?.view && !['lateral', 'medial', 'deep', 'orbit'].includes(c.struktur.view)) err(c, `bilinmeyen bakış: ${c.struktur.view}`);
     need(c, c.folge?.territory, 'territory');

@@ -17,7 +17,7 @@ import { getLang } from './testlang.js';
 import * as S from './patho-store.js';
 
 const COL = { nerve: 0xf5d742, lost: 0x9a6cf0, kept: 0xd9705f, artery: 0xe0302a, terr: 0xf0923f, mark: 0xff4d3d, hit: 0x3fc46a, miss: 0x4da3ff };
-const GROUPS = [['arm', 'Kol sinirleri'], ['leg', 'Bacak sinirleri'], ['plexus', 'Pleksus ve kökler'], ['passage', 'Geçitler ve sıkışmalar'], ['spinal', 'Omurilik ve kauda'], ['cranial', 'Kranial sinirler'], ['brain', 'Beyin ve omurilik infarktları']];
+const GROUPS = [['arm', 'Kol sinirleri'], ['leg', 'Bacak sinirleri'], ['plexus', 'Pleksus ve kökler'], ['passage', 'Geçitler ve sıkışmalar'], ['spinal', 'Omurilik ve kauda'], ['cranial', 'Kranial sinirler'], ['brain', 'Beyin ve beyin sapı lezyonları']];
 const ISSUES = 'https://github.com/alikaankaraduman/anatomi3d-atlas/issues/new';   // Hata bildir: herkese açık depo
 const BONES = { arm: ['Bones of upper limb'], leg: ['Bones of lower limb'] };
 const BONE_CTX = { arm: ['Thoracic skeleton', 'Vertebral column'], leg: ['Vertebral column'] };
@@ -78,7 +78,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     if (built) return;
     mats = {
       nerve: solid(COL.nerve, 0.35), lost: solid(COL.lost, 0.2), kept: solid(COL.kept, 0.1),
-      ghostM: tint(0xd9a79d, 0.03, 0.3), ctx: noPick(tint(0xc9c0bc, 0.012, 0.18)), ctxN: noPick(tint(0xc9c0bc, 0.02, 0.28)),
+      ghostM: tint(0xd9a79d, 0.03, 0.3), ctx: noPick(tint(0xc9c0bc, 0.006, 0.09)), ctxN: noPick(tint(0xc9c0bc, 0.02, 0.28)),
       artery: solid(COL.artery, 0.3), terr: solid(COL.terr, 0.22), cord: tint(0xe9d9a0, 0.03, 0.35),
       lesion: solid(COL.mark, 0.35), wall: noPick(tint(0x7fd6c8, 0.05, 0.42)),
       k_n: tint(COL.nerve, 0.05, 0.45), k_a: tint(0xe0473f, 0.06, 0.45), k_v: tint(0x3f7fe0, 0.06, 0.45), k_t: tint(0xd9a066, 0.06, 0.45), k_l: tint(0x4fc46a, 0.05, 0.4), k_o: tint(0xd8d8e0, 0.05, 0.4),
@@ -126,7 +126,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
   function brainScene(c) {
     const view = viewOf(c), side = sideOf(c);
     const seen = new Set(), parts = [];
-    for (const n of BRAIN) for (const r of groupRecs(n)) if (sexOk(r) && !seen.has(r.id)) { seen.add(r.id); parts.push({ r, ctx: CORTEX.has(n) }); }
+    for (const n of BRAIN) for (const r of groupRecs(n)) if (sexOk(r) && !seen.has(r.id)) { seen.add(r.id); parts.push({ r, ctx: CORTEX.has(n) || n === 'White matter of telencephalon' }); }
     const keep = view === 'orbit' ? [] : view === 'medial' ? parts.filter(x => L(x.r)) : parts;
     const eye = view === 'orbit' ? grp(['Eyeball']).filter(L) : [];   // orbita vakası: beyin yok, göz küresi saydam
     const cord = c.struktur.artery === 'asa' ? groupRecs('Spinal cord') : [];
@@ -143,7 +143,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     for (const r of art) ov.set(r.id, mats.artery);
     setMark(null);
     if (art.length) list.push({ text: `<b>${esc(artName(c))}</b>`, p: anchorOf(art), cls: 'on' });
-    if (terr.length) list.push({ text: 'Infarkt', p: anchorOf(terr), cls: '' });
+    if (terr.length) list.push({ text: c.struktur.artery ? 'Infarkt' : 'Läsion', p: anchorOf(terr), cls: c.struktur.artery ? '' : 'on' });
     // 3B görevinde ışın sınamasına girmeyenler: derin bakışta saydam korteks, orbitada göz küresinin etkilenmeyen parçaları
     const tn = new Set(c.folge.territory), skip = new Set([...(view === 'deep' ? keep.filter(x => x.ctx).map(x => x.r.id) : []), ...eye.filter(r => !tn.has(r.n)).map(r => r.id)]);
     return { iso: [...keep.map(x => x.r), ...cord, ...eye, ...terr, ...art], ghost: [], list, skip };
@@ -291,7 +291,8 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
   // bakış vakada verilebilir (struktur.view: lateral | medial | deep | orbit); struktur.both: alan iki taraflı (ör. Percheron)
   const viewOf = c => c.struktur.view || VIEW[c.struktur.artery] || 'deep';
   const sideOf = c => (c.struktur.both ? recs : lrecs);
-  const artName = c => { const r = recs([c.struktur.n[0]])[0]; return r ? (r.la || titleName(r)) : c.struktur.n[0]; };
+  // arteri olmayan beyin vakası (tümör, MS, kanama: struktur.artery yok, n boş): lezyon alanı yalnız turuncu
+  const artName = c => { const n = c.struktur.n?.[0]; if (!n) return nameOf(c.folge.territory[0]); const r = recs([n])[0]; return r ? (r.la || titleName(r)) : n; };
 
   function apply() {
     model.overrides.clear(); marks.clear(); spinalExtra.clear();
@@ -466,8 +467,9 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
   const allKeys = () => D.cases.map(c => c.key);
   const grpOf = x => (x.system !== 'nerve' ? x.system : nerveOf(x)?.region === 'leg' ? 'leg' : 'arm');
   const TESTAT_N = 10, TESTAT_MS = 90e3;   // 10 vaka, vaka başına 90 sn
-  function startReview() {
-    const keys = S.due(allKeys());
+  // bad: tarihi gelmemiş olsa da son cevabı yanlış olan bütün vakalar (Yanlışlarım)
+  function startReview(bad = false) {
+    const keys = bad ? allKeys().filter(k => S.status(k) === 'bad') : S.due(allKeys());
     if (!keys.length) { refresh(); return; }
     p.q = { kind: 'review', keys, i: 0, res: {} }; openKey(keys[0]);
   }
@@ -563,11 +565,17 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     if (!q && p.mode === 'testat') return head + testatSetupHTML() + foot;
     if (q?.kind === 'testat' && q.done) return head + testatSummaryHTML(q) + foot;
     if (!q && p.mode === 'review') {
-      const s = S.summary(allKeys()), nd = S.nextDue(allKeys());
+      const s = S.summary(allKeys()), nd = S.nextDue(allKeys()), badN = allKeys().filter(k => S.status(k) === 'bad').length;
+      const byGroup = GROUPS.map(([k, t]) => {
+        const ks = D.cases.filter(x => grpOf(x) === k).map(x => x.key), seen = ks.filter(x => S.status(x)).length, ok = ks.filter(x => S.status(x) === 'ok').length;
+        return `<tr><td>${t}</td><td>${seen}/${ks.length}</td><td class="ok">${ok || ''}</td><td class="bad">${seen - ok || ''}</td></tr>`;
+      }).join('');
+      const extra = (badN ? `<div class="btns"><button data-pt="wrong" title="Son cevabı yanlış olan bütün vakalar, tekrar tarihi gelmemiş olsa da">Yanlışlarımı çöz (${badN})</button></div>` : '')
+        + (s.seen ? `<table class="ptab"><tr><th>Konu</th><th>Çözülen</th><th>Doğru</th><th>Yanlış</th></tr>${byGroup}</table>` : '');
       return head + `<h1 class="name">Aralıklı tekrar</h1>
         <p class="htext">Cevapladığın her vaka bir tekrar kutusuna girer: yanlışsa ertesi gün, doğruysa sırayla 3, 7, 16, 35 ve 90 gün sonra yeniden sorulur.</p>
         <p class="htext small">Çözülen ${s.seen}/${s.total} vaka · doğru kutuda ${s.ok} · bugün tekrar ${s.due}</p>
-        ${s.due ? `<div class="btns"><button data-pt="review" class="primary">Tekrara başla (${s.due})</button></div>` : `<p class="htext small dim">${s.seen ? `Bugün tekrar edilecek vaka yok.${Number.isFinite(nd) ? ` Sonraki tekrar: ${day(nd)}.` : ''}` : 'Henüz cevaplanmış vaka yok: Vakalar sekmesinden başla.'}</p>`}` + foot;
+        ${s.due ? `<div class="btns"><button data-pt="review" class="primary">Tekrara başla (${s.due})</button></div>` : `<p class="htext small dim">${s.seen ? `Bugün tekrar edilecek vaka yok.${Number.isFinite(nd) ? ` Sonraki tekrar: ${day(nd)}.` : ''}` : 'Henüz cevaplanmış vaka yok: Vakalar sekmesinden başla.'}</p>`}${extra}` + foot;
     }
     const c = cur(), f = c.frage, lg = lang(), other = lg === 'de' ? 'tr' : 'de', testat = q?.kind === 'testat';
     const opts = f['options_' + lg];
@@ -580,7 +588,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     const legend = c.system === 'spinal' ? `${sw(COL.mark, 'lezyon')} ${sw(COL.lost, 'işlevi kesilen yol')}${you}`
       : c.system !== 'brain'
       ? `${c.system === 'nerve' || c.system === 'cranial' || c.struktur.n?.length ? sw(COL.nerve, 'sinir') + ' ' : ''}${sw(COL.mark, 'lezyon')} ${c.folge.paralysed.length ? sw(COL.lost, 'felçli') + ' ' : ''}${c.system === 'nerve' || c.folge.kept?.length ? sw(COL.kept, 'aynı sinir, sağlam') : ''}${c.struktur.v?.length ? ' ' + sw(COL.artery, 'damar') : ''}${you}`
-      : `${sw(COL.artery, 'tıkanan arter')} ${sw(COL.terr, 'etkilenen alan')}${you}`;
+      : c.struktur.artery ? `${sw(COL.artery, 'tıkanan arter')} ${sw(COL.terr, 'etkilenen alan')}${you}` : `${sw(COL.terr, 'lezyon alanı')}${you}`;
     const ps = c.system === 'passage' ? passOf(c) : null;
     const where = c.system === 'spinal' ? `<span lang="la">${esc(nameOf(c.struktur.level || ''))}${c.struktur.level2 ? ' – ' + esc(nameOf(c.struktur.level2)) : ''}</span>`
       : ps ? `<span lang="la">${esc(ps.la)}</span> · <span lang="la">${esc(ps.contents.find(x => x.key === c.struktur.content)?.la || '')}</span>`
@@ -604,7 +612,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
       ${tractsHTML}
       ${MODEL_NOTE[c.key] || c.model_note_tr ? `<div class="tip">${esc(MODEL_NOTE[c.key] || c.model_note_tr)}</div>` : ''}
       ${st ? `<p class="htext small dim">Kayıt: ${st.r} doğru, ${st.w} yanlış${st.lr + st.lw ? ` · 3B ${st.lr}/${st.lr + st.lw}` : ''} · sonraki tekrar ${day(st.d)}</p>` : ''}
-      <div class="btns">${ps ? `<button data-pg="pass" title="Bu geçidi duvarları ve içindekilerle Hareket modunda aç">Geçidi Hareket modunda aç</button>` : c.system === 'plexus' || c.system === 'spinal' ? '' : c.system === 'cranial' ? `<button data-pg="cn" title="Bu siniri Beyin modunda, Sinirler bölümünde aç">Beyin modunda aç</button>` : c.system === 'nerve' ? `<button data-pg="loco" title="Bu siniri bütün lezyon yerleriyle Hareket modunda aç">Hareket modunda aç</button>` : `<button data-pg="brain" title="Beyin arterlerini ve beslenme alanlarını Beyin modunda aç">Beyin modunda aç</button>`}
+      <div class="btns">${ps ? `<button data-pg="pass" title="Bu geçidi duvarları ve içindekilerle Hareket modunda aç">Geçidi Hareket modunda aç</button>` : c.system === 'plexus' || c.system === 'spinal' ? '' : c.system === 'cranial' ? `<button data-pg="cn" title="Bu siniri Beyin modunda, Sinirler bölümünde aç">Beyin modunda aç</button>` : c.system === 'nerve' ? `<button data-pg="loco" title="Bu siniri bütün lezyon yerleriyle Hareket modunda aç">Hareket modunda aç</button>` : c.struktur.artery ? `<button data-pg="brain" title="Beyin arterlerini ve beslenme alanlarını Beyin modunda aç">Beyin modunda aç</button>` : ''}
         <a class="btnlink" href="${issueURL(c)}" target="_blank" rel="noopener" title="Bu vakadaki bir hatayı herkese açık GitHub deposunda bildir (GitHub hesabı gerekir)">Hata bildir</a></div>`
       : testat ? '' : `<div class="btns"><button data-pa="show" title="${answered ? '3B görevini atlayıp tabloyu göster' : 'Soruyu cevaplamadan lezyonu 3B görünümde göster (sonuç kaydedilmez)'}">Tabloyu şimdi göster</button></div>`;
     // üst gezinme: Vakalar listesi, Tekrar ya da Testat sırası
@@ -656,6 +664,7 @@ export function createPatho({ stage, model, state, refresh, defer, viewLayers, e
     if (d.pt === 'start' || d.pt === 'again') { p.mode = 'testat'; startTestat(); return; }
     if (d.pt === 'stop') { endTestat(); refresh(); return; }
     if (d.pt === 'review') { startReview(); return; }
+    if (d.pt === 'wrong') { startReview(true); return; }
     if (d.pt === 'back') { if (p.last) { p.q = p.last; p.last = null; clickMark.clear(); refresh(); } return; }
     if (d.pt === 'endreview') { p.q = null; p.mode = 'browse'; refresh(); return; }
     if (d.pt === 'open') {

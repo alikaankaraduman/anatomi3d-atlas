@@ -1,4 +1,4 @@
-// Hareket modu (anahtar: move), üç uzuv: kol (motion-kin.js), bacak (motion-kin-leg.js) ve gövde (motion-kin-spine.js, küçük sürüm: kemikler). Kol: sol kolun kemikleri ve tek kemiğe bağlı eklem parçaları, motion-kin.js'in segment
+// Hareket modu (anahtar: move), üç uzuv: kol (motion-kin.js), bacak (motion-kin-leg.js) ve gövde (motion-kin-spine.js: omurga, baş, gövde ve boyun kasları). Kol: sol kolun kemikleri ve tek kemiğe bağlı eklem parçaları, motion-kin.js'in segment
 // matrisleriyle katı cisim olarak hareket eder (klavikula ve skapula ritimle eşlik eder). Az gerilen kaslar deri
 // ağırlıklarıyla (models/motion-arm.bin) CPU'da bükülerek çizilir, boy değişimine göre renklenir ve kısalınca kalınlaşır.
 // Bir kasın ağı bir duruşta bozuluyorsa (eklemi saran kaslar perde gibi gerilir) kas yalnız o duruşta gizlenir ve panelde
@@ -60,6 +60,8 @@ const WIDE_ON = !(typeof location !== 'undefined' && /[?&]mvwide=0/.test(locatio
 // Bacak (2026-11-25): quadratus femoris kalça 60'tan itibaren ve abduksiyon 40'ta her yöntemde aynı ölçüyle "bozuk" çıkıyor
 // (kısa kas, kenarların %13-30'u iki katından uzun); kalça 90 / 120 ve abd 40'ta tek başına çizdirildi: gergin, tutarlı bir bant.
 const KEEP = new Set(['Latissimus dorsi muscle', 'Sternocostal head of pectoralis major muscle', 'Medial head of triceps brachii', 'Anconeus muscle', 'Quadratus femoris muscle']);
+// kol ve bacağın bükme yolları (ortak tablolar); gövde kendi tablosunu kullanır (LIMBS.spine.conf: iki yan aynı adla)
+const CONF0 = { wide: WIDE, path: PATH, lin: LIN, lbs: LBS_M, keep: KEEP, straight: null };
 const SHOW_BAD = typeof location !== 'undefined' && /[?&]mvshow=1/.test(location.search);   // denetim: bozulan kasları da çiz
 const STRAIGHT = new Set(['Coracobrachialis muscle', 'Flexor carpi radialis', 'Ulnar head of extensor carpi ulnaris', 'Brachioradialis muscle']);
 const JOINT_LBS = !(typeof location !== 'undefined' && /[?&]mvlbs=0/.test(location.search));   // denetim: ?mvlbs=0 ikili kuaterniyon
@@ -84,6 +86,9 @@ const SPINE_GROUPS = [
   ['LWS', [['lFlex', 'Flexion / Extension', -30, 50, 'Flexion', 'Extension'], ['lLat', 'Lateralflexion rechts / links', -20, 20, 'rechts', 'links'], ['lRot', 'Rotation rechts / links', -10, 10, 'rechts', 'links']], ['lFlex', 'lExt', 'lLat', 'lRot']],
 ];
 const REGION_DE = { c: 'HWS', t: 'BWS', l: 'LWS' };
+const SIDE_DE = { l: 'links', r: 'rechts' };
+// ders kitabı satırının yanı -> kas parçaları (bütün ▶ hareketleri sağa: gleiche Seite = sağdaki kas, Gegenseite = soldaki)
+const SIDE_KEYS = { beidseitig: ['.l', '.r'], 'gleiche Seite': ['.r'], Gegenseite: ['.l'] };
 // Uzuv tanımları: veri, kinematik, sürgüler, tutamaçlar, okuma, metinler. Mod kodu üçünde aynıdır.
 const LIMBS = {
   arm: {
@@ -121,13 +126,26 @@ const LIMBS = {
     },
     box: [[-14, 0, -40], [40, 100, 40], [0.5, 0.1, 1]],
   },
-  // Küçük sürüm (kolun 2026-11-22 ilk adımı gibi): kemikler ve tek segmentli eklem parçaları katı hareket eder, kaslar
-  // çizilmez (izole görünümde kaslar, organlar, damarlar, sinirler gizli). Birden çok segmente tutunan eklem parçaları
-  // (diskler, uzun bağlar) yalnız segmentleri farklı hareket ettiğinde uzaklaştırılır (multiRigid).
+  // Gövde: kemikler ve tek segmentli eklem parçaları katı hareket eder; gövde ve boyun kasları (adım 2, 2026-11-25) motion-spine.bin
+  // ağırlıklarıyla kol ve bacağın koduyla bükülür (iki yan ayrı parça). Birden çok segmente tutunan eklem parçaları (diskler,
+  // uzun bağlar) yalnız segmentleri farklı hareket ettiğinde uzaklaştırılır (multiRigid; bükülmezler).
   spine: {
     key: 'spine', K: KS, url: 'data/motion-spine.json', GROUPS: SPINE_GROUPS, chip: 'Gövde hareketi', side: 'omurga, baş, göğüs kafesi', what: 'gövde',
-    small: true, root: 'pelvis', multiRigid: true, need: ['bone', 'joint'],
-    help: 'Turuncu topu (baş) sürükle: boyun öne / arkaya ve yana eğilir (HWS). Sürgüler ve ▶ düğmeleriyle HWS, BWS ve LWS ayrı ayrı; her bölgenin açısı hareket segmentlerine ders kitabı tablosuna göre dağıtılır (ör. HWS rotasyonunun yarısı C1/C2). Pelvis ve bacaklar sabit.',
+    root: 'pelvis', multiRigid: true, need: ['bone', 'joint', 'muscle'],
+    // Bükme yolları (tools/_qawork/motion-spine-hide.mjs CONF ile aynı; kas adı, iki yan birlikte; ekransız ölçüyle seçildi):
+    // linea alba orta çizgi boyunca (PATH: kaburga kıkırdaklarının yakınında düzey hızlı değişiyor, ince şerit yırtılıyordu);
+    // C2'den kalkan iki kısa ense kası düz lif (LIN: atlas yarım rotasyonu taşıyor, kasın ortası onunla dönüp burkuluyordu);
+    // Mm. interspinales lumborum (tam lomber fleksiyon) ve colli (HWS fleksiyon 45 + rotasyon 80) ölçüye göre "bozuk" (dikenler
+    // arası açılıyor, kenarların %9-10'u iki katını aşıyor) ama ?mvshow=1 ile bakıldı: gergin, tutarlı küçük bantlar (KEEP).
+    // straight: boy okuması origo - insersiyo düz çizgisinden: Kopfgelenke'yi atlasa tutunmadan geçen kaslar (orta çizginin
+    // C1 düzeyindeki örnekleri atlasla dönüp boyu yanlış okutuyordu) ve tek eklemli M. obliquus capitis inferior.
+    conf: {
+      wide: {}, lbs: new Set(), path: new Set(['Linea alba']),
+      lin: { 'Rectus posterior major capitis muscle': [0.1, 0.9], 'Obliquus inferior capitis muscle': [0.1, 0.9] },
+      keep: new Set(['Interspinales lumborum muscles', 'Interspinales colli muscles']),
+      straight: new Set(['Sternocleidomastoid muscle', 'Splenius capitis muscle', 'Longissimus capitis muscle', 'Descending part of trapezius muscle', 'Longus capitis muscle', 'Spinalis capitis muscle', 'Rectus posterior major capitis muscle', 'Obliquus inferior capitis muscle']),
+    },
+    help: 'Turuncu topu (baş) sürükle: boyun öne / arkaya ve yana eğilir (HWS). Sürgüler ve ▶ düğmeleriyle HWS, BWS ve LWS ayrı ayrı; her bölgenin açısı hareket segmentlerine ders kitabı tablosuna göre dağıtılır (ör. HWS rotasyonunun yarısı C1/C2). Pelvis ve bacaklar sabit. Kaslar kısalınca turuncuya, uzayınca maviye döner.',
     handles: [{ k: 'head', pt: 'head', color: 0xffa23a, solve: (K, KM, pose, ray) => K.solveHead(KM, pose, ray).pose }],
     guard: () => {},
     from: m => ({ ...(m.from || {}) }),
@@ -135,14 +153,11 @@ const LIMBS = {
       const r = K.readout(KM, pose), t = x => esc(x.de) + ' ' + deg(x.abs), reg = x => `${t(x.flex)}, ${t(x.lat)}, ${t(x.rot)}`;
       return `<b>HWS:</b> ${reg(r.c)} <span class="mv-dim">(Kopfgelenke C0–C2: ${t(r.kopf.flex)}, ${t(r.kopf.rot)})</span><br><b>BWS:</b> ${reg(r.t)}<br><b>LWS:</b> ${reg(r.l)}`;
     },
-    // ders kitabı ana kasları (motion-spine.json; muscles.json kas kartlarının Funktion satırıyla denetlenmiş liste)
-    lists: mv => {
-      if (!mv) return '<p class="mv-base">Bir ▶ hareket seç: ders kitabına göre ana kaslar burada listelenir.</p>';
-      const rot = /^Rotation/.test(mv.de), lat = /^Lateral/.test(mv.de);
-      return `<h4>Ders kitabına göre ana kaslar: <span lang="de">${REGION_DE[mv.group]} ${esc(mv.de)}</span></h4><ul class="mv-list">${mv.textbook.map(x => `<li><span lang="la">${esc(x.la)}</span>${x.de ? `<small lang="de">${esc(x.de)}</small>` : ''}<b class="mv-dim" lang="de">${esc(x.side)}</b></li>`).join('')}</ul>`
-        + (rot || lat ? `<p class="mv-dim mv-note"><span lang="de">„gleiche Seite“</span>: sağa hareket için sağdaki kas, <span lang="de">„Gegenseite“</span>: soldaki kas (tek taraflı kasılma).</p>` : '<p class="mv-dim mv-note">İki yandaki kaslar birlikte (beidseitig) kasılır.</p>');
-    },
-    note: D => `Küçük sürüm: kemikler ve tek segmentli eklem parçaları katı hareket eder, kaslar çizilmez. Kaburgalar kendi torakal omuruyla, sternum ${D.attach.sternum} ile, omuz kuşağı ve kollar ${D.attach.girdle} ile, hyoid ve gırtlak kıkırdakları ${D.attach.larynx} ile hareket eder (ölçülerek seçildi). Disk ve uzun bağlar gibi birden çok omura tutunan parçalar, omurları farklı hareket ettiği sürece gizlenir. Dönme merkezleri: disklerde nucleus pulposus, C1/C2'de dens, C0/C1'de atlasın üst eklem yüzleri.`,
+    // ders kitabı ana kasları (motion-spine.json; muscles.json kas kartlarının Funktion satırıyla denetlenmiş liste; yan: SIDE_KEYS)
+    mvTitle: mv => REGION_DE[mv.group] + ' ' + mv.de,
+    tbNo: 'modelde kısalmıyor (çizgi yaklaşımı)',
+    tbNote: mv => (/^(Rotation|Lateral)/.test(mv.de) ? `<p class="mv-dim mv-note"><span lang="de">„gleiche Seite“</span>: sağa hareket için sağdaki kas, <span lang="de">„Gegenseite“</span>: soldaki kas (tek taraflı kasılma).</p>` : '<p class="mv-dim mv-note">İki yandaki kaslar birlikte (beidseitig) kasılır; değer iki yanın ortalaması.</p>'),
+    note: D => `Geometrik bir modeldir, fizik değildir. Kaslar kemiğe uzaklığa göre omurlara bağlanır: omurga boyunca uzanan kas her yükseklikte o düzeydeki omurla gider, kaburgaya, kafatasına ya da pelvise değen ucu o kemikle. Kas boyu orta çizgiden okunur; transversospinal kaslarda ve karın yan duvarı kaslarında lif yönündeki çizgilerin ortalamasından. Kaburgalar kendi torakal omuruyla, sternum ${D.attach.sternum} ile, omuz kuşağı ve kollar ${D.attach.girdle} ile, hyoid ve gırtlak kıkırdakları ${D.attach.larynx} ile hareket eder (ölçülerek seçildi). Disk ve uzun bağlar gibi birden çok omura tutunan parçalar bükülmez, omurları farklı hareket ettiği sürece gizlenir. Dönme merkezleri: disklerde nucleus pulposus, C1/C2'de dens, C0/C1'de atlasın üst eklem yüzleri.`,
     box: [[-25, 75, -25], [25, 175, 25], [0.55, 0.15, 1]],
   },
 };
@@ -185,10 +200,10 @@ function createLimb(L, { stage, model, state, refresh, defer, viewLayers, endStu
     if (skins) return;
     skins = []; hiddenNames = [];
     const u8 = skinBuf ? new Uint8Array(skinBuf) : null, HUM = D.segments.findIndex(x => x.key === 'humerus');
-    const multiIds = new Set(multi.map(x => x.id));
+    const multiIds = new Set(multi.map(x => x.id)), C = L.conf || CONF0;
     for (const p of D.skin.parts) {
       const isJ = p.kind === 'joint';
-      if (isJ ? !multiIds.has(p.id) : p.kind !== 'muscle') continue;      // eklem parçalarından yalnız çok kemikli olanlar
+      if (isJ ? !multiIds.has(p.id) || p.verts === undefined : p.kind !== 'muscle') continue;      // eklem parçalarından yalnız çok kemikli ve ağırlığı olanlar
       const r = model.items.get(p.id), g = r?.geo;
       if (!u8 || !g) { if (!isJ) hiddenNames.push(r?.la || p.n); continue; }
       const pos = g.attributes.position, nor = g.attributes.normal, nv = pos.count;
@@ -200,7 +215,7 @@ function createLimb(L, { stage, model, state, refresh, defer, viewLayers, endStu
         const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), nx = nor.getX(i), ny = nor.getY(i), nz = nor.getZ(i);
         P[3 * i] = x; P[3 * i + 1] = y; P[3 * i + 2] = z; N0[3 * i] = nx; N0[3 * i + 1] = ny; N0[3 * i + 2] = nz;
       }
-      const wd = WIDE_ON && (LIN[p.n] || WIDE[p.n]), lin = WIDE_ON && !!LIN[p.n];
+      const wd = WIDE_ON && (C.lin[p.n] || C.wide[p.n]), lin = WIDE_ON && !!C.lin[p.n];
       if (wd) {
         // origo ve insersiyo segmenti: uçlardaki köşelerin ağırlık oylaması
         const va = new Float64Array(64), vb = new Float64Array(64);
@@ -216,8 +231,8 @@ function createLimb(L, { stage, model, state, refresh, defer, viewLayers, endStu
         }
       }
       let path = null;
-      const li0 = byName.get(p.n);
-      if (WIDE_ON && PATH.has(p.n) && !lin && li0 !== undefined) {
+      const li0 = byName.get(p.key || p.n);      // gövdede iki yan ayrı: anahtar ad + '.l' / '.r'
+      if (WIDE_ON && C.path.has(p.n) && !lin && li0 !== undefined) {
         const cl = lines[li0].cl, C = cl.P, m = cl.n, cum = new Float64Array(m);
         for (let k = 1; k < m; k++) cum[k] = cum[k - 1] + Math.hypot(C[3 * k] - C[3 * k - 3], C[3 * k + 1] - C[3 * k - 2], C[3 * k + 2] - C[3 * k - 1]);
         const va = new Float64Array(64), vb = new Float64Array(64);
@@ -241,7 +256,7 @@ function createLimb(L, { stage, model, state, refresh, defer, viewLayers, endStu
       }
       // Şişme için: köşenin dinlenmedeki orta çizgiye en yakın noktasından uzaklık vektörü x karın profili sin(pi t)
       // (t: origo 0, insersiyo 1; uçlar yerinde kalır). Kas kısalınca köşe bu yönde dışarı itilir.
-      const R = new Float32Array(3 * nv), ln = p.line || [];
+      const R = new Float32Array(3 * nv), ln = p.bulge === 0 ? [] : p.line || [];      // bulge 0: yassı tabaka, şişme yok
       for (let i = 0; i < nv && ln.length > 1; i++) {
         const x = P[3 * i], y = P[3 * i + 1], z = P[3 * i + 2];
         let bd = Infinity, cx = x, cy = y, cz = z;
@@ -259,7 +274,7 @@ function createLimb(L, { stage, model, state, refresh, defer, viewLayers, endStu
       pa.setUsage(THREE.DynamicDrawUsage); na.setUsage(THREE.DynamicDrawUsage);
       geo.setAttribute('position', pa); geo.setAttribute('normal', na); geo.setAttribute('color', g.attributes.color); geo.setIndex(g.index);
       const mesh = new THREE.Mesh(geo, (r.o ? model.mat.solidOpen : model.mat.solid).clone());
-      mesh.frustumCulled = false; mesh.matrixAutoUpdate = false; mesh.raycast = () => {}; mroot.add(mesh);
+      mesh.frustumCulled = false; mesh.matrixAutoUpdate = false; mesh.raycast = () => {}; mesh.name = 'mv:' + (p.key || p.n); mroot.add(mesh);
       // parçanın bağlı olduğu segmentler: köşe ağırlıkları, çizgileri ve yol izleme uçları
       const sgs = new Set();
       for (let i = 0; i < 4 * nv; i++) if (W[i] > 0) sgs.add(I[i]);
@@ -271,7 +286,7 @@ function createLimb(L, { stage, model, state, refresh, defer, viewLayers, endStu
         const a = ix[3 * t + k], b = ix[3 * t + k + 1], l = Math.hypot(P[3 * a] - P[3 * b], P[3 * a + 1] - P[3 * b + 1], P[3 * a + 2] - P[3 * b + 2]);
         if (l > 1e-4) { E.push(a, b); EL.push(l); }
       }
-      skins.push({ lbs: isJ ? JOINT_LBS : WIDE_ON && !wd && !path && LBS_M.has(p.n), segs: [...sgs], mode: 'rest', gDone: 0, joint: isJ, wide: !!wd || !!path, path, lin, mesh, pa, na, P0: pos.array, N0, R, L0: li0 === undefined ? 0 : restLen(lines[li0].len), name: p.n, la: r.la || p.n, E, EL, bad: false, a: { n: nv, P, I, W, out: null }, li: byName.get(p.n), rest: true });
+      skins.push({ lbs: isJ ? JOINT_LBS : WIDE_ON && !wd && !path && C.lbs.has(p.n), segs: [...sgs], mode: 'rest', gDone: 0, joint: isJ, wide: !!wd || !!path, path, lin, mesh, pa, na, P0: pos.array, N0, R, L0: li0 === undefined || p.bulge === 0 ? 0 : restLen(lines[li0].len), name: p.n, key: p.key || p.n, sd: p.sd || null, keep: C.keep.has(p.n), la: r.la || p.n, E, EL, bad: false, a: { n: nv, P, I, W, out: null }, li: li0, rest: true });
     }
   }
   // Yol izleyen bükme: orta çizgi (cl) önce duruşa taşınır
@@ -387,7 +402,7 @@ function createLimb(L, { stage, model, state, refresh, defer, viewLayers, endStu
           if (q > mx) mx = q;
         }
         const k = s.bad ? 0.8 : 1;
-        s.bad = ne > 0 && !KEEP.has(s.name) && (lo / ne > HIDE.longShare * k || mx > HIDE.max * k || sh / ne > HIDE.shortShare * k);
+        s.bad = ne > 0 && !s.keep && (lo / ne > HIDE.longShare * k || mx > HIDE.max * k || sh / ne > HIDE.shortShare * k);
       }
       s.mesh.visible = s.joint ? away && !s.bad : !s.bad || SHOW_BAD;
       // renk: kısalan sıcak, uzayan soğuk; % 2 içinde nötr, % 25'te tam
@@ -403,6 +418,9 @@ function createLimb(L, { stage, model, state, refresh, defer, viewLayers, endStu
   // abduksiyonda uzuyor görünüyordu; gerçek insersiyo spina scapulae'nin köküdür (joints.scapula.ts).
   function compileLen(L) { if (!Array.isArray(L[0])) return K.compileLine(KM, L); const fan = L.map(f => K.compileLine(KM, f)); return Object.assign(fan[0], { fan }); }
   function fixLine(p) {
+    // gövde: lif çizgileri (p.fib; boy = liflerin ortalaması) ya da origo - insersiyo düz çizgisi (conf.straight)
+    if (p.fib?.length) return p.fib;
+    if (L.conf?.straight?.has(p.n) && p.line.length > 2) return [p.line[0], p.line[p.line.length - 1]];
     const ts = D.joints.scapula?.ts;
     // pars ascendens: yelpaze; boy = Procc. spinosi T5-T12 boyunca üç lifin (y 117 / 122,5 / 128) trigonum spinae'ye ortalaması
     if (p.n === 'Ascending part of trapezius muscle' && ts) return FAN.map(y => [{ p: [p.line[0].p[0], y, p.line[0].p[2]], w: [['thorax', 1]] }, { p: ts, w: [['scapula', 1]] }]);
@@ -429,8 +447,9 @@ function createLimb(L, { stage, model, state, refresh, defer, viewLayers, endStu
     segRecs = [...bySeg.values()];
     moved = [...segRecs.flatMap(x => x[1]), ...multi];
     lines = D.skin.parts.filter(p => p.kind === 'muscle' && p.line?.length > 1).map(p => {
-      const r = model.items.get(p.id);
-      return { n: p.n, la: r?.la || p.n, de: r?.de || '', cl: K.compileLine(KM, p.line), len: compileLen(fixLine(p)) };      // cl: bükme için orta çizgi, len: boy okuması için çizgi
+      const r = model.items.get(p.id), sd = SIDE_DE[p.sd];
+      // cl: bükme için orta çizgi, len: boy okuması için çizgi; gövdede anahtar yanla (ad.l / ad.r), yan Almanca adın yanında
+      return { n: p.key || p.n, la: r?.la || p.n, de: (r?.de || '') + (sd ? (r?.de ? ' · ' : '') + sd : ''), cl: K.compileLine(KM, p.line), len: compileLen(fixLine(p)) };
     });
     byName = new Map(lines.map((l, i) => [l.n, i]));
   }
@@ -488,25 +507,31 @@ function createLimb(L, { stage, model, state, refresh, defer, viewLayers, endStu
   const pct = d => (Math.abs(d) < 0.005 ? '0 %' : (d > 0 ? '+' : '−') + Math.abs(d * 100).toFixed(0) + ' %');
   const mrow = (l, d) => `<li><span lang="la">${esc(l.la)}</span>${l.de ? `<small lang="de">${esc(l.de)}</small>` : ''}<b class="${d < 0 ? 'mv-sh' : 'mv-lo'}">${pct(d)}</b></li>`;
   function listsHTML() {
-    if (L.small) return L.lists(mv);      // küçük sürüm: kas boyu yok, yalnız ders kitabı listesi
     const ch = lines.map((l, i) => ({ l, d: baseLen[i] > 0 ? (lenOf(out, l.len) - baseLen[i]) / baseLen[i] : 0 }));
     const sh = ch.filter(x => x.d <= -0.02).sort((a, b) => a.d - b.d).slice(0, 6), lo = ch.filter(x => x.d >= 0.02).sort((a, b) => b.d - a.d).slice(0, 4);
     let h = `<p class="mv-base">Boylar şuna göre: ${mv ? '<b lang="de">' + esc(mv.de) + '</b> hareketinin başlangıcı' : 'model duruşu (modun açıldığı duruş)'}</p>`;
     h += `<h4>En çok kısalan kaslar</h4>${sh.length ? `<ul class="mv-list">${sh.map(x => mrow(x.l, x.d)).join('')}</ul>` : '<p class="mv-dim">Belirgin kısalan kas yok (eşik % 2).</p>'}`;
     h += `<h4>Uzayan kaslar</h4>${lo.length ? `<ul class="mv-list">${lo.map(x => mrow(x.l, x.d)).join('')}</ul>` : '<p class="mv-dim">Belirgin uzayan kas yok.</p>'}`;
     if (mv?.textbook?.length) {
-      h += `<h4>Ders kitabına göre ana kaslar: <span lang="de">${esc(mv.de)}</span></h4><ul class="mv-list">${mv.textbook.map(n => {
-        const i = byName.get(n), x = i === undefined ? null : ch[i];
-        if (!x) return `<li><span>${esc(n)}</span><b class="mv-dim">–</b></li>`;
+      h += `<h4>Ders kitabına göre ana kaslar: <span lang="de">${esc(L.mvTitle ? L.mvTitle(mv) : mv.de)}</span></h4><ul class="mv-list">${mv.textbook.map(n => {
+        const x = tbItem(n, ch);
+        if (!x) return `<li><span>${esc(typeof n === 'string' ? n : n.la)}</span><b class="mv-dim">–</b></li>`;
         const ok = x.d <= -0.02;
-        return `<li><span lang="la">${esc(x.l.la)}</span><small>${ok ? 'modelde de kısalıyor' : 'modelde kısalmıyor (düz çizgi yaklaşımı)'}</small><b class="${ok ? 'mv-sh' : 'mv-dim'}">${pct(x.d)}</b></li>`;
+        return `<li><span lang="la">${esc(x.la)}</span><small>${x.side ? `<span lang="de">${esc(x.side)}</span> · ` : ''}${ok ? 'modelde de kısalıyor' : L.tbNo || 'modelde kısalmıyor (düz çizgi yaklaşımı)'}</small><b class="${ok ? 'mv-sh' : 'mv-dim'}">${pct(x.d)}</b></li>`;
       }).join('')}</ul>`;
+      if (L.tbNote) h += L.tbNote(mv);
     } else if (mv) h += '<p class="mv-dim">Bu hareket için ders kitabı kas listesi yok.</p>';
     return h;
   }
+  // ders kitabı satırı -> boy değişimi. Kol / bacak: kas adı; gövde: { n, la, side } (beidseitig: iki yanın ortalaması)
+  function tbItem(n, ch) {
+    if (typeof n === 'string') { const i = byName.get(n); return i === undefined ? null : { la: ch[i].l.la, d: ch[i].d }; }
+    const ix = (SIDE_KEYS[n.side] || ['']).map(s => byName.get(n.n + s));
+    return ix.some(i => i === undefined) ? null : { la: n.la, side: n.side, d: ix.reduce((t, i) => t + ch[i].d, 0) / ix.length };
+  }
   // Bu duruşta gizlenen kaslar: eklemi sardıkları için bugünkü bükme yöntemiyle perde gibi geriliyorlar
   function hiddenHTML() {
-    const h = (skins || []).filter(x => x.bad && !x.joint).map(x => x.la).concat(hiddenNames);
+    const h = (skins || []).filter(x => x.bad && !x.joint).map(x => x.la + (x.sd ? ' ' + SIDE_DE[x.sd] : '')).concat(hiddenNames);
     return h.length ? `Bu duruşta çizilemeyen kaslar (${h.length}): <span lang="la">${h.map(esc).join(', ')}</span>. Eklemi sardıkları için bugünkü yöntemle bozuluyorlar; boy değişimleri yine listelerde.` : 'Bu duruşta bütün ' + L.what + ' kasları çiziliyor.';
   }
   // Tıklanan kas: bükülmüş ağlar ışınla sınanır (yalnız tıklamada; ağın sınır küresi o an yeniden hesaplanır)
@@ -546,10 +571,10 @@ function createLimb(L, { stage, model, state, refresh, defer, viewLayers, endStu
       <p class="htext mv-read" id="mv-read" lang="de">${readHTML()}</p>
       <div class="btns"><button data-mva="neutral" title="Neutral-Null sıfır duruşu">Nötr duruş</button><button data-mva="rest" title="Modelin kendi duruşu">Model duruşu</button></div>
       ${groups}
-      ${L.small ? '' : `<div id="mv-pick">${pickHTML()}</div>`}
+      <div id="mv-pick">${pickHTML()}</div>
       <div id="mv-lists">${listsHTML()}</div>
-      ${L.small ? `<p class="htext mv-note">${esc(L.note(D))}</p>` : `<p class="htext mv-note">Geometrik bir modeldir, fizik değildir: kas boyu, origo ile insersiyo arasındaki orta çizgiden hesaplanır ve eklemi saran kaslarda yanılabilir. Çizilen kaslar kısalınca turuncuya, uzayınca maviye döner (başlangıca göre) ve kısaldıkça kalınlaşır (hacim korunumu, yaklaşık). Bağlar ve eklem kapsülleri de ${L.key === 'arm' ? 'kolla' : 'bacakla'} birlikte bükülür; ağı bozulan bağ ya da kapsül o duruşta gizlenir.</p>`}
-      ${skins?.length ? `<p class="htext mv-note" id="mv-hidden">${hiddenHTML()}</p>` : L.key === 'arm' ? '<p class="htext mv-note">Kas ağları yüklenemedi: kaslar çizilmiyor, boy değişimleri listelerde.</p>' : ''}
+      ${L.note ? `<p class="htext mv-note">${esc(L.note(D))}</p>` : `<p class="htext mv-note">Geometrik bir modeldir, fizik değildir: kas boyu, origo ile insersiyo arasındaki orta çizgiden hesaplanır ve eklemi saran kaslarda yanılabilir. Çizilen kaslar kısalınca turuncuya, uzayınca maviye döner (başlangıca göre) ve kısaldıkça kalınlaşır (hacim korunumu, yaklaşık). Bağlar ve eklem kapsülleri de ${L.key === 'arm' ? 'kolla' : 'bacakla'} birlikte bükülür; ağı bozulan bağ ya da kapsül o duruşta gizlenir.</p>`}
+      ${skins?.length ? `<p class="htext mv-note" id="mv-hidden">${hiddenHTML()}</p>` : L.key !== 'leg' ? '<p class="htext mv-note">Kas ağları yüklenemedi: kaslar çizilmiyor, boy değişimleri listelerde.</p>' : ''}
       <div class="btns"><button data-mva="exit" title="${L.chip} modundan çık (Esc)">Moddan çık</button></div>`;
   }
   // Sürükleme ve oynatma sırasında panel yeniden kurulmaz: yalnız değişen düğümler yazılır
