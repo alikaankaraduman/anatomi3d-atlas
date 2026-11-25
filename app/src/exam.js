@@ -34,7 +34,7 @@ const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
 // [soru, Türkçe alt konu (gruplama anahtarı), Almanca alt konu]; sonuçta konu çubuğunun altında gösterilir.
 const SUB_BRAIN = { csf: 'BOS', cn: 'Kraniyal sinirler', art: 'Arterler' };
 const SUB_LOCO = { nerve: 'Sinirler', passage: 'Geçitler', joint: 'Eklemler' };
-const PATHO_SUB = { nerve: ['Periferik sinirler', 'Periphere Nerven'], plexus: ['Pleksus ve kökler', 'Plexus und Wurzeln'], passage: ['Geçitler', 'Engstellen'], spinal: ['Omurilik', 'Rückenmark'], cranial: ['Kranial sinirler', 'Hirnnerven'], brain: ['Beyin ve beyin sapı', 'Gehirn und Hirnstamm'] };
+const PATHO_SUB = { nerve: ['Periferik sinirler', 'Periphere Nerven'], plexus: ['Pleksus ve kökler', 'Plexus und Wurzeln'], passage: ['Geçitler', 'Engstellen'], spinal: ['Omurilik', 'Rückenmark'], cranial: ['Kranial sinirler', 'Hirnnerven'], brain: ['Beyin ve beyin sapı', 'Gehirn und Hirnstamm'], organ: ['Gövde ve baş topografisi', 'Topographie von Rumpf und Kopf'] };
 const subOf = (map, cat) => [map[cat] || null, map[cat] ? Tin('de', 'cat.' + cat) || null : null];
 function baseBanks(tours) {
   return [

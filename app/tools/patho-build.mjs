@@ -12,6 +12,7 @@ const src = read(SRC);
 for (const f of fs.readdirSync('../data/work/patho').filter(f => /^new-.*.json$/.test(f)).sort()) src.cases.push(...read('../data/work/patho/' + f));   // sonraki partiler (new-arm.json, new-leg.json …)
 const meta = read('public/data/meta.json'), loco = read('public/data/locomotor.json'), brain = read('public/data/brain.json');
 const names = new Set(meta.items.map(i => i.n));
+const groupNames = new Set(meta.groups.map(g => g.n));
 const muscles = new Set(meta.items.filter(i => i.s === 'muscle' || i.n === 'Iris').map(i => i.n));
 const PTS = '../data/work/patho/cranial-points.json', points = fs.existsSync(PTS) ? read(PTS) : {};
 const warn = [];
@@ -70,6 +71,16 @@ for (const c of src.cases) {
     }
     if (!Array.isArray(c.folge?.paralysed)) err(c, 'folge.paralysed dizi değil');
     for (const k of ['paralysed', 'kept']) for (const n of c.folge?.[k] || []) if (!muscles.has(n)) err(c, `${k}: kas değil ya da modelde yok: ${n}`);
+  } else if (c.system === 'organ') {
+    // gövde ve baş topografisi: struktur.n lezyonlu yapı(lar) (kırmızı), struktur.ctx bağlam (grup ya da parça adı), struktur.v
+    // damarlar, folge.affected etkilenen yapılar (turuncu), struktur.at isteğe bağlı nokta (cranial-points.json), view yön
+    const st = c.struktur || {};
+    if (!(st.n || []).length) err(c, 'struktur.n boş');
+    need(c, st.n, 'struktur.n'); need(c, st.v, 'struktur.v'); need(c, c.folge?.affected, 'folge.affected');
+    for (const g of st.ctx || []) if (!groupNames.has(g) && !names.has(g)) err(c, `struktur.ctx: grup ya da parça yok: ${g}`);
+    if (st.view && !['front', 'back', 'left', 'right', 'top', 'below'].includes(st.view)) err(c, `bilinmeyen bakış: ${st.view}`);
+    if (st.at) { need(c, [st.at.on, st.at.near], 'struktur.at'); if (points[c.key]) c.struktur.p = points[c.key]; else warn.push(`${c.key}: lezyon noktası henüz hesaplanmadı (cranial-points.json)`); }
+    for (const n of c.folge?.paralysed || []) if (!muscles.has(n)) err(c, `paralysed: kas değil ya da modelde yok: ${n}`);
   } else if (c.system === 'spinal') {
     // omurilik vakası: level (level2) seviye parçası; lesion (kırmızı) ve tracts (mor) {n, side l|r|both, part below|above|level|range|all}
     const st = c.struktur || {};
@@ -96,7 +107,7 @@ if (new Set(keys).size !== keys.length) errs.push('yinelenen vaka anahtarı');
 if (warn.length) console.warn(warn.join('\n'));
 if (errs.length) { console.error(errs.join('\n')); console.error(`${errs.length} hata; ${OUT} yazılmadı`); process.exit(1); }
 // sıra: kol sinirleri, bacak sinirleri, pleksus ve kökler, geçitler, omurilik, kranial sinirler, beyin (panelde ◀ ▶ bu sırayla gezer); grup içinde dosyadaki sıra korunur
-const RANK = { plexus: 2, passage: 3, spinal: 4, cranial: 5, brain: 6 };
+const RANK = { plexus: 2, passage: 3, spinal: 4, cranial: 5, brain: 6, organ: 7 };
 const rank = c => RANK[c.system] ?? (loco.nerves.list.find(n => n.key === c.struktur.site.split('@')[0])?.region === 'leg' ? 1 : 0);
 src.cases = src.cases.map((c, i) => [rank(c), i, c]).sort((x, y) => x[0] - y[0] || x[1] - y[1]).map(x => x[2]);
 const out = { v: src.v, date: src.date, title_de: src.title_de, note: src.note, cases: src.cases };
@@ -107,7 +118,7 @@ const IDX = 'public/data/patho-index.json', by = {};
 const put = (n, i) => { if (!n || !names.has(n)) return; (by[n] ||= []); if (!by[n].includes(i)) by[n].push(i); };
 src.cases.forEach((c, i) => {
   const st = c.struktur || {};
-  for (const n of [...(st.n || []), ...(st.lesion || []).map(x => (typeof x === 'string' ? x : x.n)), ...(st.v || []), ...(st.tracts || []).map(x => x.n), ...(c.folge?.territory || []), ...(c.folge?.paralysed || [])]) put(n, i);
+  for (const n of [...(st.n || []), ...(st.lesion || []).map(x => (typeof x === 'string' ? x : x.n)), ...(st.v || []), ...(st.tracts || []).map(x => x.n), ...(c.folge?.territory || []), ...(c.folge?.affected || []), ...(c.folge?.paralysed || [])]) put(n, i);
   if (c.system === 'nerve') for (const n of loco.nerves.list.find(x => x.key === (st.site || '').split('@')[0])?.n || []) put(n, i);
   if (c.system === 'passage') for (const n of loco.passages.list.find(x => x.key === st.passage)?.contents.find(x => x.key === st.content)?.n || []) put(n, i);
 });
