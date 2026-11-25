@@ -1,6 +1,6 @@
 // Küçük CDP istemcisi: başsız Edge'e bağlanır, sayfada JS çalıştırır (yalnız yerel test için).
 import fs from 'node:fs';
-const PORT = 9333;
+const PORT = +process.env.CDP_PORT || 9333;   // başka bir başsız Edge 9333'teyse: CDP_PORT=9334
 export async function connect() {
   const list = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json();
   const page = list.find(t => t.type === 'page');

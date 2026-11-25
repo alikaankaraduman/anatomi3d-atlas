@@ -22,7 +22,8 @@ out.start = await c.evalJs(snap);
 const PROBE = '<img src=x onerror=window.__xss=1>';
 const HASHES = ['#t=abp-01', '#m=heart:flow', '#m=heart:valves', '#m=heart:conduction', '#m=brain', '#m=loco', '#m=sect:head-sag', '#m=sect:thx-heart',
   '#m=situs:arteries', '#m=situs:quiz', '#m=thorax:lung', '#m=uro:male', '#m=uro:female', '#m=head:ear', '#m=vessels:armart', '#m=lymph:organs',
-  '#m=constructor', '#m=' + PROBE, '#t=' + PROBE, '#s=' + PROBE, '#m=situs:' + PROBE, '#m=sect:' + PROBE, '#m=heart:' + PROBE, '#m=exam'];
+  '#m=patho:mca-links', '#m=patho:fremdkoerperaspiration-rechts', '#m=patho:brown-sequard', '#m=patho:erb-obere-plexuslaesion', '#m=move:', '#m=move:leg.hFlex', '#m=move:spine.cRot',
+  '#m=constructor', '#m=' + PROBE, '#m=patho:' + PROBE, '#m=move:' + PROBE, '#t=' + PROBE, '#s=' + PROBE, '#m=situs:' + PROBE, '#m=sect:' + PROBE, '#m=heart:' + PROBE, '#m=exam'];
 for (const h of HASHES) {
   await c.evalJs('location.hash = ' + JSON.stringify(h) + '; 1');
   await c.sleep(2600);
