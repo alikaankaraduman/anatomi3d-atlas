@@ -27,6 +27,22 @@ başlıkları bilgisayardaki Edge ile sınanır. Hiçbir şey indirilmez; geçic
   Edge'i kapat ve aynı profille, sitenin adını ulaşılmaz kılan şu ek seçenekle yeniden başlat:
   `--host-resolver-rules="MAP <site adı> 127.0.0.1"`; uygulama, bir çalışma modu ve `lisanslar.txt` önbellekten açılmalı.
 - `node run.mjs first|reload|state|eval [adres] [...]`: tek tek adımlar (ilk açılış, yeniden yükleme, durum, sayfada JS).
+- `node locsweep.mjs [adres]` (`SEX=f`: kadın model): patoloji vakalarının hepsinde 3B lezyon bulma görevini
+  (`../patho-loc-sweep.js`) çalıştırır; doğru noktaya tıklamanın doğru sayılmasını ve vakanın açılmasını denetler.
+- `node mobilecheck.mjs [adres]`: 375x812 dokunmatik görünümde 14 modu açar; yatay taşma ve konsol hatası arar,
+  her mod için `mobile-<n>.png` yazar.
+- `node quizflow.mjs [adres]`: modların ve turların testlerinde çoktan seçmeli soruları cevaplar (her birinde 6 soru);
+  ilerlemenin kaydedildiğini ve konsol hatası olmadığını denetler.
+- `node heartfind.mjs [adres]`: kalp testinde "Yapıyı bul": sorulan yapıya, önünde yalnız saydam parçalar olan bir
+  noktadan gerçek fare tıklaması; doğru sayılmalı.
+- `node sectfind.mjs [adres] [n]` (`SEX=f`; `FLIP=1`: her 4 soruda bir beden değiştirir): kesit testinde "Yapıyı bul":
+  sorulan yapının kesit yüzündeki noktasına gerçek tıklama.
+- `node brainlp.mjs [adres]`: düşük bellekli telefon taklidiyle (sistemler gerektiğinde yüklenir) beyin modunun lomber
+  ponksiyon adımı; kas ve eklem sistemi istenmeli, iğne noktaları yüklemeden sonra yeniden hesaplanmalı.
+- `node loadfail.mjs [adres]`: kas modeli engellenir, hareket sistemi moduna girilir; "… yüklenemedi" bildirimi beklenir.
+
+Bu betikler sayfayı önce `about:blank` ile boşaltır: aynı adreste yalnız karma değişirse sayfa yenilenmez ve önceki
+sınamanın durumu (engellenen dosya, taklit edilen bellek) sürer.
 
 `cdp.mjs` küçük bir Chrome DevTools Protocol istemcisidir (Node 22+ yerleşik WebSocket). Bitince o profilin Edge
 süreçlerini ve yerel sunucuyu kapat.

@@ -249,8 +249,13 @@ export function createBrain({ stage, model, state, refresh, defer, viewLayers, e
     c.group.visible = false; root.add(c.group);
   }
   // Lomber ponksiyon (brain-csf.js lumbarPuncture): bedene göre (kalça kemikleri ve sacrum kadında ayrı)
+  // sırt kasları (deri noktası) ve bağlar (katmanlar) kas ve eklem sistemlerinde: onlar yüklenmeden hesap eksik kalır;
+  // eksik sonuç saklanır ama sistemler yüklenince yeniden hesaplanır
+  const LP_SYS = ['muscle', 'joint'];
   function lpGeo() {
-    const sex = state.sex; if (G.lp[sex]) return G.lp[sex];
+    const sex = state.sex, full = LP_SYS.every(s => model.loaded[s] || model.failed?.has(s)), old = G.lp[sex];
+    if (old && (old.full || !full)) return old;
+    if (old) { root.remove(old.group); old.group.traverse(o => o.geometry?.dispose()); }
     const vert = Object.fromEntries(['L1', 'L2', 'L3', 'L4', 'L5'].map(k => [k, one('Vertebra ' + k)]).filter(([, r]) => r).map(([k, r]) => [k, mesh(r)]));
     const opt = (n, sd) => { const r = one(n, sd); return r ? mesh(r) : null; };
     const layers = Object.fromEntries(['Supraspinous ligament', 'Interspinous ligaments', 'Ligamenta flava', 'Cauda equina'].map(n => [n, opt(n)]).filter(([, m]) => m));
@@ -289,7 +294,7 @@ export function createBrain({ stage, model, state, refresh, defer, viewLayers, e
     }
     g.visible = false; root.add(g);
     const lev = s => (s || '').split(' ')[0];
-    return (G.lp[sex] = { group: g, pts, conusLevel: lev(L.conus?.level) });
+    return (G.lp[sex] = { group: g, pts, conusLevel: lev(L.conus?.level), full });
   }
   // Kranial sinirler (brain-nerves.js; geo-nerves.md §11): sol yanda her sinir için merkez çizgisi, beyinden çıkış ve kafa
   // tabanındaki delik; ardından ortak noktalar (Fissura orbitalis superior, Foramen jugulare, Foramen magnum) ve etiket
@@ -462,6 +467,9 @@ export function createBrain({ stage, model, state, refresh, defer, viewLayers, e
         put(cord, mats.cord); put(cauda, mats.cord); put(dura, mats.dura); put(lig, mats.lig);
         // bağlar eklem sisteminde (katmanı kapalı olabilir): bağlam olarak her durumda çizilir
         state.isolate = ids([...cord, ...cauda, ...dura]); ghost = ids([...recs(s.bones || []), ...lig]);
+        // kas ve eklem sistemi yüklenmemişse (telefonda gerektiğinde yükleme) istenir; yüklenince sahne yeniden kurulur
+        const need = LP_SYS.find(k => !model.loaded[k] && !model.failed?.has(k));
+        if (need) defer(need, () => { if (active && b.tab === 'csf' && csfStep().view === 'lumbar') { applyTab(); refresh(); } });
         let lp = null;
         try { lp = lpGeo(); } catch (e) { failed.add('lp'); console.warn('beyin modu: lomber ponksiyon hesaplanamadı:', e); }
         if (lp) {

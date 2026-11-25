@@ -255,10 +255,12 @@ function markQueue() { for (const s of queue) { const on = !lazy || wanted.has(s
 // Yüklenmemiş bir sistemdeki yapı seçilirse (ör. aramadan) istek burada bekler; en son istek geçerlidir.
 let deferred = null;
 function defer(sys, run) {
-  if (model.failed?.has(sys)) return;
+  if (model.failed?.has(sys)) { loadFailNote(sys); return; }
   deferred = { sys, run }; prioritize(sys); ui?.setLoadingHint(sys);
   navReconcile();   // bekleyen istek de bir katmandır: Geri onu iptal etsin, sayfadan çıkmasın
 }
+// istenen görünüm, modeli yüklenemeyen bir sisteme bağlıysa sessiz kalmasın
+function loadFailNote(sys) { ui?.notify(`${SYSTEMS[sys]?.title || sys} yüklenemedi; bağlantıyı kontrol edip sayfayı yenileyin.`); }
 function flushDeferred(sys) {
   if (deferred?.sys !== sys) return;
   const { run } = deferred; deferred = null; ui.setLoadingHint(null); run();
@@ -655,7 +657,7 @@ canvas.addEventListener('pointerup', e => {
   const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y); down = null;
   if (moved > 5) return;
   const rec = model.pick(e.clientX, e.clientY, 9);
-  if (rec && (sect?.onPick(rec.id, e.clientX, e.clientY) || heart?.onPick(rec.id) || brain?.onPick(rec.id, e.clientX, e.clientY) || loco?.onPick(rec.id, e.clientX, e.clientY) || patho?.onPick(rec.id, e.clientX, e.clientY) || move?.onPick(rec.id, e.clientX, e.clientY) || allTours().some(t => t.onPick(rec.id, e.clientX, e.clientY)) || quiz?.onPick(rec.id))) return;   // çalışma modunda tıklama modda kalır (testte cevap sayılır)
+  if (rec && (sect?.onPick(rec.id, e.clientX, e.clientY) || heart?.onPick(rec.id, e.clientX, e.clientY) || brain?.onPick(rec.id, e.clientX, e.clientY) || loco?.onPick(rec.id, e.clientX, e.clientY) || patho?.onPick(rec.id, e.clientX, e.clientY) || move?.onPick(rec.id, e.clientX, e.clientY) || allTours().some(t => t.onPick(rec.id, e.clientX, e.clientY)) || quiz?.onPick(rec.id))) return;   // çalışma modunda tıklama modda kalır (testte cevap sayılır)
   // çalışma turunda birkaç piksellik bir lenf düğümünün hemen yanına tıklama o düğümü seçer (tour.js pickNear)
   if (!rec && allTours().some(t => t.pickNear(e.clientX, e.clientY))) return;
   if (!rec && move?.pickAt(e.clientX, e.clientY)) return;      // kol hareketi modunda bükülmüş kasa tıklama (arkasında kemik yoksa)
@@ -756,7 +758,7 @@ async function loadOne(s) {
   catch (err) {
     console.error('Sistem yüklenemedi:', s, err);
     model.failed.add(s); ui.setPending(s, false, true); syncWeakBtn();
-    if (deferred?.sys === s) { deferred = null; ui.setLoadingHint(null); }
+    if (deferred?.sys === s) { deferred = null; ui.setLoadingHint(null); loadFailNote(s); }
   }
 }
 // En çok iki sistem aynı anda yüklenir. lazy kapalıyken kuyruğun hepsi, açıkken yalnız istenenler.

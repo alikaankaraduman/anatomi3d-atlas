@@ -301,10 +301,10 @@ export function createHeart({ stage, model, state, refresh, defer, ui, glow, vie
     return rs.filter(r => r.vis).map(r => r.mesh);
   }
   // 3B görünümde tıklanan yapı: modda kalınır; testin "bul" sorusunda cevap sayılır
-  function onPick(id) {
+  function onPick(id, x, y) {
     if (!active) return false;
     const r = model.items.get(id); if (!r) return true;
-    if (h.tab === 'quiz') { if (test.pick(r)) refresh(); return true; }
+    if (h.tab === 'quiz') { if (test.pick(r, x, y)) refresh(); return true; }
     h.picked = r.n;
     refresh();
     return true;

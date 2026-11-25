@@ -257,9 +257,12 @@ export function createStudyQuiz({ recs, items, facts = null, cats = null, refres
     // "Yapıyı bul" cevabını kaydet (doğruluğu çağıran belirler); r: tıklanan yapı
     answer(ok, r) { const c = z.cur; if (!c?.q || c.answer) return; c.answer = { ok, picked: titleName(r) }; score(ok, sid(c.q)); },
     // 3B görünümde tıklanan yapı "Yapıyı bul" sorusunun cevabı sayılır; true: panel yenilenmeli
-    pick(r) {
+    // x, y: tıklama noktası; öndeki saydam parçaların ardındaki doğru yapı da kabul edilir (beyin/hareket sistemi gibi)
+    pick(r, x, y) {
       const q = this.findQuestion(); if (!q) return false;
-      this.answer(q.n.includes(r.n), r);
+      let ok = q.n.includes(r.n);
+      if (!ok && x !== undefined && model?.hitsAt) for (const h of model.hitsAt(x, y)) { if (q.n.includes(h.rec.n)) { ok = true; break; } if (!h.soft) break; }
+      this.answer(ok, r);
       return true;
     },
     html() {

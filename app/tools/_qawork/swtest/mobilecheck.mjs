@@ -10,6 +10,7 @@ const HASHES = ['', '#m=heart:flow', '#m=brain:nerves', '#m=loco:passages', '#m=
 const c = await connect();
 await c.send('Emulation.setDeviceMetricsOverride', { width: 375, height: 812, deviceScaleFactor: 2, mobile: true });
 await c.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+await c.send('Page.navigate', { url: 'about:blank' }); await c.sleep(500);   // yeni belge: aynı adreste yalnız karma değişirse sayfa yenilenmez
 await c.send('Page.navigate', { url: ORIGIN });
 for (let i = 0; i < 90; i++) { await c.sleep(1000); const ok = await c.evalJs(`(() => { const A = window.__anatomi; return !!A && Object.values(A.model.loaded).every(Boolean) && Object.keys(A.model.loaded).length >= 6; })()`).catch(() => false); if (ok) break; }
 const out = [];

@@ -14,6 +14,7 @@ const out = { origin: ORIGIN, steps: [] };
 const ready = async (max = 120) => { for (let i = 0; i < max; i++) { const ok = await c.evalJs("(() => { const A = window.__anatomi; return !!A && Object.values(A.model.loaded).length >= 6 && Object.values(A.model.loaded).every(Boolean); })()").catch(() => false); if (ok) return i; await c.sleep(1000); } return -1; };
 const snap = "(() => { const A = window.__anatomi; const p = document.querySelector('#right .panel:not([hidden]) h2, #info h2, #right h2'); return { hash: decodeURIComponent(location.hash), csp: window.__csp.length, xss: window.__xss, sex: A && A.state.sex, dialog: !!document.querySelector('dialog[open]'), title: p ? p.textContent.trim().slice(0, 60) : null }; })()";
 
+await c.send('Page.navigate', { url: 'about:blank' }); await c.sleep(500);   // yeni belge: aynı adreste yalnız karma değişirse sayfa yenilenmez
 await c.send('Page.navigate', { url: ORIGIN });
 await c.sleep(3000);
 out.readyAfterS = await ready();

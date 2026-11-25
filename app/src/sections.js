@@ -182,7 +182,7 @@ export function createSections({ stage, model, state, refresh, defer, cancel, vi
         z.region = 'all'; z.weakOnly = true; z.cur = null; z.last = null;
         // zayıf sorusu olan ilk soru türü (önce o anki tür)
         const has = k => pool(k).some(x => weak(idOf(x, k)));
-        z.mode = [z.mode, ...TYPES.map(t => t[0])].find(has) || z.mode;
+        z.mode = [z.mode, ...TYPES].find(has) || z.mode;   // TYPES düz ad dizisi
       }
       else if (sub && (sub === 'all' || regionOf(sub)) && sub !== z.region) { z.region = sub; z.cur = null; }
     }
@@ -190,6 +190,8 @@ export function createSections({ stage, model, state, refresh, defer, cancel, vi
     if (!L) {
       const reg = regionOf(tab === 'test' ? sub : head) ? (tab === 'test' ? sub : head) : m.region || D.regions[0].key;
       L = (cur() && regionOfLevel(m.level).key === reg ? cur() : null) || levelsOf(reg)[0] || regionOf(reg).levels[0];
+      // açık bir seviye bağlantısı yoksa kullanıcının seçtiği beden korunur: hatırlanan seviye öteki bedene aitse ikizi
+      if (L.sex && L.sex !== state.sex) L = twinOf(L, state.sex) || L;
     }
     // bütün sistemler gerekli: yüklenmemiş olan sırayla beklenir (defer yükleme notunu gösterir)
     const wait = SYS_ORDER.find(x => !model.loaded[x] && !model.failed?.has(x));
@@ -230,8 +232,10 @@ export function createSections({ stage, model, state, refresh, defer, cancel, vi
       const L = cur(), T = L && twinOf(L, state.sex);
       if (T) { m.level = T.key; m.sel = null; }
       m.picked = null; m.away = false;   // düzlem aşağıda seviyeye (ve kaydırma payına) yeniden konur
-      // testte sorusu cinsiyetli seviyedeyse yeni soru (bu bedenin havuzundan); sahne showQ ile kurulur
-      if (m.tab === 'test' && z.cur?.L.sex && z.cur.L.sex !== state.sex) { z.cur = null; nextQ(false); showQ({ force: true }); return; }
+      // testte sorusu cinsiyetli seviyede, yalnız öbür bedende olan bir yapıda ya da noktaları bedene göre değişen bir yapıda
+      // ise yeni soru (bu bedenin havuzundan); sahne showQ ile kurulur
+      const a = z.cur?.a;
+      if (m.tab === 'test' && z.cur && ((z.cur.L.sex && z.cur.L.sex !== state.sex) || (a?.x && a.x !== state.sex) || a?.ptsF)) { z.cur = null; nextQ(false); showQ({ force: true }); return; }
       setupLevel(cur(), m.off);
       applyLabels();
     }

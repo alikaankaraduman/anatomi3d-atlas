@@ -479,7 +479,7 @@ export function createTour({ key, title, chip, dataUrl, stage, model, state, ref
     if (!active) return;
     if (state.primary?.type !== key) {
       // beden değişince sekmenin bütün yapıları kaybolduysa (ana kod izolasyonu boşaltıp modu kapattı) kullanıcıya söylenir
-      if (m.sex !== state.sex && !state.isolate) ui?.notify?.(`Bu sekmenin yapıları ${SEX[state.sex]?.label.toLowerCase() || 'bu'} modelde yok`);
+      if (state.primary == null && m.sex !== state.sex && !state.isolate) ui?.notify?.(`Bu sekmenin yapıları ${SEX[state.sex]?.label.toLowerCase() || 'bu'} modelde yok`);
       cleanup(); return;
     }
     if (m.sex !== state.sex) { m.sex = state.sex; m.pickedId = null; applyTab(); }
@@ -509,9 +509,10 @@ export function createTour({ key, title, chip, dataUrl, stage, model, state, ref
         const want = new Set(q.n); let ok = want.has(r.n);
         if (!ok && x !== undefined) for (const h of model.hitsAt(x, y)) { if (want.has(h.rec.n)) { ok = true; break; } if (!h.soft) break; }
         // opak bir yapının hemen ardındaki küçük madde (derin lenf düğümü) de bulunmuş sayılır
-        if (!ok && buriedSmall(x, y, rec => want.has(rec.n))) ok = true;
+        // (yalnız tıklanan parça küçük değilse: başka bir küçük düğüme doğrudan tıklama yanlış kalır)
+        if (!ok && !smallBits(r) && buriedSmall(x, y, rec => want.has(rec.n))) ok = true;
         // ekranda birkaç piksellik düğüm: tıklama 8 px yakınına düştüyse de bulunmuş sayılır (nearSmall)
-        if (!ok && nearSmall(x, y, rec => want.has(rec.n))) ok = true;
+        if (!ok && !smallBits(r) && nearSmall(x, y, rec => want.has(rec.n))) ok = true;
         test.answer(ok, r); refresh();
       }
       return true;
