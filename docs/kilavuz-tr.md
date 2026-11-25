@@ -87,13 +87,14 @@ kemiğinin arka yüzündeki Gluteus maximus origosu arkadan).
 Derindeki bir yapıya ulaşmak için üstündekini seçip `H` ile (ya da bilgi kartındaki **Gizle** ile) gizleyin;
 *Gizlenenleri göster* hepsini geri getirir.
 
-**Patoloji vakaları** (Araçlar › Çalışma modları › **Patoloji**; 98 vaka): 28 periferik sinir lezyonu (17 kol,
+**Patoloji vakaları** (Araçlar › Çalışma modları › **Patoloji**; 108 vaka): 28 periferik sinir lezyonu (17 kol,
 11 bacak; Hareket modundaki her lezyon yeri için bir vaka), 6 pleksus ve kök lezyonu (biri Plexus lumbalis), 8 geçit vakası (sıkışma, fıtık,
 tendon), 9 omurilik, kauda ve lomber kök vakası (L4, L5, S1, spinal stenoz), 14 kranial sinir lezyonu (II–XII; baş-boyun görünümü, sol taraf) ve 23 beyin
 vakası: arter tıkanmaları (göz vakası orbitada, Percheron ve Anton iki taraflı), beyin sapı sendromları (Weber,
-Benedikt, Parinaud, INO, Dejerine) ve görme yolu (Meyer halkası); damar dışı lezyonlarda alan turuncu "Läsion". Ayrıca 10 gövde ve baş topografisi vakası
+Benedikt, Parinaud, INO, Dejerine) ve görme yolu (Meyer halkası); damar dışı lezyonlarda alan turuncu "Läsion". Ayrıca 20 gövde ve baş topografisi vakası
 (üreter taşı, portal hipertansiyon, sol varikosel, yabancı cisim aspirasyonu, apandisit, epidural ve subdural hematom,
-Pancoast, hiatus hernisi, kolesistit): organlar ve damarlar gösterilir, lezyonlu yapı kırmızı, etkilenenler turuncu;
+Pancoast, hiatus hernisi, kolesistit, duodenum ülseri, pankreas başı tümörü, mezenter iskemisi, dalak rüptürü, aort
+anevrizması, özofagus darlıkları, aort koarktasyonu; ponksiyon ve girişim yerleri: plevra ponksiyonu, koniotomi, perikard ponksiyonu): organlar ve damarlar gösterilir, lezyonlu yapı kırmızı, etkilenenler turuncu;
 3B görevinde ya lezyon noktasına ya da etkilenen yapıya tıklanır. Her vaka bir klinik tablo (Almanca; Türkçesi "Türkçe" altında) ve
 tek bir soruyla açılır; soru test dilinde (DE | TR) sorulur. Cevaptan sonra **3B görevi** gelir: modelde lezyon yerine
 (beyin vakasında etkilenen bölgeye) tıklarsın; tek deneme, **Atla** ile geçilir. Sonra açıklama ve 3B tablo açılır:

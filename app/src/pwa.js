@@ -144,6 +144,8 @@ export function setupPWA({ notify }) {
   const showUpdate = () => { if (navigator.serviceWorker.controller) bar.hidden = false; };
   function watch(r) {
     if (r.waiting) showUpdate();
+    // kayıt dönmeden başlamış bir kurulum (yavaş telefonda gezinme sonrası güncelleme) da izlenir
+    if (r.installing) { const w = r.installing; w.addEventListener('statechange', () => { if (w.state === 'installed') showUpdate(); }); }
     r.addEventListener('updatefound', () => {
       const w = r.installing; if (!w) return;
       w.addEventListener('statechange', () => { if (w.state === 'installed') showUpdate(); });

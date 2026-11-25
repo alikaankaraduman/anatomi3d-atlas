@@ -840,7 +840,8 @@ function applyHash(raw) {
 // derin bağlantılar (#g=...&t=...) eskisi gibi uygulanır. Öteki tarayıcılarda, kurulu uygulamada ve Android kabuğunda adresten silinir.
 // Kart açılıştan önce gösterilir; Geri tuşu katmanı onu da kapatır.
 const welcomeUI = setupWelcome({ notify: t => ui.notify(t), onHash: () => syncHash() });
-function fullHash() { return [welcomeUI?.hashParam(), viewHash()].filter(Boolean).join('&'); }
+// kişisel bağlantı yalnız görünüm boşken adreste kalır: bir yapı ya da konu paylaşılırsa adres notu ve mesaj anahtarını taşımasın
+function fullHash() { return viewHash() || welcomeUI?.hashParam() || ''; }
 // Sınav penceresi açıkken (Geri tuşu) alttaki görünüm değişmez; adres sınavı göstermeye devam eder
 // Uygulamanın kendi geçmiş girişlerine (taban ve bekçi, aşağıda) dönüşleri popstate işler: adresleri yeniden yazılır.
 window.addEventListener('hashchange', () => { if (navMark(history.state)) { syncHash(); return; } navCur = history.state; welcomeUI.onHashChange(location.hash); if (exam?.isOpen()) { syncHash(); return; } try { applyHash(location.hash); } catch (err) { console.error(err); ui.notify('Bağlantı açılamadı'); syncHash(); } });

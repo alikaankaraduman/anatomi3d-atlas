@@ -317,8 +317,9 @@ export function factText(f) {
 // Kaynakta dili belirtilmemiş kısa metnin dili (kesit atlası ipuçları Almanca ya da Türkçe yazılmış): Türkçeye özgü harf
 // sık Türkçe sözcük ya da ek varsa 'tr', Almancaya özgü harf ya da sık Almanca sözcük varsa 'de', ikisi de yoksa ''
 // (HTML'de "dil bilinmiyor"; Latince terim ve kısaltmalardan oluşan ipuçları)
-const TR_HINT = /[ğĞşŞıİçÇ]|'(?:[dt][ae]|n?[ıiuü]n|[ae]|[ıiuü])(?!\p{L})|(?<!\p{L})(?:ve|ile|bu|bir|en|için|sağ|sol|ön|arka|burada|gibi|dal)(?!\p{L})|\p{L}(?:inde|ında|unda|ünde)(?!\p{L})/iu;
-const DE_HINT = /[äßÄ]|(?<!\p{L})(?:der|die|das|und|von|im|den|des|unter|zwischen|oberhalb|als|an)(?!\p{L})/iu;
+// geriye bakış (?<!…) yerine (?:^|[^\p{L}]): Safari 16.4 öncesi geriye bakışı bilmez, sözdizimi hatası bütün uygulamayı durdurur
+const TR_HINT = /[ğĞşŞıİçÇ]|'(?:[dt][ae]|n?[ıiuü]n|[ae]|[ıiuü])(?!\p{L})|(?:^|[^\p{L}])(?:ve|ile|bu|bir|en|için|sağ|sol|ön|arka|burada|gibi|dal)(?!\p{L})|\p{L}(?:inde|ında|unda|ünde)(?!\p{L})/iu;
+const DE_HINT = /[äßÄ]|(?:^|[^\p{L}])(?:der|die|das|und|von|im|den|des|unter|zwischen|oberhalb|als|an)(?!\p{L})/iu;
 export const tipLang = s => (TR_HINT.test(s || '') ? 'tr' : DE_HINT.test(s || '') ? 'de' : '');
 // Kısa metin (kesit testi ask[].tr ve ask[].tip): { text, de }
 export function shortText(t) {

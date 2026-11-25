@@ -512,6 +512,10 @@ export function createUI({ state, model, actions }) {
       words: 'kraniyal sinirler, kranial sinirler, kafa çiftleri, beyin sinirleri, cranial nerves, nervi craniales, hirnnerven, kraniyal, kranial, cranial, hirnnerv' },
     { key: 'peel', label: 'Derin kaslar: üst kas katmanını kaldır', sub: 'Hızlı görünüm: Araçlar › Kas katmanı', run: () => actions.peel(1),
       words: 'derin kaslar, kas katmanı, katman, deep muscles, tiefe muskeln, muskelschicht, soy, yüzeyel kaslar, oberflächliche' },
+    { key: 'patho', label: 'Patoloji vakaları', sub: 'Çalışma modu: klinik tablo, soru, 3B görevi, Tekrar ve Testat', run: () => actions.pathoMode(''),
+      words: 'patoloji, vaka, vakalar, klinik vaka, lezyon, felç, pathologie, fall, fälle, läsion, lähmung, testat, pathology, case, cases, lesion, palsy' },
+    { key: 'move', label: 'Hareket modu (kol, bacak, gövde)', sub: 'Çalışma modu: eklem hareketleri ve kasların boy değişimi', run: () => actions.moveMode(''),
+      words: 'hareket, kol hareketi, bacak hareketi, gövde hareketi, abduksiyon, fleksiyon, bewegung, gelenk, beweglichkeit, movement, motion, range of motion' },
   ];
   const SIDE_TOKENS = new Set(['sag', 'sol', 'right', 'left', 'dexter', 'sinister', 'rechts', 'links']);
   // Sonuç satırı kartla aynı düzende: Latince ad, altında Almanca. Arama yalnızca Türkçe ya da İngilizce adla

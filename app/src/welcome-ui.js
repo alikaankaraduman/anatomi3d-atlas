@@ -306,6 +306,7 @@ export function setupWelcome({ notify, onHash } = {}) {
     if (a === 'start' && fresh && !manage) {
       // kişiselleştirme yalnız burada saklanır ve uygulanır (×, Esc ya da Geri: hiçbir şey saklanmaz)
       const rec = fresh; fresh = null; save(rec);
+      if (keep && !keepFragment()) setKeep('');   // kabul edildi: bağlantı artık adreste durmaz (Apple Safari dışında)
       setTimeout(() => startBanner(rec.data), 400);
       if (saveFailed) notify?.('Bu cihazın tarayıcı depolaması kapalı: not yalnız bu açılışta görünür.');
     }
@@ -330,8 +331,9 @@ export function setupWelcome({ notify, onHash } = {}) {
     }
     if (a === 'yes' && fresh) { renderLetter(fresh.data, 'yes'); card.querySelector('.wlx-yes')?.focus({ preventScroll: true }); return; }
     if (a === 'replace') {
+      // yeni not mektup akışıyla açılır (zarf, Evet / Hayır, şerit); kaydı "Başla" yapar, kapatılırsa eski not kalır
       const rec = pending; pending = null; pendingFromHash = false;
-      if (rec) save(rec);
+      if (rec) fresh = rec;
       openCard('card');
       return;
     }
@@ -364,15 +366,19 @@ export function setupWelcome({ notify, onHash } = {}) {
   async function fromHash(hash, sync = true) {
     const signed = W.payloadFromHash(hash);
     if (signed == null) { seq++; if (keep) setKeep('', sync); return; }
-    if (keep === 'g=' + signed) return;
+    // adresin yeniden yazılması (syncHash) aynı bağlantıyı yeniden açmasın; ama kapatılmış, kabul edilmemiş bir not
+    // aynı bağlantı yeniden açılınca yeniden gösterilir
+    if (keep === 'g=' + signed && (fresh || pending || (stored && W.sameLink(stored.signed, signed)))) return;
     const my = ++seq;
     const r = await W.verifyLink(signed);
     if (my !== seq) return;   // bu arada başka bir bağlantı geldi
     // Geçersiz bağlantı: hep aynı kısa uyarı. crypto.subtle yoksa (güvensiz bağlam) bağlantı sessizce yok sayılır.
     if (!r.ok) { if (r.code !== 'nocrypto') notify?.(W.INVALID); setKeep('', sync); return; }
     show(r, 'hash');
-    // Apple Safari sekmesinde bağlantı adreste kalır; öteki tarayıcılarda, kurulu uygulamada ve Android kabuğunda tüketilir
-    setKeep(keepFragment() ? 'g=' + signed : '', sync);
+    // Apple Safari sekmesinde bağlantı adreste kalır. Öteki tarayıcılarda, kurulu uygulamada ve Android kabuğunda
+    // "Başla"ya (ya da "Eskisi kalsın"a) kadar kalır, sonra tüketilir: kabul edilmemiş not Geri / Esc ya da sekmenin
+    // yeniden yüklenmesiyle kaybolmasın (yeniden yüklemede mektup yeniden açılır)
+    setKeep(keepFragment() || fresh || pending ? 'g=' + signed : '', sync);
   }
 
   // ---------- Hakkında: sana özel not, yapıştır ----------
@@ -438,6 +444,9 @@ export function setupWelcome({ notify, onHash } = {}) {
   }
   async function startBanner(d) {
     if (!d || (!d.since && !d.feed)) return;
+    // açılışta açık bir modal pencere (ör. kullanıcı şifresi) varsa şerit onun altında tıklanamaz kalırdı: kapanınca göster
+    const modal = [...document.querySelectorAll('dialog[open]')].find(x => x !== card);
+    if (modal) { modal.addEventListener('close', () => startBanner(d), { once: true }); return; }
     const run = ++bannerRun;
     const counter = W.counterText(d.since);
     const feed = loadFeed(d);

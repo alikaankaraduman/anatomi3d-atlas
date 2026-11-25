@@ -62,7 +62,7 @@ export function available() {
 const ID_RE = /^[0-9a-f]{8}$/;
 const B64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 function validUser(u) {
-  return u && typeof u === 'object' && ID_RE.test(u.id) && typeof u.name === 'string' && u.name.length > 0 && u.name.length <= NAME_MAX &&
+  return u && typeof u === 'object' && ID_RE.test(u.id) && typeof u.name === 'string' && u.name.length > 0 && [...u.name].length <= NAME_MAX &&   // kod noktası sayısı (emoji iki birim), checkName ile aynı
     typeof u.salt === 'string' && B64_RE.test(u.salt) && typeof u.hash === 'string' && B64_RE.test(u.hash) &&
     Number.isInteger(u.iter) && u.iter >= 1000 && u.iter <= 10000000;
 }

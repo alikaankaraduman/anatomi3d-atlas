@@ -1,4 +1,4 @@
-// Patoloji vakaları (pilot): topografik patoloji. Her vaka bir klinik tablo (Befund) ve tek soruyla başlar; soru cevaplanınca
+// Patoloji vakaları: topografik patoloji. Her vaka bir klinik tablo (Befund) ve tek soruyla başlar; soru cevaplanınca
 // (ya da "Tabloyu şimdi göster" ile) 3B görünüm lezyonu gösterir:
 //  - Sinir vakası: sol kol ya da bacak; sinir sarı, lezyon yeri kırmızı nokta, lezyonun altında dalını alan kaslar mor
 //    (felçli), aynı sinirin sağlam kalan kasları turuncu, bölgenin öteki kasları saydam. Felçli kas listesi Hareket
