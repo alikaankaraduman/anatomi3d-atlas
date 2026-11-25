@@ -390,3 +390,24 @@ export async function resolveShort(short, fetchFn = globalThis.fetch, timeoutMs 
   } catch { return null; }
   return text ? openShort(text, s.key) : null;
 }
+
+// ---------- düz metin mesaj (FEED_TEXT) ----------
+// Bağlantı sahibi mesajı telefonda GitHub'ın kendi Gist düzenleme sayfasından yazar: aynı gizli Gist'te düz metin bir
+// dosya (FEED_TEXT). Varsa o geçerlidir (tarihi Gist'in updated_at'i); yoksa şifreli FEED_FILE okunur (eski biçim).
+// Düz metin Gist kimliğini bilen herkesçe okunabilir; kimlik yalnız imzalı bağlantının yükündedir.
+export const FEED_TEXT = 'mesaj.txt';
+// GitHub API Gist nesnesinden: { kind: 'plain', text, at } | { kind: 'enc', text } | null
+export function feedSource(gist) {
+  const p = gist?.files?.[FEED_TEXT];
+  if (p && !p.truncated && typeof p.content === 'string') return { kind: 'plain', text: p.content, at: typeof gist.updated_at === 'string' ? gist.updated_at : '' };
+  const e = feedFileFrom(gist);
+  return e ? { kind: 'enc', text: e } : null;
+}
+// Düz metni mesaja çevirir: temizlenir (cleanText), en çok FEED_MSG_MAX karakter (fazlası "…" ile kesilir)
+export function plainFeed(text, at = '') {
+  if (typeof text !== 'string' || text.length > 20000) return { ok: false };
+  let msg = cleanText(text);
+  if (cpLength(msg) > FEED_MSG_MAX) msg = [...msg].slice(0, FEED_MSG_MAX - 1).join('').trimEnd() + '…';
+  const ok = typeof at === 'string' && /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(at);
+  return { ok: true, msg, at: ok ? at : '' };
+}

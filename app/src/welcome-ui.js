@@ -441,20 +441,22 @@ export function setupWelcome({ notify, onHash } = {}) {
   let bannerRun = 0;
   async function loadFeed(d) {
     if (!d.feed || !W.cryptoReady()) return null;
-    let text = null;
+    // düz metin (mesaj.txt, GitHub'dan elle düzenlenir) ya da şifreli m.json; önbellekte kaynak biçimiyle saklanır
+    const read = async src => (src?.kind === 'plain' ? W.plainFeed(src.text, src.at) : src?.kind === 'enc' ? W.openFeed(src.text, d.fk) : { ok: false });
+    let src = null;
     try {
       const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 8000);
       const res = await fetch(W.feedUrl(d.feed), { headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store', signal: ctl.signal });
       clearTimeout(t);
-      if (res.ok) text = W.feedFileFrom(await res.json());
+      if (res.ok) src = W.feedSource(await res.json());
     } catch { /* ağ yok: son okunan mesaj */ }
-    if (text) {
-      const m = await W.openFeed(text, d.fk);
-      if (m.ok) { try { localStorage.setItem(FEED_CACHE, JSON.stringify({ feed: d.feed, text })); } catch { /* depolama kapalı */ } return m; }
+    if (src) {
+      const m = await read(src);
+      if (m.ok) { try { localStorage.setItem(FEED_CACHE, JSON.stringify({ feed: d.feed, ...src })); } catch { /* depolama kapalı */ } return m; }
     }
     try {
       const c = JSON.parse(localStorage.getItem(FEED_CACHE) || 'null');
-      if (c?.feed === d.feed && typeof c.text === 'string') { const m = await W.openFeed(c.text, d.fk); if (m.ok) return m; }
+      if (c?.feed === d.feed && typeof c.text === 'string') { const m = await read(c.kind === 'plain' ? c : { kind: 'enc', text: c.text }); if (m.ok) return m; }
     } catch { /* bozuk önbellek */ }
     return null;
   }

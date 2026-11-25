@@ -286,6 +286,21 @@ const rejected = async (signed, msg, key) => { const v = await vk(signed, key); 
   ok(W.shortFromHash('#m=x&k=' + short) === short && W.shortFromText('https://example.org/#k=' + short) === short && W.shortFromText('k=' + short) === short && W.shortFromText(short) === short && W.shortFromText('#g=abc.def') === null, 'kısa bağlantı adres ve yapıştırmadan okunur');
   ok(W.hashWithout('k=' + short + '&m=brain') === 'm=brain' && W.hashWithout('g=a.b&k=' + short) === '', 'hashWithout g= ve k= atar');
 }
+// düz metin mesaj (mesaj.txt; GitHub'dan elle düzenlenir), şifreli m.json'un önüne geçer
+{
+  const at = '2026-11-26T09:15:00Z';
+  const src = W.feedSource({ updated_at: at, files: { 'mesaj.txt': { content: '  Günaydın 💙\r\n\r\n\r\n\r\nikinci satır  \n', truncated: false }, 'm.json': { content: 'x' } } });
+  ok(src?.kind === 'plain' && src.at === at, 'mesaj.txt varsa o kullanılır (tarih updated_at)');
+  const m = W.plainFeed(src.text, src.at);
+  ok(m.ok && m.msg === 'Günaydın 💙\n\n\nikinci satır' && m.at === at, 'düz metin temizlenir (satır sonları, boşluklar)');
+  ok(W.feedSource({ files: { 'm.json': { content: 'şifreli' } } })?.kind === 'enc', 'mesaj.txt yoksa şifreli m.json');
+  ok(W.feedSource({ files: { 'mesaj.txt': { content: 'x', truncated: true }, 'm.json': { content: 'şifreli' } } })?.kind === 'enc', 'kesik mesaj.txt yok sayılır');
+  ok(W.feedSource({ files: {} }) === null && W.feedSource(null) === null, 'dosya yoksa null');
+  const long = W.plainFeed('a'.repeat(700));
+  ok(long.ok && [...long.msg].length === W.FEED_MSG_MAX && long.msg.endsWith('…'), 'uzun düz metin 600 karakterde kesilir');
+  ok(W.plainFeed('x', 'dün').at === '' && !W.plainFeed(5).ok && !W.plainFeed('a'.repeat(20001)).ok, 'geçersiz tarih ve tür');
+  ok(W.plainFeed('a\u200bb\u202ec').msg === 'abc', 'görünmeyen ve yön karakterleri atılır');
+}
 // crypto.subtle yok (güvensiz bağlam): bağlantılar yok sayılır
 {
   const desc = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
